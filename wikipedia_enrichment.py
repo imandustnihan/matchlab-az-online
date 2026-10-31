@@ -217,14 +217,19 @@ def _init():
 
 def cached(qid,refresh_days=14):
     if not VALID_QID.fullmatch(qid or ''):return None
-    _init()
-    with sqlite3.connect(CACHE_DB,timeout=5) as con:
-        row=con.execute('SELECT fetched_utc,payload,success FROM enriched WHERE qid=?',(qid,)).fetchone()
-    if not row:return None
-    when=dt.datetime.fromisoformat(row[0])
-    age=dt.datetime.now(dt.timezone.utc)-when.replace(tzinfo=dt.timezone.utc)
-    if age>dt.timedelta(days=refresh_days if row[2] else 1):return None
-    return json.loads(row[1])
+    # The cache is an optimization, never an authority: a corrupt/locked SQLite
+    # row must not prevent an otherwise valid player or club profile loading.
+    try:
+        _init()
+        with sqlite3.connect(CACHE_DB,timeout=5) as con:
+            row=con.execute('SELECT fetched_utc,payload,success FROM enriched WHERE qid=?',(qid,)).fetchone()
+        if not row:return None
+        when=dt.datetime.fromisoformat(row[0])
+        age=dt.datetime.now(dt.timezone.utc)-when.replace(tzinfo=dt.timezone.utc)
+        if age>dt.timedelta(days=refresh_days if row[2] else 1):return None
+        return json.loads(row[1])
+    except (sqlite3.Error, OSError, ValueError, TypeError, KeyError, json.JSONDecodeError):
+        return None
 
 
 def store(qid,payload,success):
@@ -260,6 +265,28 @@ def entity_value(entity,prop):
     return None
 
 
+def wikidata_date(value):
+    """Respect Wikidata precision: year/month-only dates are NOT January 1.
+
+    Wikidata time values represent unknown components using 01 internally;
+    precision 9 means only the year is known, 10 the month, and 11 the day.
+    """
+    if not isinstance(value,dict):return ''
+    raw=str(value.get('time') or '')
+    match=re.match(r'^\+?(\d{4})-(\d{2})-(\d{2})T',raw)
+    if not match:return ''
+    yyyy,mm,dd=match.groups()
+    try:precision=int(value.get('precision',11))
+    except (ValueError,TypeError):return ''
+    if precision<9:return ''
+    if not 1<=int(mm)<=12:return ''
+    if precision==9:return yyyy
+    if precision==10:return f'{yyyy}-{mm}'
+    try:dt.date(int(yyyy),int(mm),int(dd))
+    except ValueError:return ''
+    return f'{yyyy}-{mm}-{dd}'
+
+
 def remote_enrich(qid,get_json,kind='players'):
     """Pass a request adapter get_json(url,ttl). Failures are handled upstream."""
     url='https://www.wikidata.org/w/api.php?'+urllib.parse.urlencode({'action':'wbgetentities','format':'json','ids':qid,'props':'sitelinks|claims|labels','languages':'az|en|tr'})
@@ -271,22 +298,26 @@ def remote_enrich(qid,get_json,kind='players'):
     details={}
     try:details=article_details(lang,title,qid,get_json)
     except Exception:pass
-    # Do not display any Wikipedia snippet without matching pageprops QID.
-    if not details.get('articleVerified'):details={}
-    rest='https://'+lang+'.wikipedia.org/w/rest.php/v1/page/'+urllib.parse.quote(title.replace(' ','_'),safe='()_')
-    try:wikitext=get_json(rest,86400).get('source','')
-    except Exception:wikitext=''
-    if not wikitext:
-        # Stable wiki Action API fallback for older/unsupported page source formats.
-        api='https://'+lang+'.wikipedia.org/w/api.php?'+urllib.parse.urlencode({'action':'query','prop':'revisions','titles':title,'rvprop':'content','rvslots':'main','formatversion':2,'format':'json'})
-        try:
-            response=get_json(api,86400)
-            pages=response.get('query',{}).get('pages',[])
-            if pages:
-                slot=(pages[0].get('revisions') or [{}])[0].get('slots',{}).get('main',{})
-                wikitext=slot.get('content') or slot.get('*') or ''
-        except Exception:pass
-    data=parse_club_infobox(wikitext) if kind=='teams' else parse_football_infobox(wikitext)
+    # Never parse a Wikipedia infobox unless the actual page's Wikidata QID
+    # matches the football identity. A sitelink alone is not confirmation of
+    # the current page after redirects or page replacements.
+    verified=bool(details.get('articleVerified'))
+    if not verified:details={}
+    wikitext=''
+    if verified:
+        rest='https://'+lang+'.wikipedia.org/w/rest.php/v1/page/'+urllib.parse.quote(title.replace(' ','_'),safe='()_')
+        try:wikitext=get_json(rest,86400).get('source','')
+        except Exception:wikitext=''
+        if not wikitext:
+            api='https://'+lang+'.wikipedia.org/w/api.php?'+urllib.parse.urlencode({'action':'query','prop':'revisions','titles':title,'rvprop':'content','rvslots':'main','formatversion':2,'format':'json'})
+            try:
+                response=get_json(api,86400)
+                pages=response.get('query',{}).get('pages',[])
+                if pages:
+                    slot=(pages[0].get('revisions') or [{}])[0].get('slots',{}).get('main',{})
+                    wikitext=slot.get('content') or slot.get('*') or ''
+            except Exception:pass
+    data=(parse_club_infobox(wikitext) if kind=='teams' else parse_football_infobox(wikitext)) if verified else {}
     data.update({k:v for k,v in details.items() if k not in ('wikiThumbnail','articleVerified') and v})
     if kind=='teams':
         founded=entity_value(e,'P571')
@@ -295,8 +326,8 @@ def remote_enrich(qid,get_json,kind='players'):
             if match:data['foundedYear']=int(match.group())
     birth=entity_value(e,'P569');death=entity_value(e,'P570')
     if kind!='teams':
-        if isinstance(birth,dict) and birth.get('time'):data['birth']=birth['time'].lstrip('+')[:10]
-        if isinstance(death,dict) and death.get('time'):data['death']=death['time'].lstrip('+')[:10]
+        if (value:=wikidata_date(birth)):data['birth']=value
+        if (value:=wikidata_date(death)):data['death']=value
     photo=entity_value(e,'P154' if kind=='teams' else 'P18')
     # P154 is a club crest, NEVER a fallback portrait for footballers/coaches.
     if isinstance(photo,str) and len(photo)<240:
@@ -305,8 +336,8 @@ def remote_enrich(qid,get_json,kind='players'):
     elif kind!='teams' and details.get('wikiThumbnail'):
         data['image']=details['wikiThumbnail']
         data['imagePage']=page_url
-    data['careerSource']='Wikipedia ('+lang+') · '+('klub məlumatları' if kind=='teams' else 'senior liqa göstəriciləri')
-    data['careerUrl']=page_url
+    data['careerSource']=('Wikipedia ('+lang+') · '+('klub məlumatları' if kind=='teams' else 'senior liqa göstəriciləri')) if verified else 'Wikidata · təsdiqlənmiş struktur faktları'
+    data['careerUrl']=page_url if verified else 'https://www.wikidata.org/wiki/'+qid
     data['wikiUrl']=page_url
     data['wikiLanguage']=lang
     data['wikiPageLinks']=verified_language_links(e)
@@ -317,7 +348,7 @@ def remote_enrich(qid,get_json,kind='players'):
     if kind!='teams':
         data['statsScope']='domestic_league'
         data['statNotice']='Matç və qollar əsasən daxili liqa üçündür; bütün yarışların cəmi deyil. Asist məlum deyilsə, 0 sayılmır.'
-    data['wikiMatch']=True
+    data['wikiMatch']=verified
     data['verifiedSnapshot']=False
     return data
 
@@ -331,12 +362,15 @@ def enrich(qid,get_json,refresh=False,kind='players'):
     try:
         info=remote_enrich(qid,get_json,kind=kind)
         if info:
-            store(qid,info,True)
+            # Disk cache failure cannot discard valid, freshly fetched source data.
+            try:store(qid,info,bool(info.get('wikiMatch'))) # Retry unverified pages after 1 day
+            except (sqlite3.Error,OSError,ValueError):pass
             # Historical editorial snapshots remain fallback if remote infobox lacks useful detail.
             if not info.get('clubs') and not info.get('coached') and qid in SEED:
                 return {**SEED[qid],**{k:v for k,v in info.items() if v and k not in ('clubs','coached')}}
             return info
-        store(qid,{},False)
+        try:store(qid,{},False)
+        except (sqlite3.Error,OSError,ValueError):pass
     except Exception:
         # Cache miss rather than an empty authoritative profile if requests fail.
         pass
@@ -356,7 +390,8 @@ def with_wikipedia(profile,info):
         if field in info:p[field]=info[field]
     if p.get('death'):p['lifeStatus']='deceased'
     if info.get('clubs') or info.get('coached') or p.get('kind')=='teams' or info.get('wikiSummary'):
-        p['source']=(p.get('source','').split(' + Wikipedia')[0] or 'Wikidata')+' + Wikipedia'
+        if info.get('wikiMatch'):
+            p['source']=(p.get('source','').split(' + Wikipedia')[0] or 'Wikidata')+' + Wikipedia'
         p['statsAvailable']=any(c.get('apps') is not None or c.get('goals') is not None for c in info.get('clubs',[]))
     return p
 

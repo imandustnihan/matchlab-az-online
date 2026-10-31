@@ -1,4 +1,4 @@
-"""MATCHLAB AZ v0.9.4 HTML + local Python server (stdlib only, no user API key).
+"""MATCHLAB AZ v0.9.15 HTML + local Python server (stdlib only, no user API key).
 Respects upstream failures, returns explicit availability flags, never synthesizes match results.
 Sources: Wikidata CC0, Wikipedia pageimages (image rights vary), OpenLigaDB and unofficial ESPN.
 """
@@ -23,7 +23,7 @@ CACHE={}; CACHE_LOCK=threading.Lock(); HOST_COOLDOWN={}; UPSTREAM_TIMEOUT=8
 SOURCE_STATUS={}
 SCORE_CACHE=ROOT/'score_cache'
 SCORE_CACHE.mkdir(exist_ok=True)
-USER_AGENT=os.environ.get('MATCHLAB_WIKIMEDIA_UA','MatchlabAZ/0.9.14 (https://github.com/imandustnihan/matchlab-az-online; community football archive)')
+USER_AGENT=os.environ.get('MATCHLAB_WIKIMEDIA_UA','MatchlabAZ/0.9.15 (https://github.com/imandustnihan/matchlab-az-online; community football archive)')
 WIKI_REQUEST_LOCK=threading.Lock()
 WIKI_NEXT_REQUEST=0.0
 
@@ -205,11 +205,16 @@ def wd_profile(qid,known_kind=None):
  positions=[lookup.get(wd_val(c),wd_val(c)) for c in claims(e,'P413')]
  countries=[lookup.get(wd_val(c),wd_val(c)) for c in claims(e,'P27')]
  awards=[lookup.get(wd_val(c),wd_val(c)) for c in claims(e,'P166')]
- death=wd_val((claims(e,'P570') or [None])[0]);birthdate=wd_val((claims(e,'P569') or [None])[0])
+ # Preserve Wikidata date precision; a year-only death must never become Jan 1.
+ def date_claim(prop):
+  statement=(claims(e,prop) or [None])[0]
+  raw=statement.get('mainsnak',{}).get('datavalue',{}).get('value') if statement else None
+  return wiki.wikidata_date(raw)
+ death=date_claim('P570');birthdate=date_claim('P569')
  has_playing=bool(clubs or claims(e,'P54'))
  has_coaching=bool(coached or claims(e,'P6087'))
  roles=(["players"] if has_playing else [])+(["coaches"] if has_coaching else [])
- return {'id':qid,'name':wd_label(e),'kind':known_kind or wd_kind(e),'description':wd_desc(e),'image':photo_url(e,known_kind),'country':', '.join(countries),'position':', '.join(positions),'clubs':clubs,'coached':coached,'awards':awards,'birth':str(birthdate or '').lstrip('+')[:10],'death':str(death or '').lstrip('+')[:10],'lifeStatus':'deceased' if death else 'unknown','careerStatus':'unverified','roles':roles,'source':'Wikidata','url':'https://www.wikidata.org/wiki/'+qid,'verified':True}
+ return {'id':qid,'name':wd_label(e),'kind':known_kind or wd_kind(e),'description':wd_desc(e),'image':photo_url(e,known_kind),'country':', '.join(countries),'position':', '.join(positions),'clubs':clubs,'coached':coached,'awards':awards,'birth':birthdate,'death':death,'lifeStatus':'deceased' if death else 'unknown','careerStatus':'unverified','roles':roles,'source':'Wikidata','url':'https://www.wikidata.org/wiki/'+qid,'verified':True}
 
 def parse_espn(data,league):
  out=[]
@@ -364,7 +369,7 @@ def media_by_qid(qid,kind='players',retry=False):
  return {'url':url,'source':'Wikipedia — image license varies'}
 
 def send_data(path,params):
- if path=='/api/status':return {'ok':True,'backend':True,'version':'0.9.14-local','catalog':len(CATALOG),'world':world_db.counts(),'liveGuaranteed':False,'livePollingSeconds':25,'canInstall':True,'wikipedia':{'mode':'on_demand_verified_qid','verifiedSeedCount':len(wiki.SEED),'linkedQids':158924,'teamProfiles':True,'shortExtracts':True}}
+ if path=='/api/status':return {'ok':True,'backend':True,'version':'0.9.15-local','catalog':len(CATALOG),'world':world_db.counts(),'liveGuaranteed':False,'livePollingSeconds':25,'canInstall':True,'wikipedia':{'mode':'on_demand_verified_qid','verifiedSeedCount':len(wiki.SEED),'linkedQids':158924,'teamProfiles':True,'shortExtracts':True}}
  if path=='/api/sources':return {'sources':SOURCE_STATUS,'providers':['ESPN (qeyri-rəsmi)','OpenLigaDB (icma)','TheSportsDB (pulsuz/limitli)','Wikipedia/Wikidata (mənbəli profil)'],'internetVerifiedHere':False}
  if path=='/api/photos':
   values=params.get('qids',[''])[0].split(',')[:20]
