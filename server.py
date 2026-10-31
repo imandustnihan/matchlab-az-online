@@ -7,6 +7,7 @@ from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 import world_db
 import match_sources as feeds
+import free_match_details as details
 import datetime as _dt
 import wikipedia_enrichment as wiki
 import live_center
@@ -139,10 +140,10 @@ def year(v):
  m=re.search(r'([12]\d{3})',str(v)) if v else None
  return int(m.group(1)) if m else None
 
-def photo_url(e):
- # Club crests P154; people portraits P18. Never confuse the two.
- kind=wd_kind(e)
- props=['P154','P18'] if kind=='teams' else ['P18']
+def photo_url(e,known_kind=None):
+ # A team photo/stadium photograph (P18) is NOT a club crest.
+ kind=known_kind or wd_kind(e)
+ props=['P154'] if kind=='teams' else ['P18']
  raw=next((wd_val(c) for prop in props for c in claims(e,prop) if isinstance(wd_val(c),str)),None)
  return 'https://commons.wikimedia.org/wiki/Special:FilePath/'+urllib.parse.quote(raw,safe='')+'?width=280' if isinstance(raw,str) and len(raw)<240 else ''
 
@@ -163,10 +164,10 @@ def wd_search(q,kind):
   if not e:continue
   typ=wd_kind(e)
   if typ=='other' or (kind!='all' and kind!=typ):continue
-  out.append({'id':id,'name':wd_label(e),'kind':typ,'country':'','description':wd_desc(e),'image':photo_url(e),'source':'Wikidata','verified':True})
+  out.append({'id':id,'name':wd_label(e),'kind':typ,'country':'','description':wd_desc(e),'image':photo_url(e,typ),'source':'Wikidata','verified':True})
  return out
 
-def wd_profile(qid):
+def wd_profile(qid,known_kind=None):
  raw=wd_entities([qid]); e=raw.get(qid)
  if not e or e.get('missing') is not None:return None
  related=[]
@@ -191,7 +192,7 @@ def wd_profile(qid):
  has_playing=bool(clubs or claims(e,'P54'))
  has_coaching=bool(coached or claims(e,'P6087'))
  roles=(["players"] if has_playing else [])+(["coaches"] if has_coaching else [])
- return {'id':qid,'name':wd_label(e),'kind':wd_kind(e),'description':wd_desc(e),'image':photo_url(e),'country':', '.join(countries),'position':', '.join(positions),'clubs':clubs,'coached':coached,'awards':awards,'birth':str(birthdate or '').lstrip('+')[:10],'death':str(death or '').lstrip('+')[:10],'lifeStatus':'deceased' if death else 'unknown','careerStatus':'unverified','roles':roles,'source':'Wikidata','url':'https://www.wikidata.org/wiki/'+qid,'verified':True}
+ return {'id':qid,'name':wd_label(e),'kind':known_kind or wd_kind(e),'description':wd_desc(e),'image':photo_url(e,known_kind),'country':', '.join(countries),'position':', '.join(positions),'clubs':clubs,'coached':coached,'awards':awards,'birth':str(birthdate or '').lstrip('+')[:10],'death':str(death or '').lstrip('+')[:10],'lifeStatus':'deceased' if death else 'unknown','careerStatus':'unverified','roles':roles,'source':'Wikidata','url':'https://www.wikidata.org/wiki/'+qid,'verified':True}
 
 def parse_espn(data,league):
  out=[]
@@ -216,11 +217,25 @@ def openliga_matches(date):
  rows=get_json(f'https://api.openligadb.de/getmatchdata/bl1/{season}',ttl=120)
  out=[]
  for e in rows:
+  # OpenLigaDB reports UTC kickoff; align the requested match day to Baku time.
   when=e.get('matchDateTimeUTC') or e.get('matchDateTime') or ''
-  if when[:10]!=date:continue
-  rs=e.get('matchResults') or []; final=next((x for x in rs if x.get('resultTypeID')==2),rs[-1] if rs else {})
-  finished=bool(e.get('matchIsFinished'));started=when and when[:10]<=date
-  out.append({'id':'open:'+str(e.get('matchID')),'league':'ger.1','home':{'id':str(e.get('team1',{}).get('teamId','')),'name':e.get('team1',{}).get('teamName',''),'image':e.get('team1',{}).get('teamIconUrl','')},'away':{'id':str(e.get('team2',{}).get('teamId','')),'name':e.get('team2',{}).get('teamName',''),'image':e.get('team2',{}).get('teamIconUrl','')},'homeScore':final.get('pointsTeam1') if final else None,'awayScore':final.get('pointsTeam2') if final else None,'state':'final' if finished else 'live' if final else 'scheduled','minute':'','date':when,'source':'OpenLigaDB','eventId':str(e.get('matchID'))})
+  try:
+   kick=_dt.datetime.fromisoformat(when.replace('Z','+00:00'))
+   # Provider's matchDateTime without UTC suffix is local German time, not UTC.
+   if kick.tzinfo is None:
+    from zoneinfo import ZoneInfo
+    kick=kick.replace(tzinfo=ZoneInfo('Europe/Berlin'))
+   from zoneinfo import ZoneInfo
+   if kick.astimezone(ZoneInfo('Asia/Baku')).date().isoformat()!=date:continue
+  except (ValueError,TypeError):continue
+  rs=e.get('matchResults') or []
+  final=next((x for x in rs if x.get('resultTypeID')==2),rs[-1] if rs else {})
+  finished=bool(e.get('matchIsFinished'))
+  elapsed=(_dt.datetime.now(_dt.timezone.utc)-kick.astimezone(_dt.timezone.utc)).total_seconds()
+  has_score=bool(final and final.get('pointsTeam1') is not None and final.get('pointsTeam2') is not None)
+  is_live=not finished and has_score and 0<=elapsed<=5*3600
+  state='final' if finished else 'live' if is_live else 'scheduled'
+  out.append({'id':'open:'+str(e.get('matchID')),'league':'ger.1','home':{'id':str(e.get('team1',{}).get('teamId','')),'name':e.get('team1',{}).get('teamName',''),'image':e.get('team1',{}).get('teamIconUrl','')},'away':{'id':str(e.get('team2',{}).get('teamId','')),'name':e.get('team2',{}).get('teamName',''),'image':e.get('team2',{}).get('teamIconUrl','')},'homeScore':final.get('pointsTeam1') if final and state!='scheduled' else None,'awayScore':final.get('pointsTeam2') if final and state!='scheduled' else None,'state':state,'minute':'','date':kick.astimezone(_dt.timezone.utc).isoformat(),'source':'OpenLigaDB','eventId':str(e.get('matchID'))})
  return out
 
 def espn_standings(league):
@@ -314,11 +329,12 @@ def media_by_qid(qid,kind='players',retry=False):
  # Always bind portraits to a verified Wikidata identity. Never guess by an ambiguous name.
  e=wd_entities([qid]).get(qid,{})
  if not e:return {'url':'','source':''}
- props=('P154','P18') if kind=='teams' else ('P18',)
+ props=('P154',) if kind=='teams' else ('P18',)
  filename=next((wd_val(v) for prop in props for v in claims(e,prop) if isinstance(wd_val(v),str)),None)
  if filename and len(filename)<230:
   return {'url':'https://commons.wikimedia.org/wiki/Special:FilePath/'+urllib.parse.quote(filename,safe='')+'?width=300',
           'source':'Wikidata / Wikimedia Commons'}
+ if kind=='teams':return {'url':'','source':'Wikidata P154 emblemi tapılmadı'}
  # Wikipedia thumbnails are accepted only when the article's Wikidata ID matches.
  raw=wd_query('wbgetentities',ids=qid,props='sitelinks',sitefilter='enwiki')
  title=(raw.get('entities',{}).get(qid,{}).get('sitelinks',{}).get('enwiki') or {}).get('title')
@@ -330,7 +346,7 @@ def media_by_qid(qid,kind='players',retry=False):
  return {'url':url,'source':'Wikipedia — image license varies'}
 
 def send_data(path,params):
- if path=='/api/status':return {'ok':True,'backend':True,'version':'0.9.6','catalog':len(CATALOG),'world':world_db.counts(),'liveGuaranteed':False,'livePollingSeconds':25,'canInstall':True,'wikipedia':{'mode':'on_demand_cache','verifiedSeedCount':len(wiki.SEED),'linkedQids':158924}}
+ if path=='/api/status':return {'ok':True,'backend':True,'version':'0.9.9-free','catalog':len(CATALOG),'world':world_db.counts(),'liveGuaranteed':False,'livePollingSeconds':25,'canInstall':True,'wikipedia':{'mode':'on_demand_cache','verifiedSeedCount':len(wiki.SEED),'linkedQids':158924}}
  if path=='/api/sources':return {'sources':SOURCE_STATUS,'providers':['ESPN (qeyri-rəsmi)','OpenLigaDB (icma)','TheSportsDB (pulsuz/limitli)'],'internetVerifiedHere':False}
  if path=='/api/photos':
   values=params.get('qids',[''])[0].split(',')[:20]
@@ -348,7 +364,7 @@ def send_data(path,params):
    entities=wd_entities(remaining)
    for qid in remaining:
     e=entities.get(qid,{})
-    props=('P154','P18') if kind=='teams' else ('P18',)
+    props=('P154',) if kind=='teams' else ('P18',)
     img=next((wd_val(v) for prop in props for v in claims(e,prop) if isinstance(wd_val(v),str)),None)
     if img and len(img)<230:output[qid]='https://commons.wikimedia.org/wiki/Special:FilePath/'+urllib.parse.quote(img,safe='')+'?width=240'
   except Exception:pass
@@ -395,7 +411,7 @@ def send_data(path,params):
    qid=profile.get('wikidataId','')
    if qid and qid not in wiki.SEED:
     try:
-     wd=wd_profile(qid)
+     wd=wd_profile(qid,profile.get('kind'))
      if wd:
       profile.update({'image':wd.get('image',''),'position':wd.get('position',''),'clubs':wd.get('clubs',[]),'coached':wd.get('coached',[]),'awards':wd.get('awards',[]),'birth':wd.get('birth',''),'death':wd.get('death',''),'lifeStatus':wd.get('lifeStatus','unknown'),'roles':list(dict.fromkeys(profile.get('roles',[])+wd.get('roles',[])))})
     except Exception:pass
@@ -450,6 +466,40 @@ def send_data(path,params):
   if not QID.fullmatch(qid):return {'url':'','source':'Kimlik bağlantısı yoxdur'}
   try:return media_by_qid(qid,kind,retry=params.get('retry',['0'])[0]=='1')
   except Exception:return {'url':'','source':'Şəkil mənbəsinə çıxış yoxdur'}
+ if path=='/api/match-detail':
+  # Only three fixed upstream hosts are reachable. No arbitrary URL or hostname input.
+  provider=params.get('provider',[''])[0]
+  match_id=params.get('id',[''])[0]
+  league=params.get('league',[''])[0]
+  if not re.fullmatch(r'[1-9][0-9]{0,11}', match_id) or provider not in ('espn','sportsdb','open'):
+   return {'available':False,'events':[],'statistics':[],'message':'Matç identifikatoru düzgün deyil.'}
+  if provider=='espn' and league not in LEAGUES:
+   return {'available':False,'events':[],'statistics':[],'message':'Liqa düzgün deyil.'}
+  if provider=='espn':
+   try:
+    j=source_call('ESPN',f'https://site.api.espn.com/apis/site/v2/sports/soccer/{league}/summary?event={match_id}',180)
+    return details.espn_details(j)
+   except Exception:
+    return details.empty_details('ESPN (qeyri-rəsmi)','ESPN matç məlumatına hazırda çıxış yoxdur.')
+  if provider=='open':
+   try:
+    j=source_call('OpenLigaDB','https://api.openligadb.de/getmatchdata/'+match_id,180)
+    return details.openliga_details(j)
+   except Exception:
+    return details.empty_details('OpenLigaDB','Bu matçın qol hadisələri əlçatan deyil.')
+  # TheSportsDB v1 free key is public; 3 separate requests may individually be empty/limited.
+  path_base='https://www.thesportsdb.com/api/v1/json/123/'
+  found={}; missing=[]
+  for key,route in [('lineup','lookuplineup.php'),('stats','lookupeventstats.php'),('timeline','lookuptimeline.php')]:
+   try:
+    found[key]=source_call('TheSportsDB',path_base+route+'?id='+match_id,300)
+   except Exception:
+    found[key]={};missing.append(key)
+  result=details.sportsdb_details(found['lineup'],found['stats'],found['timeline'])
+  if missing:
+   result['partial']=True
+   result['message']=(result['message']+' ' if result['message'] else '')+'Mənbənin bəzi hissələri əlçatan deyil: '+', '.join(missing)
+  return result
  if path=='/api/summary':
   league=params.get('league',[''])[0];id=params.get('id',[''])[0]
   if league not in LEAGUES or not id.isdigit():return {'events':[],'available':False}

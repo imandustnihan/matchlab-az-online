@@ -88,20 +88,26 @@ def sportsdb_games(raw, league):
   if (ev.get('strSport') or 'Soccer')!='Soccer':continue
   status=str(ev.get('strStatus') or '').lower()
   hs=_num(ev.get('intHomeScore'));as_=_num(ev.get('intAwayScore'))
-  finished=any(x in status for x in ('finished','full time','match ended','after extra','penalty'))
-  in_play=any(x in status for x in ('live','in progress','half time','1st half','2nd half'))
+  # SportsDB football short status codes: 1H, HT, 2H, ET, FT, AET, PEN.
+  # Status codes alone (rather than a score or old event date) determine in-play.
+  final_codes={'ft','aet','pen','awd','aw','wo'}
+  live_codes={'1h','ht','2h','et','bt','p','pt'}
+  finished=status in final_codes or any(x in status for x in ('finished','full time','match ended','after extra'))
+  in_play=status in live_codes or any(x in status for x in ('live','in progress','half time','1st half','2nd half'))
   state='final' if finished else 'live' if in_play else 'scheduled'
   # If feed supplies scores without status, don't assume they are current live goals.
   if state=='scheduled' and hs is not None and as_ is not None:
    # Old scheduled date plus reported score is a past result, not a live event.
    old=(ev.get('dateEvent') or '') < dt.date.today().isoformat()
    state='final' if ev.get('strStatus')=='FT' or (old and ev.get('dateEvent')) else 'scheduled'
+  when=ev.get('strTimestamp') or ((ev.get('dateEvent') or '')+'T'+(ev.get('strTime') or '00:00:00'))
+  if isinstance(when,str) and len(when)>=19 and when[10]=='T' and not (when.endswith('Z') or '+' in when[10:] or '-' in when[10:]):when+='Z'
   out.append({'id':'sportsdb:'+str(ev.get('idEvent') or ''),'eventId':str(ev.get('idEvent') or ''),
    'league':league,'home':{'id':str(ev.get('idHomeTeam') or ''),'name':ev.get('strHomeTeam') or '—','image':ev.get('strHomeTeamBadge') or ''},
    'away':{'id':str(ev.get('idAwayTeam') or ''),'name':ev.get('strAwayTeam') or '—','image':ev.get('strAwayTeamBadge') or ''},
    'homeScore':hs if state!='scheduled' else None,'awayScore':as_ if state!='scheduled' else None,
    'state':state,'minute':ev.get('strProgress') or '',
-   'date':ev.get('strTimestamp') or ((ev.get('dateEvent') or '')+'T'+(ev.get('strTime') or '00:00:00')),
+   'date':when,
    'source':'TheSportsDB (pulsuz, qismən)'})
  return out
 
