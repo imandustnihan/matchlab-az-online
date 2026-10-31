@@ -140,12 +140,19 @@ def year(v):
  m=re.search(r'([12]\d{3})',str(v)) if v else None
  return int(m.group(1)) if m else None
 
+def entity_media_filename(e,kind):
+ # Do not display a stadium photo as a footballer portrait, or a person's photo as a club crest.
+ # Even a QID can be passed with the wrong client kind; reject obvious type conflicts.
+ inferred=wd_kind(e)
+ if kind=='teams' and inferred in ('players','coaches'):return None
+ if kind in ('players','coaches') and (inferred=='teams' or (claims(e,'P154') and not claims(e,'P106') and not claims(e,'P54'))):return None
+ prop='P154' if kind=='teams' else 'P18'
+ return next((wd_val(c) for c in claims(e,prop) if isinstance(wd_val(c),str) and 0<len(wd_val(c))<230),None)
+
 def photo_url(e,known_kind=None):
- # A team photo/stadium photograph (P18) is NOT a club crest.
  kind=known_kind or wd_kind(e)
- props=['P154'] if kind=='teams' else ['P18']
- raw=next((wd_val(c) for prop in props for c in claims(e,prop) if isinstance(wd_val(c),str)),None)
- return 'https://commons.wikimedia.org/wiki/Special:FilePath/'+urllib.parse.quote(raw,safe='')+'?width=280' if isinstance(raw,str) and len(raw)<240 else ''
+ raw=entity_media_filename(e,kind)
+ return 'https://commons.wikimedia.org/wiki/Special:FilePath/'+urllib.parse.quote(raw,safe='')+'?width=280' if raw else ''
 
 def wd_kind(e):
  desc=wd_desc(e).lower(); occupations=[wd_val(x) for x in claims(e,'P106')]; instances=[wd_val(x) for x in claims(e,'P31')]
@@ -329,8 +336,9 @@ def media_by_qid(qid,kind='players',retry=False):
  # Always bind portraits to a verified Wikidata identity. Never guess by an ambiguous name.
  e=wd_entities([qid]).get(qid,{})
  if not e:return {'url':'','source':''}
- props=('P154',) if kind=='teams' else ('P18',)
- filename=next((wd_val(v) for prop in props for v in claims(e,prop) if isinstance(wd_val(v),str)),None)
+ filename=entity_media_filename(e,kind)
+ if kind in ('players','coaches') and filename is None and (wd_kind(e)=='teams' or (claims(e,'P154') and not claims(e,'P106') and not claims(e,'P54'))):
+  return {'url':'','source':'Profil növü Wikidata kimliyi ilə uyğun deyil'}
  if filename and len(filename)<230:
   return {'url':'https://commons.wikimedia.org/wiki/Special:FilePath/'+urllib.parse.quote(filename,safe='')+'?width=300',
           'source':'Wikidata / Wikimedia Commons'}
@@ -346,7 +354,7 @@ def media_by_qid(qid,kind='players',retry=False):
  return {'url':url,'source':'Wikipedia — image license varies'}
 
 def send_data(path,params):
- if path=='/api/status':return {'ok':True,'backend':True,'version':'0.9.9-free','catalog':len(CATALOG),'world':world_db.counts(),'liveGuaranteed':False,'livePollingSeconds':25,'canInstall':True,'wikipedia':{'mode':'on_demand_cache','verifiedSeedCount':len(wiki.SEED),'linkedQids':158924}}
+ if path=='/api/status':return {'ok':True,'backend':True,'version':'0.9.13-local','catalog':len(CATALOG),'world':world_db.counts(),'liveGuaranteed':False,'livePollingSeconds':25,'canInstall':True,'wikipedia':{'mode':'on_demand_cache','verifiedSeedCount':len(wiki.SEED),'linkedQids':158924}}
  if path=='/api/sources':return {'sources':SOURCE_STATUS,'providers':['ESPN (qeyri-rəsmi)','OpenLigaDB (icma)','TheSportsDB (pulsuz/limitli)'],'internetVerifiedHere':False}
  if path=='/api/photos':
   values=params.get('qids',[''])[0].split(',')[:20]
@@ -364,11 +372,10 @@ def send_data(path,params):
    entities=wd_entities(remaining)
    for qid in remaining:
     e=entities.get(qid,{})
-    props=('P154',) if kind=='teams' else ('P18',)
-    img=next((wd_val(v) for prop in props for v in claims(e,prop) if isinstance(wd_val(v),str)),None)
+    img=entity_media_filename(e,kind)
     if img and len(img)<230:output[qid]='https://commons.wikimedia.org/wiki/Special:FilePath/'+urllib.parse.quote(img,safe='')+'?width=240'
   except Exception:pass
-  return {'items':output,'source':'Wikidata / Wikimedia Commons'}
+  return {'items':output,'source':'Wikidata / Wikimedia Commons','requested':len(qids),'found':len(output)}
  if path=='/api/world/countries':return {'items':world_db.countries(),'installed':bool(world_db.counts())}
  if path=='/api/install-status':
   with INSTALL_LOCK: state=INSTALL.copy()
@@ -452,17 +459,36 @@ def send_data(path,params):
   if league not in LEAGUES or not id.isdigit():return {'items':[],'available':False}
   try:
    j=get_json(f'https://site.api.espn.com/apis/site/v2/sports/soccer/{league}/teams/{id}/roster',300)
-   result=[]
-   for a in j.get('athletes',[]):
-    for x in (a.get('items',[]) if isinstance(a.get('items'),list) else [a.get('athlete',a)]):
-     if isinstance(x,dict) and (x.get('displayName') or x.get('fullName')):
-      photo=x.get('headshot') or ''
-      result.append({'id':str(x.get('id','')),'name':x.get('displayName') or x.get('fullName'),'image':photo.get('href','') if isinstance(photo,dict) else photo,'position':x.get('position',{}).get('displayName',''),'number':x.get('jersey','')})
-   return {'items':result,'available':True,'source':'ESPN'}
-  except Exception:return {'items':[],'available':False,'message':'Rəsmi cari heyət mənbəsi əlçatan deyil.'}
+   result=[];seen=set()
+   def collect(items):
+    if isinstance(items,list):
+     for item in items:collect(item)
+     return
+    if not isinstance(items,dict):return
+    # ESPN may return grouped position lists, or a flat athlete list.
+    athlete=items.get('athlete') if isinstance(items.get('athlete'),dict) else items
+    name=athlete.get('displayName') or athlete.get('fullName')
+    if name:
+     athlete_id=str(athlete.get('id') or '')
+     key=athlete_id or name.casefold()
+     if key not in seen:
+      seen.add(key)
+      photo=athlete.get('headshot') or ''
+      position=athlete.get('position') or {}
+      result.append({'id':athlete_id,'name':name,
+                     'image':photo.get('href','') if isinstance(photo,dict) else photo,
+                     'position':position.get('displayName','') if isinstance(position,dict) else str(position),
+                     'number':athlete.get('jersey','')})
+    for key in ('items','athletes'):
+     if isinstance(items.get(key),list):collect(items[key])
+   collect(j.get('athletes',[]) if isinstance(j,dict) else [])
+   return {'items':result,'available':bool(result),'source':'ESPN (qeyri-rəsmi)',
+           'message':'' if result else 'ESPN bu klub üçün təsdiqlənmiş cari heyət qaytarmadı.'}
+  except Exception:return {'items':[],'available':False,'message':'Cari heyət mənbəyi əlçatan deyil.'}
  if path=='/api/photo':
   qid=params.get('qid',[''])[0].strip()
   kind=params.get('kind',['players'])[0]
+  if kind not in ('players','teams','coaches'):return {'url':'','source':'Profil növü düzgün deyil'}
   if not QID.fullmatch(qid):return {'url':'','source':'Kimlik bağlantısı yoxdur'}
   try:return media_by_qid(qid,kind,retry=params.get('retry',['0'])[0]=='1')
   except Exception:return {'url':'','source':'Şəkil mənbəsinə çıxış yoxdur'}

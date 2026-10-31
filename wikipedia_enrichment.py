@@ -212,7 +212,7 @@ def remote_enrich(qid,get_json):
     if isinstance(birth,dict) and birth.get('time'):data['birth']=birth['time'].lstrip('+')[:10]
     if isinstance(death,dict) and death.get('time'):data['death']=death['time'].lstrip('+')[:10]
     photo=entity_value(e,'P18')
-    if not photo and entity_value(e,'P154'):photo=entity_value(e,'P154')
+    # P154 is an organisation crest, NEVER a fallback portrait for footballers or coaches.
     if isinstance(photo,str) and len(photo)<240:
         data['image']='https://commons.wikimedia.org/wiki/Special:FilePath/'+urllib.parse.quote(photo,safe='')+'?width=360'
     data['careerSource']='Wikipedia ('+lang+') · senior liqa göstəriciləri'
