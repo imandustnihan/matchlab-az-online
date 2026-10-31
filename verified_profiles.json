@@ -1,0 +1,761 @@
+{
+  "Q11571": {
+    "id": "Q11571",
+    "name": "Cristiano Ronaldo",
+    "birth": "1985-02-05",
+    "death": "",
+    "image": "https://commons.wikimedia.org/wiki/Special:FilePath/Cristiano%20Ronaldo%202018%20%28cropped%29.jpg?width=360",
+    "clubs": [
+      {
+        "name": "Sporting CP B",
+        "from": 2002,
+        "to": 2003,
+        "apps": 2,
+        "goals": 0,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Sporting CP",
+        "from": 2002,
+        "to": 2003,
+        "apps": 25,
+        "goals": 3,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Manchester United",
+        "from": 2003,
+        "to": 2009,
+        "apps": 196,
+        "goals": 84,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Real Madrid",
+        "from": 2009,
+        "to": 2018,
+        "apps": 292,
+        "goals": 311,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Juventus",
+        "from": 2018,
+        "to": 2021,
+        "apps": 98,
+        "goals": 81,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Manchester United",
+        "from": 2021,
+        "to": 2022,
+        "apps": 40,
+        "goals": 19,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Al-Nassr",
+        "from": 2023,
+        "to": null,
+        "apps": 117,
+        "goals": 109,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      }
+    ],
+    "coached": [],
+    "national": {
+      "name": "Portuqaliya",
+      "apps": 234,
+      "goals": 146
+    },
+    "awards": [],
+    "careerSource": "Wikipedia (ingiliscə) — senior liqa göstəriciləri",
+    "careerUrl": "https://en.wikipedia.org/wiki/Cristiano_Ronaldo",
+    "statsChecked": "2026-10-31",
+    "statsAsOf": "2026-10-29",
+    "statsScope": "domestic_league",
+    "statNotice": "Burada yalnız daxili liqa matçları və qolları göstərilir; kubok/avrokubok və milli komanda matçları bu toplama daxil deyil. Asist məlumatı bu mənbədə mövcud deyil.",
+    "verifiedSnapshot": true
+  },
+  "Q5705": {
+    "id": "Q5705",
+    "name": "Lionel Messi",
+    "birth": "1987-06-24",
+    "death": "",
+    "image": "https://commons.wikimedia.org/wiki/Special:FilePath/Lionel%20Messi%20WC2022.jpg?width=360",
+    "clubs": [
+      {
+        "name": "Barcelona C",
+        "from": 2003,
+        "to": 2004,
+        "apps": 10,
+        "goals": 5,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Barcelona B",
+        "from": 2004,
+        "to": 2005,
+        "apps": 22,
+        "goals": 6,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Barcelona",
+        "from": 2004,
+        "to": 2021,
+        "apps": 520,
+        "goals": 474,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Paris Saint-Germain",
+        "from": 2021,
+        "to": 2023,
+        "apps": 58,
+        "goals": 22,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Inter Miami",
+        "from": 2023,
+        "to": null,
+        "apps": 82,
+        "goals": 75,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      }
+    ],
+    "coached": [],
+    "national": {
+      "name": "Argentina",
+      "apps": 208,
+      "goals": 126
+    },
+    "awards": [],
+    "careerSource": "Wikipedia (ingiliscə) — senior liqa göstəriciləri",
+    "careerUrl": "https://en.wikipedia.org/wiki/Lionel_Messi",
+    "statsChecked": "2026-10-31",
+    "statsAsOf": "2026-10-29",
+    "statsScope": "domestic_league",
+    "statNotice": "Burada yalnız daxili liqa matçları və qolları göstərilir; kubok/avrokubok və milli komanda matçları bu toplama daxil deyil. Asist məlumatı bu mənbədə mövcud deyil.",
+    "verifiedSnapshot": true
+  },
+  "Q1835": {
+    "id": "Q1835",
+    "name": "Zinedine Zidane",
+    "birth": "1972-06-23",
+    "death": "",
+    "image": "https://commons.wikimedia.org/wiki/Special:FilePath/Zinedine%20Zidane%20%28cropped%29.JPG?width=360",
+    "clubs": [
+      {
+        "name": "Cannes",
+        "from": 1989,
+        "to": 1992,
+        "apps": 61,
+        "goals": 6,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Bordeaux",
+        "from": 1992,
+        "to": 1996,
+        "apps": 139,
+        "goals": 28,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Juventus",
+        "from": 1996,
+        "to": 2001,
+        "apps": 151,
+        "goals": 24,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Real Madrid",
+        "from": 2001,
+        "to": 2006,
+        "apps": 155,
+        "goals": 37,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      }
+    ],
+    "coached": [
+      {
+        "name": "Real Madrid Castilla",
+        "from": 2014,
+        "to": 2016
+      },
+      {
+        "name": "Real Madrid",
+        "from": 2016,
+        "to": 2018
+      },
+      {
+        "name": "Real Madrid",
+        "from": 2019,
+        "to": 2021
+      }
+    ],
+    "national": {
+      "name": "Fransa",
+      "apps": 108,
+      "goals": 31
+    },
+    "awards": [],
+    "careerSource": "Wikipedia (ingiliscə) — senior liqa göstəriciləri",
+    "careerUrl": "https://en.wikipedia.org/wiki/Zinedine_Zidane",
+    "statsChecked": "2026-10-31",
+    "statsAsOf": "2006-05-07",
+    "statsScope": "domestic_league",
+    "statNotice": "Burada yalnız daxili liqa matçları və qolları göstərilir; kubok/avrokubok və milli komanda matçları bu toplama daxil deyil. Asist məlumatı bu mənbədə mövcud deyil.",
+    "verifiedSnapshot": true
+  },
+  "p:pel": {
+    "id": "p:pel",
+    "name": "Pelé",
+    "birth": "1940-10-23",
+    "death": "2022-12-29",
+    "image": "https://commons.wikimedia.org/wiki/Special:FilePath/Pele.jpg?width=360",
+    "clubs": [
+      {
+        "name": "Santos",
+        "from": 1956,
+        "to": 1974,
+        "apps": 583,
+        "goals": 569,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "New York Cosmos",
+        "from": 1975,
+        "to": 1977,
+        "apps": 64,
+        "goals": 37,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      }
+    ],
+    "coached": [],
+    "national": {
+      "name": "Braziliya",
+      "apps": 92,
+      "goals": 77
+    },
+    "awards": [],
+    "careerSource": "Wikipedia (ingiliscə) — senior liqa göstəriciləri",
+    "careerUrl": "https://en.wikipedia.org/wiki/Pel%C3%A9",
+    "statsChecked": "2026-10-31",
+    "statsAsOf": "1977-10-01",
+    "statsScope": "domestic_league",
+    "statNotice": "Burada yalnız daxili liqa matçları və qolları göstərilir; kubok/avrokubok və milli komanda matçları bu toplama daxil deyil. Asist məlumatı bu mənbədə mövcud deyil.",
+    "verifiedSnapshot": true
+  },
+  "p:diego-maradona": {
+    "id": "p:diego-maradona",
+    "name": "Diego Maradona",
+    "birth": "1960-10-30",
+    "death": "2020-11-25",
+    "image": "https://commons.wikimedia.org/wiki/Special:FilePath/DiegoMaradona.jpg?width=360",
+    "clubs": [
+      {
+        "name": "Argentinos Juniors",
+        "from": 1976,
+        "to": 1981,
+        "apps": 166,
+        "goals": 116,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Boca Juniors",
+        "from": 1981,
+        "to": 1982,
+        "apps": 40,
+        "goals": 28,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Barcelona",
+        "from": 1982,
+        "to": 1984,
+        "apps": 36,
+        "goals": 22,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Napoli",
+        "from": 1984,
+        "to": 1991,
+        "apps": 188,
+        "goals": 81,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Sevilla",
+        "from": 1992,
+        "to": 1993,
+        "apps": 26,
+        "goals": 5,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Newell's Old Boys",
+        "from": 1993,
+        "to": 1994,
+        "apps": 5,
+        "goals": 0,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Boca Juniors",
+        "from": 1995,
+        "to": 1997,
+        "apps": 30,
+        "goals": 7,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      }
+    ],
+    "coached": [
+      {
+        "name": "Deportivo Mandiyú",
+        "from": 1994,
+        "to": 1994
+      },
+      {
+        "name": "Racing Club",
+        "from": 1995,
+        "to": 1995
+      },
+      {
+        "name": "Argentina",
+        "from": 2008,
+        "to": 2010
+      },
+      {
+        "name": "Al-Wasl",
+        "from": 2011,
+        "to": 2012
+      },
+      {
+        "name": "Fujairah",
+        "from": 2017,
+        "to": 2018
+      },
+      {
+        "name": "Dorados de Sinaloa",
+        "from": 2018,
+        "to": 2019
+      },
+      {
+        "name": "Gimnasia de La Plata",
+        "from": 2019,
+        "to": 2020
+      }
+    ],
+    "national": {
+      "name": "Argentina",
+      "apps": 91,
+      "goals": 34
+    },
+    "awards": [],
+    "careerSource": "Wikipedia (ingiliscə) — senior liqa göstəriciləri",
+    "careerUrl": "https://en.wikipedia.org/wiki/Diego_Maradona",
+    "statsChecked": "2026-10-31",
+    "statsAsOf": "1997-10-25",
+    "statsScope": "domestic_league",
+    "statNotice": "Burada yalnız daxili liqa matçları və qolları göstərilir; kubok/avrokubok və milli komanda matçları bu toplama daxil deyil. Asist məlumatı bu mənbədə mövcud deyil.",
+    "verifiedSnapshot": true
+  },
+  "Q21621995": {
+    "id": "Q21621995",
+    "name": "Kylian Mbappé",
+    "birth": "1998-12-20",
+    "death": "",
+    "image": "",
+    "clubs": [
+      {
+        "name": "Monaco II",
+        "from": 2015,
+        "to": 2016,
+        "apps": 12,
+        "goals": 4,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Monaco",
+        "from": 2015,
+        "to": 2018,
+        "apps": 41,
+        "goals": 16,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Paris Saint-Germain (icarə)",
+        "from": 2017,
+        "to": 2018,
+        "apps": 27,
+        "goals": 13,
+        "assists": null,
+        "loan": true,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Paris Saint-Germain",
+        "from": 2018,
+        "to": 2024,
+        "apps": 178,
+        "goals": 162,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Real Madrid",
+        "from": 2024,
+        "to": null,
+        "apps": 75,
+        "goals": 67,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      }
+    ],
+    "coached": [],
+    "national": {
+      "name": "Fransa",
+      "apps": 107,
+      "goals": 67
+    },
+    "awards": [],
+    "careerSource": "Wikipedia (ingiliscə) — senior liqa göstəriciləri",
+    "careerUrl": "https://en.wikipedia.org/wiki/Kylian_Mbapp%C3%A9",
+    "statsChecked": "2026-10-31",
+    "statsAsOf": "2026-10-25",
+    "statsScope": "domestic_league",
+    "statNotice": "Burada yalnız daxili liqa matçları və qolları göstərilir; kubok/avrokubok və milli komanda matçları bu toplama daxil deyil. Asist məlumatı bu mənbədə mövcud deyil.",
+    "verifiedSnapshot": true
+  },
+  "Q28967995": {
+    "id": "Q28967995",
+    "name": "Erling Haaland",
+    "birth": "2000-07-21",
+    "death": "",
+    "image": "",
+    "clubs": [
+      {
+        "name": "Bryne 2",
+        "from": 2015,
+        "to": 2016,
+        "apps": 18,
+        "goals": 18,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Bryne",
+        "from": 2016,
+        "to": 2017,
+        "apps": 16,
+        "goals": 0,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Molde 2",
+        "from": 2017,
+        "to": 2018,
+        "apps": 4,
+        "goals": 2,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Molde",
+        "from": 2017,
+        "to": 2019,
+        "apps": 39,
+        "goals": 14,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Red Bull Salzburg",
+        "from": 2019,
+        "to": 2020,
+        "apps": 16,
+        "goals": 17,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Borussia Dortmund",
+        "from": 2020,
+        "to": 2022,
+        "apps": 67,
+        "goals": 62,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Manchester City",
+        "from": 2022,
+        "to": null,
+        "apps": 140,
+        "goals": 121,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      }
+    ],
+    "coached": [],
+    "national": {
+      "name": "Norveç",
+      "apps": 59,
+      "goals": 65
+    },
+    "awards": [],
+    "careerSource": "Wikipedia (ingiliscə) — senior liqa göstəriciləri",
+    "careerUrl": "https://en.wikipedia.org/wiki/Erling_Haaland",
+    "statsChecked": "2026-10-31",
+    "statsAsOf": "2026-10-24",
+    "statsScope": "domestic_league",
+    "statNotice": "Burada yalnız daxili liqa matçları və qolları göstərilir; kubok/avrokubok və milli komanda matçları bu toplama daxil deyil. Asist məlumatı bu mənbədə mövcud deyil.",
+    "verifiedSnapshot": true
+  },
+  "p:neymar": {
+    "id": "p:neymar",
+    "name": "Neymar",
+    "birth": "1992-02-05",
+    "death": "",
+    "image": "",
+    "clubs": [
+      {
+        "name": "Santos",
+        "from": 2009,
+        "to": 2013,
+        "apps": 179,
+        "goals": 107,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Barcelona",
+        "from": 2013,
+        "to": 2017,
+        "apps": 123,
+        "goals": 68,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Paris Saint-Germain",
+        "from": 2017,
+        "to": 2023,
+        "apps": 112,
+        "goals": 82,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Al-Hilal",
+        "from": 2023,
+        "to": 2025,
+        "apps": 3,
+        "goals": 0,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Santos",
+        "from": 2025,
+        "to": null,
+        "apps": 44,
+        "goals": 19,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      }
+    ],
+    "coached": [],
+    "national": {
+      "name": "Braziliya",
+      "apps": 130,
+      "goals": 80
+    },
+    "awards": [],
+    "careerSource": "Wikipedia (ingiliscə) — senior liqa göstəriciləri",
+    "careerUrl": "https://en.wikipedia.org/wiki/Neymar",
+    "statsChecked": "2026-10-31",
+    "statsAsOf": "2026-10-25",
+    "statsScope": "domestic_league",
+    "statNotice": "Burada yalnız daxili liqa matçları və qolları göstərilir; kubok/avrokubok və milli komanda matçları bu toplama daxil deyil. Asist məlumatı bu mənbədə mövcud deyil.",
+    "verifiedSnapshot": true
+  },
+  "p:mohamed-salah": {
+    "id": "p:mohamed-salah",
+    "name": "Mohamed Salah",
+    "birth": "1992-06-15",
+    "death": "",
+    "image": "",
+    "clubs": [
+      {
+        "name": "Al-Mokawloon",
+        "from": 2010,
+        "to": 2012,
+        "apps": 40,
+        "goals": 11,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Basel",
+        "from": 2012,
+        "to": 2014,
+        "apps": 47,
+        "goals": 9,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Chelsea",
+        "from": 2014,
+        "to": 2016,
+        "apps": 13,
+        "goals": 2,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Fiorentina (icarə)",
+        "from": 2015,
+        "to": 2015,
+        "apps": 16,
+        "goals": 6,
+        "assists": null,
+        "loan": true,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Roma (icarə)",
+        "from": 2015,
+        "to": 2016,
+        "apps": 34,
+        "goals": 14,
+        "assists": null,
+        "loan": true,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Roma",
+        "from": 2016,
+        "to": 2017,
+        "apps": 31,
+        "goals": 15,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Liverpool",
+        "from": 2017,
+        "to": 2026,
+        "apps": 315,
+        "goals": 191,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Trabzonspor",
+        "from": 2026,
+        "to": null,
+        "apps": 9,
+        "goals": 8,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      }
+    ],
+    "coached": [],
+    "national": {
+      "name": "Misir",
+      "apps": 122,
+      "goals": 68
+    },
+    "awards": [],
+    "careerSource": "Wikipedia (ingiliscə) — senior liqa göstəriciləri",
+    "careerUrl": "https://en.wikipedia.org/wiki/Mohamed_Salah",
+    "statsChecked": "2026-10-31",
+    "statsAsOf": "2026-10-26",
+    "statsScope": "domestic_league",
+    "statNotice": "Burada yalnız daxili liqa matçları və qolları göstərilir; kubok/avrokubok və milli komanda matçları bu toplama daxil deyil. Asist məlumatı bu mənbədə mövcud deyil.",
+    "verifiedSnapshot": true
+  }
+}

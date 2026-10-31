@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: matchlab-az-online
+    runtime: python
+    plan: free
+    region: frankfurt
+    buildCommand: python prepare_database.py
+    startCommand: python hosting_server.py
+    healthCheckPath: /healthz
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.4

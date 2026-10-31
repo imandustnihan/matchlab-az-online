@@ -1,0 +1,2671 @@
+[
+  {
+    "id": "Q5705",
+    "name": "Lionel Messi",
+    "kind": "players",
+    "country": "Argentina",
+    "position": "Hücumçu",
+    "clubs": [
+      "Barcelona",
+      "Paris Saint-Germain",
+      "Inter Miami"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "Q11571",
+    "name": "Cristiano Ronaldo",
+    "kind": "players",
+    "country": "Portugal",
+    "position": "Hücumçu",
+    "clubs": [
+      "Sporting CP",
+      "Manchester United",
+      "Real Madrid",
+      "Juventus",
+      "Al Nassr"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "Q21621995",
+    "name": "Kylian Mbappé",
+    "kind": "players",
+    "country": "France",
+    "position": "Hücumçu",
+    "clubs": [
+      "Monaco",
+      "Paris Saint-Germain",
+      "Real Madrid"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "Q28967995",
+    "name": "Erling Haaland",
+    "kind": "players",
+    "country": "Norway",
+    "position": "Hücumçu",
+    "clubs": [
+      "Molde",
+      "Red Bull Salzburg",
+      "Borussia Dortmund",
+      "Manchester City"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:neymar",
+    "name": "Neymar",
+    "kind": "players",
+    "country": "Brazil",
+    "position": "Hücumçu",
+    "clubs": [
+      "Santos",
+      "Barcelona",
+      "Paris Saint-Germain",
+      "Al Hilal"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:mohamed-salah",
+    "name": "Mohamed Salah",
+    "kind": "players",
+    "country": "Egypt",
+    "position": "Hücumçu",
+    "clubs": [
+      "Basel",
+      "Chelsea",
+      "Fiorentina",
+      "Roma",
+      "Liverpool"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:kevin-de-bruyne",
+    "name": "Kevin De Bruyne",
+    "kind": "players",
+    "country": "Belgium",
+    "position": "Yarımmüdafiəçi",
+    "clubs": [
+      "Genk",
+      "Chelsea",
+      "Wolfsburg",
+      "Manchester City"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:luka-modri",
+    "name": "Luka Modrić",
+    "kind": "players",
+    "country": "Croatia",
+    "position": "Yarımmüdafiəçi",
+    "clubs": [
+      "Dinamo Zagreb",
+      "Tottenham Hotspur",
+      "Real Madrid"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:toni-kroos",
+    "name": "Toni Kroos",
+    "kind": "players",
+    "country": "Germany",
+    "position": "Yarımmüdafiəçi",
+    "clubs": [
+      "Bayern Munich",
+      "Bayer Leverkusen",
+      "Real Madrid"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:karim-benzema",
+    "name": "Karim Benzema",
+    "kind": "players",
+    "country": "France",
+    "position": "Hücumçu",
+    "clubs": [
+      "Lyon",
+      "Real Madrid",
+      "Al Ittihad"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:robert-lewandowski",
+    "name": "Robert Lewandowski",
+    "kind": "players",
+    "country": "Poland",
+    "position": "Hücumçu",
+    "clubs": [
+      "Lech Poznań",
+      "Borussia Dortmund",
+      "Bayern Munich",
+      "Barcelona"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:harry-kane",
+    "name": "Harry Kane",
+    "kind": "players",
+    "country": "England",
+    "position": "Hücumçu",
+    "clubs": [
+      "Tottenham Hotspur",
+      "Bayern Munich"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:vin-cius-j-nior",
+    "name": "Vinícius Júnior",
+    "kind": "players",
+    "country": "Brazil",
+    "position": "Hücumçu",
+    "clubs": [
+      "Flamengo",
+      "Real Madrid"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:jude-bellingham",
+    "name": "Jude Bellingham",
+    "kind": "players",
+    "country": "England",
+    "position": "Yarımmüdafiəçi",
+    "clubs": [
+      "Birmingham City",
+      "Borussia Dortmund",
+      "Real Madrid"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:rodri",
+    "name": "Rodri",
+    "kind": "players",
+    "country": "Spain",
+    "position": "Yarımmüdafiəçi",
+    "clubs": [
+      "Villarreal",
+      "Atlético Madrid",
+      "Manchester City"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:pedri",
+    "name": "Pedri",
+    "kind": "players",
+    "country": "Spain",
+    "position": "Yarımmüdafiəçi",
+    "clubs": [
+      "Las Palmas",
+      "Barcelona"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:lamine-yamal",
+    "name": "Lamine Yamal",
+    "kind": "players",
+    "country": "Spain",
+    "position": "Hücumçu",
+    "clubs": [
+      "Barcelona"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:raphinha",
+    "name": "Raphinha",
+    "kind": "players",
+    "country": "Brazil",
+    "position": "Hücumçu",
+    "clubs": [
+      "Vitória SC",
+      "Sporting CP",
+      "Rennes",
+      "Leeds United",
+      "Barcelona"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:phil-foden",
+    "name": "Phil Foden",
+    "kind": "players",
+    "country": "England",
+    "position": "Yarımmüdafiəçi",
+    "clubs": [
+      "Manchester City"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:bukayo-saka",
+    "name": "Bukayo Saka",
+    "kind": "players",
+    "country": "England",
+    "position": "Hücumçu",
+    "clubs": [
+      "Arsenal"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:martin-degaard",
+    "name": "Martin Ødegaard",
+    "kind": "players",
+    "country": "Norway",
+    "position": "Yarımmüdafiəçi",
+    "clubs": [
+      "Strømsgodset",
+      "Real Madrid",
+      "Real Sociedad",
+      "Arsenal"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:declan-rice",
+    "name": "Declan Rice",
+    "kind": "players",
+    "country": "England",
+    "position": "Yarımmüdafiəçi",
+    "clubs": [
+      "West Ham United",
+      "Arsenal"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:bruno-fernandes",
+    "name": "Bruno Fernandes",
+    "kind": "players",
+    "country": "Portugal",
+    "position": "Yarımmüdafiəçi",
+    "clubs": [
+      "Udinese",
+      "Sampdoria",
+      "Sporting CP",
+      "Manchester United"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:virgil-van-dijk",
+    "name": "Virgil van Dijk",
+    "kind": "players",
+    "country": "Netherlands",
+    "position": "Müdafiəçi",
+    "clubs": [
+      "Groningen",
+      "Celtic",
+      "Southampton",
+      "Liverpool"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:trent-alexander-arnold",
+    "name": "Trent Alexander-Arnold",
+    "kind": "players",
+    "country": "England",
+    "position": "Müdafiəçi",
+    "clubs": [
+      "Liverpool",
+      "Real Madrid"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:alisson-becker",
+    "name": "Alisson Becker",
+    "kind": "players",
+    "country": "Brazil",
+    "position": "Qapıçı",
+    "clubs": [
+      "Internacional",
+      "Roma",
+      "Liverpool"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:thibaut-courtois",
+    "name": "Thibaut Courtois",
+    "kind": "players",
+    "country": "Belgium",
+    "position": "Qapıçı",
+    "clubs": [
+      "Genk",
+      "Atlético Madrid",
+      "Chelsea",
+      "Real Madrid"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:manuel-neuer",
+    "name": "Manuel Neuer",
+    "kind": "players",
+    "country": "Germany",
+    "position": "Qapıçı",
+    "clubs": [
+      "Schalke 04",
+      "Bayern Munich"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:gianluigi-donnarumma",
+    "name": "Gianluigi Donnarumma",
+    "kind": "players",
+    "country": "Italy",
+    "position": "Qapıçı",
+    "clubs": [
+      "AC Milan",
+      "Paris Saint-Germain"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:jan-oblak",
+    "name": "Jan Oblak",
+    "kind": "players",
+    "country": "Slovenia",
+    "position": "Qapıçı",
+    "clubs": [
+      "Benfica",
+      "Rio Ave",
+      "Atlético Madrid"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:antoine-griezmann",
+    "name": "Antoine Griezmann",
+    "kind": "players",
+    "country": "France",
+    "position": "Hücumçu",
+    "clubs": [
+      "Real Sociedad",
+      "Atlético Madrid",
+      "Barcelona"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:juli-n-lvarez",
+    "name": "Julián Álvarez",
+    "kind": "players",
+    "country": "Argentina",
+    "position": "Hücumçu",
+    "clubs": [
+      "River Plate",
+      "Manchester City",
+      "Atlético Madrid"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:federico-valverde",
+    "name": "Federico Valverde",
+    "kind": "players",
+    "country": "Uruguay",
+    "position": "Yarımmüdafiəçi",
+    "clubs": [
+      "Peñarol",
+      "Real Madrid",
+      "Deportivo La Coruña"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:eduardo-camavinga",
+    "name": "Eduardo Camavinga",
+    "kind": "players",
+    "country": "France",
+    "position": "Yarımmüdafiəçi",
+    "clubs": [
+      "Rennes",
+      "Real Madrid"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:aur-lien-tchouam-ni",
+    "name": "Aurélien Tchouaméni",
+    "kind": "players",
+    "country": "France",
+    "position": "Yarımmüdafiəçi",
+    "clubs": [
+      "Bordeaux",
+      "Monaco",
+      "Real Madrid"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:casemiro",
+    "name": "Casemiro",
+    "kind": "players",
+    "country": "Brazil",
+    "position": "Yarımmüdafiəçi",
+    "clubs": [
+      "São Paulo",
+      "Real Madrid",
+      "Porto",
+      "Manchester United"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:joshua-kimmich",
+    "name": "Joshua Kimmich",
+    "kind": "players",
+    "country": "Germany",
+    "position": "Yarımmüdafiəçi",
+    "clubs": [
+      "RB Leipzig",
+      "Bayern Munich"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:jamal-musiala",
+    "name": "Jamal Musiala",
+    "kind": "players",
+    "country": "Germany",
+    "position": "Yarımmüdafiəçi",
+    "clubs": [
+      "Bayern Munich"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:florian-wirtz",
+    "name": "Florian Wirtz",
+    "kind": "players",
+    "country": "Germany",
+    "position": "Yarımmüdafiəçi",
+    "clubs": [
+      "Bayer Leverkusen",
+      "Liverpool"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:victor-osimhen",
+    "name": "Victor Osimhen",
+    "kind": "players",
+    "country": "Nigeria",
+    "position": "Hücumçu",
+    "clubs": [
+      "Wolfsburg",
+      "Charleroi",
+      "Lille",
+      "Napoli",
+      "Galatasaray"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:khvicha-kvaratskhelia",
+    "name": "Khvicha Kvaratskhelia",
+    "kind": "players",
+    "country": "Georgia",
+    "position": "Hücumçu",
+    "clubs": [
+      "Rubin Kazan",
+      "Dinamo Batumi",
+      "Napoli",
+      "Paris Saint-Germain"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:son-heung-min",
+    "name": "Son Heung-min",
+    "kind": "players",
+    "country": "South Korea",
+    "position": "Hücumçu",
+    "clubs": [
+      "Hamburg",
+      "Bayer Leverkusen",
+      "Tottenham Hotspur",
+      "Los Angeles FC"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:sadio-man",
+    "name": "Sadio Mané",
+    "kind": "players",
+    "country": "Senegal",
+    "position": "Hücumçu",
+    "clubs": [
+      "Metz",
+      "Red Bull Salzburg",
+      "Southampton",
+      "Liverpool",
+      "Bayern Munich",
+      "Al Nassr"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:riyad-mahrez",
+    "name": "Riyad Mahrez",
+    "kind": "players",
+    "country": "Algeria",
+    "position": "Hücumçu",
+    "clubs": [
+      "Le Havre",
+      "Leicester City",
+      "Manchester City",
+      "Al Ahli"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:zlatan-ibrahimovi",
+    "name": "Zlatan Ibrahimović",
+    "kind": "players",
+    "country": "Sweden",
+    "position": "Hücumçu",
+    "clubs": [
+      "Malmö",
+      "Ajax",
+      "Juventus",
+      "Inter Milan",
+      "Barcelona",
+      "AC Milan",
+      "Paris Saint-Germain",
+      "Manchester United",
+      "LA Galaxy"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:sergio-ramos",
+    "name": "Sergio Ramos",
+    "kind": "players",
+    "country": "Spain",
+    "position": "Müdafiəçi",
+    "clubs": [
+      "Sevilla",
+      "Real Madrid",
+      "Paris Saint-Germain",
+      "Monterrey"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:gerard-piqu",
+    "name": "Gerard Piqué",
+    "kind": "players",
+    "country": "Spain",
+    "position": "Müdafiəçi",
+    "clubs": [
+      "Manchester United",
+      "Real Zaragoza",
+      "Barcelona"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:andr-s-iniesta",
+    "name": "Andrés Iniesta",
+    "kind": "players",
+    "country": "Spain",
+    "position": "Yarımmüdafiəçi",
+    "clubs": [
+      "Barcelona",
+      "Vissel Kobe",
+      "Emirates Club"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:xavi-hern-ndez",
+    "name": "Xavi Hernández",
+    "kind": "players",
+    "country": "Spain",
+    "position": "Yarımmüdafiəçi",
+    "clubs": [
+      "Barcelona",
+      "Al Sadd"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:sergio-busquets",
+    "name": "Sergio Busquets",
+    "kind": "players",
+    "country": "Spain",
+    "position": "Yarımmüdafiəçi",
+    "clubs": [
+      "Barcelona",
+      "Inter Miami"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:david-beckham",
+    "name": "David Beckham",
+    "kind": "players",
+    "country": "England",
+    "position": "Yarımmüdafiəçi",
+    "clubs": [
+      "Manchester United",
+      "Real Madrid",
+      "LA Galaxy",
+      "AC Milan",
+      "Paris Saint-Germain"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:wayne-rooney",
+    "name": "Wayne Rooney",
+    "kind": "players",
+    "country": "England",
+    "position": "Hücumçu",
+    "clubs": [
+      "Everton",
+      "Manchester United",
+      "D.C. United",
+      "Derby County"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:robin-van-persie",
+    "name": "Robin van Persie",
+    "kind": "players",
+    "country": "Netherlands",
+    "position": "Hücumçu",
+    "clubs": [
+      "Feyenoord",
+      "Arsenal",
+      "Manchester United",
+      "Fenerbahçe"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:arjen-robben",
+    "name": "Arjen Robben",
+    "kind": "players",
+    "country": "Netherlands",
+    "position": "Hücumçu",
+    "clubs": [
+      "Groningen",
+      "PSV",
+      "Chelsea",
+      "Real Madrid",
+      "Bayern Munich"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:franck-rib-ry",
+    "name": "Franck Ribéry",
+    "kind": "players",
+    "country": "France",
+    "position": "Hücumçu",
+    "clubs": [
+      "Marseille",
+      "Bayern Munich",
+      "Fiorentina",
+      "Salernitana"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:mesut-ozil",
+    "name": "Mesut Özil",
+    "kind": "players",
+    "country": "Germany",
+    "position": "Yarımmüdafiəçi",
+    "clubs": [
+      "Schalke 04",
+      "Werder Bremen",
+      "Real Madrid",
+      "Arsenal",
+      "Fenerbahçe",
+      "İstanbul Başakşehir"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:luis-su-rez",
+    "name": "Luis Suárez",
+    "kind": "players",
+    "country": "Uruguay",
+    "position": "Hücumçu",
+    "clubs": [
+      "Groningen",
+      "Ajax",
+      "Liverpool",
+      "Barcelona",
+      "Atlético Madrid",
+      "Grêmio",
+      "Inter Miami"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:gareth-bale",
+    "name": "Gareth Bale",
+    "kind": "players",
+    "country": "Wales",
+    "position": "Hücumçu",
+    "clubs": [
+      "Southampton",
+      "Tottenham Hotspur",
+      "Real Madrid",
+      "Los Angeles FC"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:eden-hazard",
+    "name": "Eden Hazard",
+    "kind": "players",
+    "country": "Belgium",
+    "position": "Hücumçu",
+    "clubs": [
+      "Lille",
+      "Chelsea",
+      "Real Madrid"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:didier-drogba",
+    "name": "Didier Drogba",
+    "kind": "players",
+    "country": "Ivory Coast",
+    "position": "Hücumçu",
+    "clubs": [
+      "Le Mans",
+      "Guingamp",
+      "Marseille",
+      "Chelsea",
+      "Shanghai Shenhua",
+      "Galatasaray",
+      "Montreal Impact"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:yaya-tour",
+    "name": "Yaya Touré",
+    "kind": "players",
+    "country": "Ivory Coast",
+    "position": "Yarımmüdafiəçi",
+    "clubs": [
+      "Olympiacos",
+      "Monaco",
+      "Barcelona",
+      "Manchester City",
+      "Qingdao Huanghai"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:andrea-pirlo",
+    "name": "Andrea Pirlo",
+    "kind": "players",
+    "country": "Italy",
+    "position": "Yarımmüdafiəçi",
+    "clubs": [
+      "Brescia",
+      "Inter Milan",
+      "AC Milan",
+      "Juventus",
+      "New York City FC"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "Q1835",
+    "name": "Zinedine Zidane",
+    "kind": "players",
+    "country": "France",
+    "position": "Yarımmüdafiəçi",
+    "clubs": [
+      "Cannes",
+      "Bordeaux",
+      "Juventus",
+      "Real Madrid"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:thierry-henry",
+    "name": "Thierry Henry",
+    "kind": "players",
+    "country": "France",
+    "position": "Hücumçu",
+    "clubs": [
+      "Monaco",
+      "Juventus",
+      "Arsenal",
+      "Barcelona",
+      "New York Red Bulls"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:pel",
+    "name": "Pelé",
+    "kind": "players",
+    "country": "Brazil",
+    "position": "Hücumçu",
+    "clubs": [
+      "Santos",
+      "New York Cosmos"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true,
+    "lifeStatus": "deceased",
+    "death": "2022-12-29"
+  },
+  {
+    "id": "p:diego-maradona",
+    "name": "Diego Maradona",
+    "kind": "players",
+    "country": "Argentina",
+    "position": "Yarımmüdafiəçi",
+    "clubs": [
+      "Argentinos Juniors",
+      "Boca Juniors",
+      "Barcelona",
+      "Napoli",
+      "Sevilla",
+      "Newell's Old Boys"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true,
+    "lifeStatus": "deceased",
+    "death": "2020-11-25"
+  },
+  {
+    "id": "p:ronaldinho",
+    "name": "Ronaldinho",
+    "kind": "players",
+    "country": "Brazil",
+    "position": "Yarımmüdafiəçi",
+    "clubs": [
+      "Grêmio",
+      "Paris Saint-Germain",
+      "Barcelona",
+      "AC Milan",
+      "Flamengo",
+      "Atlético Mineiro",
+      "Querétaro",
+      "Fluminense"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:ronaldo-naz-rio",
+    "name": "Ronaldo Nazário",
+    "kind": "players",
+    "country": "Brazil",
+    "position": "Hücumçu",
+    "clubs": [
+      "Cruzeiro",
+      "PSV",
+      "Barcelona",
+      "Inter Milan",
+      "Real Madrid",
+      "AC Milan",
+      "Corinthians"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:paolo-maldini",
+    "name": "Paolo Maldini",
+    "kind": "players",
+    "country": "Italy",
+    "position": "Müdafiəçi",
+    "clubs": [
+      "AC Milan"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:gianluigi-buffon",
+    "name": "Gianluigi Buffon",
+    "kind": "players",
+    "country": "Italy",
+    "position": "Qapıçı",
+    "clubs": [
+      "Parma",
+      "Juventus",
+      "Paris Saint-Germain"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:kak",
+    "name": "Kaká",
+    "kind": "players",
+    "country": "Brazil",
+    "position": "Yarımmüdafiəçi",
+    "clubs": [
+      "São Paulo",
+      "AC Milan",
+      "Real Madrid",
+      "Orlando City"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:samuel-eto-o",
+    "name": "Samuel Eto'o",
+    "kind": "players",
+    "country": "Cameroon",
+    "position": "Hücumçu",
+    "clubs": [
+      "Real Madrid",
+      "Leganés",
+      "Mallorca",
+      "Barcelona",
+      "Inter Milan",
+      "Chelsea",
+      "Everton",
+      "Antalyaspor",
+      "Konyaspor",
+      "Qatar SC"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:ruud-van-nistelrooy",
+    "name": "Ruud van Nistelrooy",
+    "kind": "players",
+    "country": "Netherlands",
+    "position": "Hücumçu",
+    "clubs": [
+      "Den Bosch",
+      "Heerenveen",
+      "PSV",
+      "Manchester United",
+      "Real Madrid",
+      "Hamburg",
+      "Málaga"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:petr-ech",
+    "name": "Petr Čech",
+    "kind": "players",
+    "country": "Czech Republic",
+    "position": "Qapıçı",
+    "clubs": [
+      "Chmel Blšany",
+      "Sparta Prague",
+      "Rennes",
+      "Chelsea",
+      "Arsenal"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:aitana-bonmat",
+    "name": "Aitana Bonmatí",
+    "kind": "players",
+    "country": "Spain",
+    "position": "Yarımmüdafiəçi",
+    "clubs": [
+      "Barcelona"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:alexia-putellas",
+    "name": "Alexia Putellas",
+    "kind": "players",
+    "country": "Spain",
+    "position": "Yarımmüdafiəçi",
+    "clubs": [
+      "Espanyol",
+      "Levante",
+      "Barcelona"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:sam-kerr",
+    "name": "Sam Kerr",
+    "kind": "players",
+    "country": "Australia",
+    "position": "Hücumçu",
+    "clubs": [
+      "Sydney FC",
+      "Western New York Flash",
+      "Perth Glory",
+      "Sky Blue FC",
+      "Chicago Red Stars",
+      "Chelsea"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:marta",
+    "name": "Marta",
+    "kind": "players",
+    "country": "Brazil",
+    "position": "Hücumçu",
+    "clubs": [
+      "Vasco da Gama",
+      "Umeå IK",
+      "Los Angeles Sol",
+      "FC Gold Pride",
+      "Western New York Flash",
+      "Tyresö FF",
+      "Orlando Pride"
+    ],
+    "image": "",
+    "source": "Local discovery index",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "Q723476",
+    "name": "Qarabağ FK",
+    "kind": "teams",
+    "country": "Azerbaijan",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:neftci-pfk",
+    "name": "Neftçi PFK",
+    "kind": "teams",
+    "country": "Azerbaijan",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:sabah-fk",
+    "name": "Sabah FK",
+    "kind": "teams",
+    "country": "Azerbaijan",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:zire-fk",
+    "name": "Zirə FK",
+    "kind": "teams",
+    "country": "Azerbaijan",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:araz-naxcivan",
+    "name": "Araz-Naxçıvan",
+    "kind": "teams",
+    "country": "Azerbaijan",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "Q8682",
+    "name": "Real Madrid",
+    "kind": "teams",
+    "country": "Spain",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "Q7156",
+    "name": "Barcelona",
+    "kind": "teams",
+    "country": "Spain",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:atl-tico-madrid",
+    "name": "Atlético Madrid",
+    "kind": "teams",
+    "country": "Spain",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:sevilla",
+    "name": "Sevilla",
+    "kind": "teams",
+    "country": "Spain",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:real-sociedad",
+    "name": "Real Sociedad",
+    "kind": "teams",
+    "country": "Spain",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:villarreal",
+    "name": "Villarreal",
+    "kind": "teams",
+    "country": "Spain",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:athletic-club",
+    "name": "Athletic Club",
+    "kind": "teams",
+    "country": "Spain",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:real-betis",
+    "name": "Real Betis",
+    "kind": "teams",
+    "country": "Spain",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:valencia",
+    "name": "Valencia",
+    "kind": "teams",
+    "country": "Spain",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "Q31456834",
+    "name": "Manchester City",
+    "kind": "teams",
+    "country": "England",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:manchester-united",
+    "name": "Manchester United",
+    "kind": "teams",
+    "country": "England",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "Q9617",
+    "name": "Arsenal",
+    "kind": "teams",
+    "country": "England",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "Q1130849",
+    "name": "Liverpool",
+    "kind": "teams",
+    "country": "England",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:chelsea",
+    "name": "Chelsea",
+    "kind": "teams",
+    "country": "England",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:tottenham-hotspur",
+    "name": "Tottenham Hotspur",
+    "kind": "teams",
+    "country": "England",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:newcastle-united",
+    "name": "Newcastle United",
+    "kind": "teams",
+    "country": "England",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:aston-villa",
+    "name": "Aston Villa",
+    "kind": "teams",
+    "country": "England",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:west-ham-united",
+    "name": "West Ham United",
+    "kind": "teams",
+    "country": "England",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:everton",
+    "name": "Everton",
+    "kind": "teams",
+    "country": "England",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:leicester-city",
+    "name": "Leicester City",
+    "kind": "teams",
+    "country": "England",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "Q15789",
+    "name": "Bayern Munich",
+    "kind": "teams",
+    "country": "Germany",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:borussia-dortmund",
+    "name": "Borussia Dortmund",
+    "kind": "teams",
+    "country": "Germany",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:bayer-leverkusen",
+    "name": "Bayer Leverkusen",
+    "kind": "teams",
+    "country": "Germany",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:rb-leipzig",
+    "name": "RB Leipzig",
+    "kind": "teams",
+    "country": "Germany",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:schalke-04",
+    "name": "Schalke 04",
+    "kind": "teams",
+    "country": "Germany",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:eintracht-frankfurt",
+    "name": "Eintracht Frankfurt",
+    "kind": "teams",
+    "country": "Germany",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:vfb-stuttgart",
+    "name": "VfB Stuttgart",
+    "kind": "teams",
+    "country": "Germany",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:juventus",
+    "name": "Juventus",
+    "kind": "teams",
+    "country": "Italy",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:inter-milan",
+    "name": "Inter Milan",
+    "kind": "teams",
+    "country": "Italy",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:ac-milan",
+    "name": "AC Milan",
+    "kind": "teams",
+    "country": "Italy",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:napoli",
+    "name": "Napoli",
+    "kind": "teams",
+    "country": "Italy",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:roma",
+    "name": "Roma",
+    "kind": "teams",
+    "country": "Italy",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:lazio",
+    "name": "Lazio",
+    "kind": "teams",
+    "country": "Italy",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:atalanta",
+    "name": "Atalanta",
+    "kind": "teams",
+    "country": "Italy",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:fiorentina",
+    "name": "Fiorentina",
+    "kind": "teams",
+    "country": "Italy",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "Q483020",
+    "name": "Paris Saint-Germain",
+    "kind": "teams",
+    "country": "France",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:monaco",
+    "name": "Monaco",
+    "kind": "teams",
+    "country": "France",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:marseille",
+    "name": "Marseille",
+    "kind": "teams",
+    "country": "France",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:lyon",
+    "name": "Lyon",
+    "kind": "teams",
+    "country": "France",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:lille",
+    "name": "Lille",
+    "kind": "teams",
+    "country": "France",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:rennes",
+    "name": "Rennes",
+    "kind": "teams",
+    "country": "France",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "Q495299",
+    "name": "Galatasaray",
+    "kind": "teams",
+    "country": "Turkey",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:fenerbahce",
+    "name": "Fenerbahçe",
+    "kind": "teams",
+    "country": "Turkey",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:besiktas",
+    "name": "Beşiktaş",
+    "kind": "teams",
+    "country": "Turkey",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:trabzonspor",
+    "name": "Trabzonspor",
+    "kind": "teams",
+    "country": "Turkey",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:i-stanbul-basaksehir",
+    "name": "İstanbul Başakşehir",
+    "kind": "teams",
+    "country": "Turkey",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:ajax",
+    "name": "Ajax",
+    "kind": "teams",
+    "country": "Netherlands",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:psv",
+    "name": "PSV",
+    "kind": "teams",
+    "country": "Netherlands",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:feyenoord",
+    "name": "Feyenoord",
+    "kind": "teams",
+    "country": "Netherlands",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:benfica",
+    "name": "Benfica",
+    "kind": "teams",
+    "country": "Portugal",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:porto",
+    "name": "Porto",
+    "kind": "teams",
+    "country": "Portugal",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:sporting-cp",
+    "name": "Sporting CP",
+    "kind": "teams",
+    "country": "Portugal",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:braga",
+    "name": "Braga",
+    "kind": "teams",
+    "country": "Portugal",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:celtic",
+    "name": "Celtic",
+    "kind": "teams",
+    "country": "Scotland",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:rangers",
+    "name": "Rangers",
+    "kind": "teams",
+    "country": "Scotland",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:inter-miami",
+    "name": "Inter Miami",
+    "kind": "teams",
+    "country": "United States",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:la-galaxy",
+    "name": "LA Galaxy",
+    "kind": "teams",
+    "country": "United States",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:los-angeles-fc",
+    "name": "Los Angeles FC",
+    "kind": "teams",
+    "country": "United States",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:new-york-city-fc",
+    "name": "New York City FC",
+    "kind": "teams",
+    "country": "United States",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:boca-juniors",
+    "name": "Boca Juniors",
+    "kind": "teams",
+    "country": "Argentina",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:river-plate",
+    "name": "River Plate",
+    "kind": "teams",
+    "country": "Argentina",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:flamengo",
+    "name": "Flamengo",
+    "kind": "teams",
+    "country": "Brazil",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:santos",
+    "name": "Santos",
+    "kind": "teams",
+    "country": "Brazil",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:palmeiras",
+    "name": "Palmeiras",
+    "kind": "teams",
+    "country": "Brazil",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:corinthians",
+    "name": "Corinthians",
+    "kind": "teams",
+    "country": "Brazil",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:al-nassr",
+    "name": "Al Nassr",
+    "kind": "teams",
+    "country": "Saudi Arabia",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:al-hilal",
+    "name": "Al Hilal",
+    "kind": "teams",
+    "country": "Saudi Arabia",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:al-ittihad",
+    "name": "Al Ittihad",
+    "kind": "teams",
+    "country": "Saudi Arabia",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:al-ahli",
+    "name": "Al Ahli",
+    "kind": "teams",
+    "country": "Saudi Arabia",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:al-sadd",
+    "name": "Al Sadd",
+    "kind": "teams",
+    "country": "Qatar",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:urawa-red-diamonds",
+    "name": "Urawa Red Diamonds",
+    "kind": "teams",
+    "country": "Japan",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:vissel-kobe",
+    "name": "Vissel Kobe",
+    "kind": "teams",
+    "country": "Japan",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:al-ahly",
+    "name": "Al Ahly",
+    "kind": "teams",
+    "country": "Egypt",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:zamalek",
+    "name": "Zamalek",
+    "kind": "teams",
+    "country": "Egypt",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:club-am-rica",
+    "name": "Club América",
+    "kind": "teams",
+    "country": "Mexico",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:tigres-uanl",
+    "name": "Tigres UANL",
+    "kind": "teams",
+    "country": "Mexico",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "t:monterrey",
+    "name": "Monterrey",
+    "kind": "teams",
+    "country": "Mexico",
+    "image": "",
+    "source": "Local discovery index"
+  },
+  {
+    "id": "c:pep-guardiola",
+    "name": "Pep Guardiola",
+    "kind": "coaches",
+    "country": "Spain",
+    "coached": [
+      "Barcelona",
+      "Bayern Munich",
+      "Manchester City"
+    ],
+    "source": "Local discovery index",
+    "playerId": "",
+    "image": ""
+  },
+  {
+    "id": "c:jurgen-klopp",
+    "name": "Jürgen Klopp",
+    "kind": "coaches",
+    "country": "Germany",
+    "coached": [
+      "Mainz 05",
+      "Borussia Dortmund",
+      "Liverpool"
+    ],
+    "source": "Local discovery index",
+    "playerId": "",
+    "image": ""
+  },
+  {
+    "id": "c:carlo-ancelotti",
+    "name": "Carlo Ancelotti",
+    "kind": "coaches",
+    "country": "Italy",
+    "coached": [
+      "Parma",
+      "Juventus",
+      "AC Milan",
+      "Chelsea",
+      "Paris Saint-Germain",
+      "Real Madrid",
+      "Bayern Munich",
+      "Napoli",
+      "Everton"
+    ],
+    "source": "Local discovery index",
+    "playerId": "",
+    "image": ""
+  },
+  {
+    "id": "c:zinedine-zidane",
+    "name": "Zinedine Zidane",
+    "kind": "coaches",
+    "country": "France",
+    "coached": [
+      "Real Madrid"
+    ],
+    "source": "Local discovery index",
+    "playerId": "Q1835",
+    "image": ""
+  },
+  {
+    "id": "c:jos-mourinho",
+    "name": "José Mourinho",
+    "kind": "coaches",
+    "country": "Portugal",
+    "coached": [
+      "Porto",
+      "Chelsea",
+      "Inter Milan",
+      "Real Madrid",
+      "Manchester United",
+      "Tottenham Hotspur",
+      "Roma",
+      "Fenerbahçe"
+    ],
+    "source": "Local discovery index",
+    "playerId": "",
+    "image": ""
+  },
+  {
+    "id": "c:xabi-alonso",
+    "name": "Xabi Alonso",
+    "kind": "coaches",
+    "country": "Spain",
+    "coached": [
+      "Real Sociedad B",
+      "Bayer Leverkusen",
+      "Real Madrid"
+    ],
+    "source": "Local discovery index",
+    "playerId": "",
+    "image": ""
+  },
+  {
+    "id": "c:mikel-arteta",
+    "name": "Mikel Arteta",
+    "kind": "coaches",
+    "country": "Spain",
+    "coached": [
+      "Arsenal"
+    ],
+    "source": "Local discovery index",
+    "playerId": "",
+    "image": ""
+  },
+  {
+    "id": "c:unai-emery",
+    "name": "Unai Emery",
+    "kind": "coaches",
+    "country": "Spain",
+    "coached": [
+      "Valencia",
+      "Sevilla",
+      "Paris Saint-Germain",
+      "Arsenal",
+      "Villarreal",
+      "Aston Villa"
+    ],
+    "source": "Local discovery index",
+    "playerId": "",
+    "image": ""
+  },
+  {
+    "id": "c:luis-enrique",
+    "name": "Luis Enrique",
+    "kind": "coaches",
+    "country": "Spain",
+    "coached": [
+      "Roma",
+      "Celta Vigo",
+      "Barcelona",
+      "Spain",
+      "Paris Saint-Germain"
+    ],
+    "source": "Local discovery index",
+    "playerId": "",
+    "image": ""
+  },
+  {
+    "id": "c:hansi-flick",
+    "name": "Hansi Flick",
+    "kind": "coaches",
+    "country": "Germany",
+    "coached": [
+      "Hoffenheim",
+      "Bayern Munich",
+      "Germany",
+      "Barcelona"
+    ],
+    "source": "Local discovery index",
+    "playerId": "",
+    "image": ""
+  },
+  {
+    "id": "c:antonio-conte",
+    "name": "Antonio Conte",
+    "kind": "coaches",
+    "country": "Italy",
+    "coached": [
+      "Juventus",
+      "Italy",
+      "Chelsea",
+      "Inter Milan",
+      "Tottenham Hotspur",
+      "Napoli"
+    ],
+    "source": "Local discovery index",
+    "playerId": "",
+    "image": ""
+  },
+  {
+    "id": "c:diego-simeone",
+    "name": "Diego Simeone",
+    "kind": "coaches",
+    "country": "Argentina",
+    "coached": [
+      "Racing Club",
+      "Estudiantes",
+      "River Plate",
+      "San Lorenzo",
+      "Catania",
+      "Atlético Madrid"
+    ],
+    "source": "Local discovery index",
+    "playerId": "",
+    "image": ""
+  },
+  {
+    "id": "c:roberto-de-zerbi",
+    "name": "Roberto De Zerbi",
+    "kind": "coaches",
+    "country": "Italy",
+    "coached": [
+      "Foggia",
+      "Palermo",
+      "Benevento",
+      "Sassuolo",
+      "Shakhtar Donetsk",
+      "Brighton",
+      "Marseille"
+    ],
+    "source": "Local discovery index",
+    "playerId": "",
+    "image": ""
+  },
+  {
+    "id": "c:xavi-hern-ndez",
+    "name": "Xavi Hernández",
+    "kind": "coaches",
+    "country": "Spain",
+    "coached": [
+      "Al Sadd",
+      "Barcelona"
+    ],
+    "source": "Local discovery index",
+    "playerId": "p:xavi-hern-ndez",
+    "image": ""
+  },
+  {
+    "id": "c:thierry-henry",
+    "name": "Thierry Henry",
+    "kind": "coaches",
+    "country": "France",
+    "coached": [
+      "Monaco",
+      "Montreal Impact",
+      "France U21"
+    ],
+    "source": "Local discovery index",
+    "playerId": "p:thierry-henry",
+    "image": ""
+  },
+  {
+    "id": "c:andrea-pirlo",
+    "name": "Andrea Pirlo",
+    "kind": "coaches",
+    "country": "Italy",
+    "coached": [
+      "Juventus",
+      "Fatih Karagümrük",
+      "Sampdoria"
+    ],
+    "source": "Local discovery index",
+    "playerId": "p:andrea-pirlo",
+    "image": ""
+  },
+  {
+    "id": "c:wayne-rooney",
+    "name": "Wayne Rooney",
+    "kind": "coaches",
+    "country": "England",
+    "coached": [
+      "Derby County",
+      "D.C. United",
+      "Birmingham City",
+      "Plymouth Argyle"
+    ],
+    "source": "Local discovery index",
+    "playerId": "p:wayne-rooney",
+    "image": ""
+  },
+  {
+    "id": "c:frank-lampard",
+    "name": "Frank Lampard",
+    "kind": "coaches",
+    "country": "England",
+    "coached": [
+      "Derby County",
+      "Chelsea",
+      "Everton",
+      "Coventry City"
+    ],
+    "source": "Local discovery index",
+    "playerId": "",
+    "image": ""
+  },
+  {
+    "id": "c:steven-gerrard",
+    "name": "Steven Gerrard",
+    "kind": "coaches",
+    "country": "England",
+    "coached": [
+      "Rangers",
+      "Aston Villa",
+      "Al Ettifaq"
+    ],
+    "source": "Local discovery index",
+    "playerId": "",
+    "image": ""
+  },
+  {
+    "id": "c:robin-van-persie",
+    "name": "Robin van Persie",
+    "kind": "coaches",
+    "country": "Netherlands",
+    "coached": [
+      "Heerenveen",
+      "Feyenoord"
+    ],
+    "source": "Local discovery index",
+    "playerId": "p:robin-van-persie",
+    "image": ""
+  },
+  {
+    "id": "p:johan-cruyff",
+    "name": "Johan Cruyff",
+    "kind": "players",
+    "country": "Netherlands",
+    "position": "Hücumçu",
+    "clubs": [
+      "Ajax",
+      "Barcelona",
+      "Feyenoord"
+    ],
+    "image": "",
+    "source": "Local historical discovery index — selected teams, NOT a full career",
+    "isHistoricalAssociations": true,
+    "lifeStatus": "deceased"
+  },
+  {
+    "id": "p:franz-beckenbauer",
+    "name": "Franz Beckenbauer",
+    "kind": "players",
+    "country": "Germany",
+    "position": "Müdafiəçi",
+    "clubs": [
+      "Bayern Munich",
+      "New York Cosmos",
+      "Hamburg"
+    ],
+    "image": "",
+    "source": "Local historical discovery index — selected teams, NOT a full career",
+    "isHistoricalAssociations": true,
+    "lifeStatus": "deceased"
+  },
+  {
+    "id": "p:alfredo-di-st-fano",
+    "name": "Alfredo Di Stéfano",
+    "kind": "players",
+    "country": "Argentina",
+    "position": "Hücumçu",
+    "clubs": [
+      "River Plate",
+      "Millonarios",
+      "Real Madrid",
+      "Espanyol"
+    ],
+    "image": "",
+    "source": "Local historical discovery index — selected teams, NOT a full career",
+    "isHistoricalAssociations": true,
+    "lifeStatus": "deceased"
+  },
+  {
+    "id": "p:eus-bio",
+    "name": "Eusébio",
+    "kind": "players",
+    "country": "Portugal",
+    "position": "Hücumçu",
+    "clubs": [
+      "Benfica"
+    ],
+    "image": "",
+    "source": "Local historical discovery index — selected teams, NOT a full career",
+    "isHistoricalAssociations": true,
+    "lifeStatus": "deceased"
+  },
+  {
+    "id": "p:lev-yashin",
+    "name": "Lev Yashin",
+    "kind": "players",
+    "country": "Soviet Union",
+    "position": "Qapıçı",
+    "clubs": [
+      "Dynamo Moscow"
+    ],
+    "image": "",
+    "source": "Local historical discovery index — selected teams, NOT a full career",
+    "isHistoricalAssociations": true,
+    "lifeStatus": "deceased"
+  },
+  {
+    "id": "p:garrincha",
+    "name": "Garrincha",
+    "kind": "players",
+    "country": "Brazil",
+    "position": "Hücumçu",
+    "clubs": [
+      "Botafogo",
+      "Corinthians"
+    ],
+    "image": "",
+    "source": "Local historical discovery index — selected teams, NOT a full career",
+    "isHistoricalAssociations": true,
+    "lifeStatus": "deceased"
+  },
+  {
+    "id": "p:ferenc-pusk-s",
+    "name": "Ferenc Puskás",
+    "kind": "players",
+    "country": "Hungary",
+    "position": "Hücumçu",
+    "clubs": [
+      "Budapest Honvéd",
+      "Real Madrid"
+    ],
+    "image": "",
+    "source": "Local historical discovery index — selected teams, NOT a full career",
+    "isHistoricalAssociations": true,
+    "lifeStatus": "deceased"
+  },
+  {
+    "id": "p:george-best",
+    "name": "George Best",
+    "kind": "players",
+    "country": "Northern Ireland",
+    "position": "Hücumçu",
+    "clubs": [
+      "Manchester United",
+      "Fulham"
+    ],
+    "image": "",
+    "source": "Local historical discovery index — selected teams, NOT a full career",
+    "isHistoricalAssociations": true,
+    "lifeStatus": "deceased"
+  },
+  {
+    "id": "p:bobby-charlton",
+    "name": "Bobby Charlton",
+    "kind": "players",
+    "country": "England",
+    "position": "Yarımmüdafiəçi",
+    "clubs": [
+      "Manchester United",
+      "Preston North End"
+    ],
+    "image": "",
+    "source": "Local historical discovery index — selected teams, NOT a full career",
+    "isHistoricalAssociations": true,
+    "lifeStatus": "deceased"
+  },
+  {
+    "id": "p:gerd-muller",
+    "name": "Gerd Müller",
+    "kind": "players",
+    "country": "Germany",
+    "position": "Hücumçu",
+    "clubs": [
+      "Bayern Munich",
+      "Fort Lauderdale Strikers"
+    ],
+    "image": "",
+    "source": "Local historical discovery index — selected teams, NOT a full career",
+    "isHistoricalAssociations": true,
+    "lifeStatus": "deceased"
+  },
+  {
+    "id": "p:paolo-rossi",
+    "name": "Paolo Rossi",
+    "kind": "players",
+    "country": "Italy",
+    "position": "Hücumçu",
+    "clubs": [
+      "Juventus",
+      "AC Milan",
+      "Hellas Verona"
+    ],
+    "image": "",
+    "source": "Local historical discovery index — selected teams, NOT a full career",
+    "isHistoricalAssociations": true,
+    "lifeStatus": "deceased"
+  },
+  {
+    "id": "p:marco-van-basten",
+    "name": "Marco van Basten",
+    "kind": "players",
+    "country": "Netherlands",
+    "position": "Hücumçu",
+    "clubs": [
+      "Ajax",
+      "AC Milan"
+    ],
+    "image": "",
+    "source": "Local historical discovery index — selected teams, NOT a full career",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:michel-platini",
+    "name": "Michel Platini",
+    "kind": "players",
+    "country": "France",
+    "position": "Yarımmüdafiəçi",
+    "clubs": [
+      "Nancy",
+      "Saint-Étienne",
+      "Juventus"
+    ],
+    "image": "",
+    "source": "Local historical discovery index — selected teams, NOT a full career",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:roberto-baggio",
+    "name": "Roberto Baggio",
+    "kind": "players",
+    "country": "Italy",
+    "position": "Hücumçu",
+    "clubs": [
+      "Fiorentina",
+      "Juventus",
+      "AC Milan",
+      "Bologna",
+      "Inter Milan",
+      "Brescia"
+    ],
+    "image": "",
+    "source": "Local historical discovery index — selected teams, NOT a full career",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:ruud-gullit",
+    "name": "Ruud Gullit",
+    "kind": "players",
+    "country": "Netherlands",
+    "position": "Yarımmüdafiəçi",
+    "clubs": [
+      "Feyenoord",
+      "PSV",
+      "AC Milan",
+      "Sampdoria",
+      "Chelsea"
+    ],
+    "image": "",
+    "source": "Local historical discovery index — selected teams, NOT a full career",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:frank-rijkaard",
+    "name": "Frank Rijkaard",
+    "kind": "players",
+    "country": "Netherlands",
+    "position": "Yarımmüdafiəçi",
+    "clubs": [
+      "Ajax",
+      "Real Zaragoza",
+      "AC Milan"
+    ],
+    "image": "",
+    "source": "Local historical discovery index — selected teams, NOT a full career",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:didier-deschamps",
+    "name": "Didier Deschamps",
+    "kind": "players",
+    "country": "France",
+    "position": "Yarımmüdafiəçi",
+    "clubs": [
+      "Nantes",
+      "Marseille",
+      "Juventus",
+      "Chelsea",
+      "Valencia"
+    ],
+    "image": "",
+    "source": "Local historical discovery index — selected teams, NOT a full career",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:pep-guardiola",
+    "name": "Pep Guardiola",
+    "kind": "players",
+    "country": "Spain",
+    "position": "Yarımmüdafiəçi",
+    "clubs": [
+      "Barcelona",
+      "Brescia",
+      "Roma"
+    ],
+    "image": "",
+    "source": "Local historical discovery index — selected teams, NOT a full career",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:carlo-ancelotti",
+    "name": "Carlo Ancelotti",
+    "kind": "players",
+    "country": "Italy",
+    "position": "Yarımmüdafiəçi",
+    "clubs": [
+      "Parma",
+      "Roma",
+      "AC Milan"
+    ],
+    "image": "",
+    "source": "Local historical discovery index — selected teams, NOT a full career",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:xabi-alonso",
+    "name": "Xabi Alonso",
+    "kind": "players",
+    "country": "Spain",
+    "position": "Yarımmüdafiəçi",
+    "clubs": [
+      "Real Sociedad",
+      "Liverpool",
+      "Real Madrid",
+      "Bayern Munich"
+    ],
+    "image": "",
+    "source": "Local historical discovery index — selected teams, NOT a full career",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:mikel-arteta",
+    "name": "Mikel Arteta",
+    "kind": "players",
+    "country": "Spain",
+    "position": "Yarımmüdafiəçi",
+    "clubs": [
+      "Paris Saint-Germain",
+      "Rangers",
+      "Real Sociedad",
+      "Everton",
+      "Arsenal"
+    ],
+    "image": "",
+    "source": "Local historical discovery index — selected teams, NOT a full career",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:antonio-conte",
+    "name": "Antonio Conte",
+    "kind": "players",
+    "country": "Italy",
+    "position": "Yarımmüdafiəçi",
+    "clubs": [
+      "Lecce",
+      "Juventus"
+    ],
+    "image": "",
+    "source": "Local historical discovery index — selected teams, NOT a full career",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:diego-simeone",
+    "name": "Diego Simeone",
+    "kind": "players",
+    "country": "Argentina",
+    "position": "Yarımmüdafiəçi",
+    "clubs": [
+      "Sevilla",
+      "Atlético Madrid",
+      "Inter Milan",
+      "Lazio",
+      "Racing Club"
+    ],
+    "image": "",
+    "source": "Local historical discovery index — selected teams, NOT a full career",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:luis-enrique",
+    "name": "Luis Enrique",
+    "kind": "players",
+    "country": "Spain",
+    "position": "Yarımmüdafiəçi",
+    "clubs": [
+      "Sporting Gijón",
+      "Real Madrid",
+      "Barcelona"
+    ],
+    "image": "",
+    "source": "Local historical discovery index — selected teams, NOT a full career",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:jurgen-klopp",
+    "name": "Jürgen Klopp",
+    "kind": "players",
+    "country": "Germany",
+    "position": "Müdafiəçi",
+    "clubs": [
+      "Mainz 05"
+    ],
+    "image": "",
+    "source": "Local historical discovery index — selected teams, NOT a full career",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:frank-lampard",
+    "name": "Frank Lampard",
+    "kind": "players",
+    "country": "England",
+    "position": "Yarımmüdafiəçi",
+    "clubs": [
+      "West Ham United",
+      "Chelsea",
+      "Manchester City",
+      "New York City FC"
+    ],
+    "image": "",
+    "source": "Local historical discovery index — selected teams, NOT a full career",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:steven-gerrard",
+    "name": "Steven Gerrard",
+    "kind": "players",
+    "country": "England",
+    "position": "Yarımmüdafiəçi",
+    "clubs": [
+      "Liverpool",
+      "LA Galaxy"
+    ],
+    "image": "",
+    "source": "Local historical discovery index — selected teams, NOT a full career",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:mia-hamm",
+    "name": "Mia Hamm",
+    "kind": "players",
+    "country": "United States",
+    "position": "Hücumçu",
+    "clubs": [
+      "Washington Freedom"
+    ],
+    "image": "",
+    "source": "Local historical discovery index — selected teams, NOT a full career",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:abby-wambach",
+    "name": "Abby Wambach",
+    "kind": "players",
+    "country": "United States",
+    "position": "Hücumçu",
+    "clubs": [
+      "Washington Freedom",
+      "Western New York Flash"
+    ],
+    "image": "",
+    "source": "Local historical discovery index — selected teams, NOT a full career",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:carli-lloyd",
+    "name": "Carli Lloyd",
+    "kind": "players",
+    "country": "United States",
+    "position": "Yarımmüdafiəçi",
+    "clubs": [
+      "Chicago Red Stars",
+      "Manchester City",
+      "Houston Dash",
+      "Gotham FC"
+    ],
+    "image": "",
+    "source": "Local historical discovery index — selected teams, NOT a full career",
+    "isHistoricalAssociations": true
+  },
+  {
+    "id": "p:christine-sinclair",
+    "name": "Christine Sinclair",
+    "kind": "players",
+    "country": "Canada",
+    "position": "Hücumçu",
+    "clubs": [
+      "Portland Thorns"
+    ],
+    "image": "",
+    "source": "Local historical discovery index — selected teams, NOT a full career",
+    "isHistoricalAssociations": true
+  }
+]

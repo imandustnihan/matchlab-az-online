@@ -1,0 +1,580 @@
+"""MATCHLAB AZ v0.9.4 HTML + local Python server (stdlib only, no user API key).
+Respects upstream failures, returns explicit availability flags, never synthesizes match results.
+Sources: Wikidata CC0, Wikipedia pageimages (image rights vary), OpenLigaDB and unofficial ESPN.
+"""
+import argparse, json, re, threading, time, urllib.error, urllib.parse, urllib.request, webbrowser, os, hashlib
+from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
+from pathlib import Path
+import world_db
+import match_sources as feeds
+import datetime as _dt
+import wikipedia_enrichment as wiki
+
+ROOT=Path(__file__).resolve().parent
+INSTALL={'state':'idle','message':'Hələ quraşdırılmayıb','bytes':0,'done':False,'error':''}
+INSTALL_LOCK=threading.Lock()
+CATALOG=json.loads((ROOT/'catalog.json').read_text(encoding='utf-8'))
+CATBYID={x['id']:x for x in CATALOG}
+QID=re.compile(r'^Q[1-9]\d{0,11}$')
+LEAGUES={'eng.1','esp.1','ger.1','ita.1','fra.1','uefa.champions','uefa.europa','tur.1','por.1','ned.1','usa.1','ksa.1'}
+CACHE={}; CACHE_LOCK=threading.Lock(); HOST_COOLDOWN={}; UPSTREAM_TIMEOUT=8
+SOURCE_STATUS={}
+SCORE_CACHE=ROOT/'score_cache'
+SCORE_CACHE.mkdir(exist_ok=True)
+USER_AGENT=os.environ.get('MATCHLAB_WIKIMEDIA_UA','MatchlabAZ/0.9 (local personal football archive; https://www.mediawiki.org/wiki/Wikimedia_APIs/Access_policy)')
+
+def norm(s):
+ import unicodedata
+ return ''.join(c for c in unicodedata.normalize('NFKD',s.casefold().replace('ə','e').replace('ı','i')) if not unicodedata.combining(c))
+
+def local_search(q,kind='all',limit=50):
+ q=norm(q.strip()); terms=[t for t in re.split(r'\s+',q) if t]
+ if not terms:return []
+ hits=[]
+ for r in CATALOG:
+  if kind!='all' and kind!=r['kind']:continue
+  text=norm(r['name']); meta=norm(' '.join([r.get('country',''),r.get('position','')]+r.get('clubs',[])+r.get('coached',[])))
+  if all(t in text or t in meta for t in terms):
+   score=(100 if text==q else 60 if text.startswith(q) else 30 if q in text else 5)
+   hits.append((score,r))
+ hits.sort(key=lambda x:(-x[0],x[1]['name']))
+ return [r for _,r in hits[:limit]]
+
+def get_json(url,ttl=300):
+ """HTTP JSON with finite timeout and a cooldown ONLY for real rate-limit responses.
+ DNS delays must not poison all unrelated requests from the same host.
+ """
+ now=time.monotonic()
+ host=urllib.parse.urlsplit(url).netloc
+ with CACHE_LOCK:
+  if HOST_COOLDOWN.get(host,0)>now:
+   raise ConnectionError('Mənbə sorğu limitini keçib; sonra yenidən yoxlanacaq.')
+  entry=CACHE.get(url)
+  if entry and entry[0]>now:
+   if isinstance(entry[1],Exception):raise entry[1]
+   return entry[1]
+ req=urllib.request.Request(url,headers={
+  'Accept':'application/json','User-Agent':USER_AGENT,
+  'Accept-Encoding':'identity','Cache-Control':'no-cache'})
+ try:
+  with urllib.request.urlopen(req,timeout=UPSTREAM_TIMEOUT) as resp:
+   if int(resp.headers.get('Content-Length','0') or 0)>10_000_000:raise ValueError('Mənbənin cavabı çox böyükdür')
+   data=resp.read(10_000_001)
+   if len(data)>10_000_000:raise ValueError('Mənbənin cavabı çox böyükdür')
+   output=json.loads(data)
+ except Exception as ex:
+  with CACHE_LOCK:
+   CACHE[url]=(now+8,ex) # transient outages shouldn't disable whole competitions
+   if isinstance(ex,urllib.error.HTTPError) and ex.code==429:
+    retry=ex.headers.get('Retry-After','')
+    HOST_COOLDOWN[host]=now+(min(300,max(25,int(retry))) if str(retry).isdigit() else 45)
+  raise
+ with CACHE_LOCK:CACHE[url]=(now+ttl,output)
+ return output
+
+# Last successful snapshots are labeled as stale whenever an upstream cannot be reached.
+# They are NEVER advertised as current live scores.
+def snapshot_key(kind,league,date=''):
+ return SCORE_CACHE / (kind+'_'+re.sub('[^a-z0-9_-]','_',league)+'_'+re.sub('[^0-9]','',date)+'.json')
+
+def snapshot_save(kind,league,date,payload):
+ try:
+  fn=snapshot_key(kind,league,date)
+  saved={'created':int(time.time()),'payload':payload}
+  temp=fn.with_suffix('.tmp')
+  temp.write_text(json.dumps(saved,ensure_ascii=False),encoding='utf8')
+  os.replace(temp,fn)
+ except (OSError,TypeError,ValueError):pass
+
+def snapshot_load(kind,league,date):
+ try:
+  entry=json.loads(snapshot_key(kind,league,date).read_text(encoding='utf8'))
+  age=int(time.time())-entry['created']
+  if age>14*86400 or age<0:return None
+  result=entry['payload']
+  return {**result,'stale':True,'available':True,'asOf':entry['created'],
+   'message':'Mənbə indi əlçatan deyil. Son saxlanmış nəticələr göstərilir; CANLI DEYİL.',
+   'source':result.get('source','Keş')+' · əvvəlki yoxlama'}
+ except (OSError,TypeError,ValueError,KeyError):return None
+
+def source_call(name,url,ttl):
+ try:
+  v=get_json(url,ttl)
+  SOURCE_STATUS[name]={'ok':True,'checked':int(time.time()),'detail':'Bağlantı uğurlu'}
+  return v
+ except Exception as ex:
+  SOURCE_STATUS[name]={'ok':False,'checked':int(time.time()),'detail':type(ex).__name__+': '+str(ex)[:140]}
+  raise
+
+
+def wd_query(action,**params):
+ params={'action':action,'format':'json',**params}
+ return get_json('https://www.wikidata.org/w/api.php?'+urllib.parse.urlencode(params),600)
+
+def wd_entities(ids):
+ ids=[x for x in dict.fromkeys(ids) if QID.fullmatch(str(x))][:50]
+ if not ids:return {}
+ return wd_query('wbgetentities',ids='|'.join(ids),props='labels|descriptions|claims',languages='az|tr|en',languagefallback='1').get('entities',{})
+
+def wd_label(e):
+ return next((e.get('labels',{}).get(l,{}).get('value') for l in ['az','tr','en'] if e.get('labels',{}).get(l,{}).get('value')),e.get('id',''))
+
+def wd_desc(e):
+ return next((e.get('descriptions',{}).get(l,{}).get('value') for l in ['az','tr','en'] if e.get('descriptions',{}).get(l,{}).get('value')),'')
+
+def claims(e,prop):
+ return [s for s in e.get('claims',{}).get(prop,[]) if s.get('rank')!='deprecated' and s.get('mainsnak',{}).get('snaktype')=='value']
+
+def wd_val(s):
+ v=s.get('mainsnak',{}).get('datavalue',{}).get('value') if s else None
+ return v.get('id',v.get('text',v.get('time',v.get('amount',v)))) if isinstance(v,dict) else v
+
+def qualifiers(s,prop):
+ v=s.get('qualifiers',{}).get(prop,[])
+ raw=v[0].get('datavalue',{}).get('value') if v else None
+ return raw.get('id',raw.get('time',raw.get('amount',raw))) if isinstance(raw,dict) else raw
+
+def year(v):
+ m=re.search(r'([12]\d{3})',str(v)) if v else None
+ return int(m.group(1)) if m else None
+
+def photo_url(e):
+ # Club crests P154; people portraits P18. Never confuse the two.
+ kind=wd_kind(e)
+ props=['P154','P18'] if kind=='teams' else ['P18']
+ raw=next((wd_val(c) for prop in props for c in claims(e,prop) if isinstance(wd_val(c),str)),None)
+ return 'https://commons.wikimedia.org/wiki/Special:FilePath/'+urllib.parse.quote(raw,safe='')+'?width=280' if isinstance(raw,str) and len(raw)<240 else ''
+
+def wd_kind(e):
+ desc=wd_desc(e).lower(); occupations=[wd_val(x) for x in claims(e,'P106')]; instances=[wd_val(x) for x in claims(e,'P31')]
+ if 'Q476028' in instances or 'football club' in desc or 'futbol klubu' in desc or 'soccer club' in desc:return 'teams'
+ if 'Q628099' in occupations or 'football coach' in desc or 'football manager' in desc or 'məşqçi' in desc:return 'coaches'
+ if 'Q937857' in occupations or 'football player' in desc or 'footballer' in desc or 'futbolçu' in desc or claims(e,'P54'):return 'players'
+ return 'other'
+
+def wd_search(q,kind):
+ found=wd_query('wbsearchentities',search=q,language='en',uselang='az',limit='30').get('search',[])
+ ids=[x.get('id','') for x in found if QID.fullmatch(x.get('id',''))]
+ entities=wd_entities(ids)
+ out=[]
+ for id in ids:
+  e=entities.get(id)
+  if not e:continue
+  typ=wd_kind(e)
+  if typ=='other' or (kind!='all' and kind!=typ):continue
+  out.append({'id':id,'name':wd_label(e),'kind':typ,'country':'','description':wd_desc(e),'image':photo_url(e),'source':'Wikidata','verified':True})
+ return out
+
+def wd_profile(qid):
+ raw=wd_entities([qid]); e=raw.get(qid)
+ if not e or e.get('missing') is not None:return None
+ related=[]
+ for prop in ['P54','P6087','P108','P413','P166','P27','P17']:
+  related.extend([wd_val(x) for x in claims(e,prop) if QID.fullmatch(str(wd_val(x)))])
+ lookup={k:wd_label(v) for k,v in wd_entities(related).items()}
+ clubs=[]
+ for c in claims(e,'P54'):
+  key=wd_val(c)
+  if not QID.fullmatch(str(key)):continue
+  apps=qualifiers(c,'P1350');goals=qualifiers(c,'P1351')
+  clubs.append({'id':key,'name':lookup.get(key,key),'from':year(qualifiers(c,'P580')),'to':year(qualifiers(c,'P582')),'apps':int(apps.lstrip('+')) if isinstance(apps,str) and apps.lstrip('+').isdigit() else None,'goals':int(goals.lstrip('+')) if isinstance(goals,str) and goals.lstrip('+').isdigit() else None})
+ coached=[]
+ for prop in ['P6087']:
+  for c in claims(e,prop):
+   key=wd_val(c)
+   if QID.fullmatch(str(key)):coached.append({'id':key,'name':lookup.get(key,key),'from':year(qualifiers(c,'P580')),'to':year(qualifiers(c,'P582'))})
+ positions=[lookup.get(wd_val(c),wd_val(c)) for c in claims(e,'P413')]
+ countries=[lookup.get(wd_val(c),wd_val(c)) for c in claims(e,'P27')]
+ awards=[lookup.get(wd_val(c),wd_val(c)) for c in claims(e,'P166')]
+ death=wd_val((claims(e,'P570') or [None])[0]);birthdate=wd_val((claims(e,'P569') or [None])[0])
+ has_playing=bool(clubs or claims(e,'P54'))
+ has_coaching=bool(coached or claims(e,'P6087'))
+ roles=(["players"] if has_playing else [])+(["coaches"] if has_coaching else [])
+ return {'id':qid,'name':wd_label(e),'kind':wd_kind(e),'description':wd_desc(e),'image':photo_url(e),'country':', '.join(countries),'position':', '.join(positions),'clubs':clubs,'coached':coached,'awards':awards,'birth':str(birthdate or '').lstrip('+')[:10],'death':str(death or '').lstrip('+')[:10],'lifeStatus':'deceased' if death else 'unknown','careerStatus':'unverified','roles':roles,'source':'Wikidata','url':'https://www.wikidata.org/wiki/'+qid,'verified':True}
+
+def parse_espn(data,league):
+ out=[]
+ for e in data.get('events',[]):
+  c=(e.get('competitions') or [{}])[0]; comps=c.get('competitors',[])
+  home=next((x for x in comps if x.get('homeAway')=='home'),None);away=next((x for x in comps if x.get('homeAway')=='away'),None)
+  if not home or not away:continue
+  st=e.get('status',{}).get('type',{});status={'pre':'scheduled','in':'live','post':'final'}.get(st.get('state'),'scheduled')
+  def team(x):
+   t=x.get('team',{});return {'id':str(t.get('id','')),'name':t.get('displayName') or t.get('name') or '—','image':t.get('logo') or (t.get('logos') or [{}])[0].get('href','')}
+  def score(x):
+   raw=x.get('score');return int(raw) if raw is not None and str(raw).isdigit() else None
+  out.append({'id':'espn:'+league+':'+str(e.get('id')),'eventId':str(e.get('id')),'league':league,'home':team(home),'away':team(away),'homeScore':None if status=='scheduled' else score(home),'awayScore':None if status=='scheduled' else score(away),'state':status,'minute':e.get('status',{}).get('displayClock') or st.get('shortDetail',''),'date':e.get('date',''),'source':'ESPN (qeyri-rəsmi)'})
+ return out
+
+def espn_scores(league,date):
+ url=f'https://site.api.espn.com/apis/site/v2/sports/soccer/{league}/scoreboard?dates={date.replace("-","")}&limit=150'
+ return parse_espn(get_json(url,ttl=45),league)
+
+def openliga_matches(date):
+ season=int(date[:4])-(int(date[5:7])<7)
+ rows=get_json(f'https://api.openligadb.de/getmatchdata/bl1/{season}',ttl=120)
+ out=[]
+ for e in rows:
+  when=e.get('matchDateTimeUTC') or e.get('matchDateTime') or ''
+  if when[:10]!=date:continue
+  rs=e.get('matchResults') or []; final=next((x for x in rs if x.get('resultTypeID')==2),rs[-1] if rs else {})
+  finished=bool(e.get('matchIsFinished'));started=when and when[:10]<=date
+  out.append({'id':'open:'+str(e.get('matchID')),'league':'ger.1','home':{'id':str(e.get('team1',{}).get('teamId','')),'name':e.get('team1',{}).get('teamName',''),'image':e.get('team1',{}).get('teamIconUrl','')},'away':{'id':str(e.get('team2',{}).get('teamId','')),'name':e.get('team2',{}).get('teamName',''),'image':e.get('team2',{}).get('teamIconUrl','')},'homeScore':final.get('pointsTeam1') if final else None,'awayScore':final.get('pointsTeam2') if final else None,'state':'final' if finished else 'live' if final else 'scheduled','minute':'','date':when,'source':'OpenLigaDB','eventId':str(e.get('matchID'))})
+ return out
+
+def espn_standings(league):
+ j=source_call('ESPN',f'https://site.api.espn.com/apis/v2/sports/soccer/{league}/standings',900)
+ entries=list(j.get('standings',{}).get('entries',[]))
+ for group in j.get('children',[]): entries+=group.get('standings',{}).get('entries',[])
+ def stat(row,*names):
+  s=next((s for s in row.get('stats',[]) if s.get('name') in names or s.get('abbreviation') in names),None)
+  if not s:return None
+  try:return int(float(s.get('value',s.get('displayValue',0))))
+  except:return None
+ return [{'name':r.get('team',{}).get('displayName',''),'image':r.get('team',{}).get('logos',[{}])[0].get('href','') if r.get('team',{}).get('logos') else r.get('team',{}).get('logo',''),'played':stat(r,'gamesPlayed','GP'),'win':stat(r,'wins','W'),'draw':stat(r,'ties','D'),'loss':stat(r,'losses','L'),'points':stat(r,'points','PTS'),'rank':stat(r,'rank') or i+1} for i,r in enumerate(entries)]
+
+def openliga_table():
+ season=time.gmtime().tm_year-(time.gmtime().tm_mon<7)
+ rows=get_json(f'https://api.openligadb.de/getmatchdata/bl1/{season}',ttl=900)
+ teams={}
+ for m in rows:
+  if not m.get('matchIsFinished'):continue
+  results=m.get('matchResults') or []
+  final=next((x for x in results if x.get('resultTypeID')==2),results[-1] if results else None)
+  if final is None:continue
+  a=m.get('team1',{}).get('teamName');b=m.get('team2',{}).get('teamName');x=final.get('pointsTeam1');y=final.get('pointsTeam2')
+  if not (a and b and isinstance(x,int) and isinstance(y,int)):continue
+  for name,goals,against in [(a,x,y),(b,y,x)]:
+   row=teams.setdefault(name,{'name':name,'played':0,'win':0,'draw':0,'loss':0,'points':0,'gf':0,'ga':0,'image':''})
+   row['played']+=1;row['gf']+=goals;row['ga']+=against
+   if goals>against:row['win']+=1;row['points']+=3
+   elif goals==against:row['draw']+=1;row['points']+=1
+   else:row['loss']+=1
+ return [dict(row,rank=i+1) for i,row in enumerate(sorted(teams.values(),key=lambda x:(-x['points'],-(x['gf']-x['ga']),-x['gf'],x['name'])))]
+
+def live_from_sources(league,date):
+ # ESPN is often the broadest source; alternative APIs are used on failure or empty result.
+ errors=[]; empty_success=None
+ candidates=[('ESPN',lambda:feeds.espn_games(source_call('ESPN',
+  f'https://site.api.espn.com/apis/site/v2/sports/soccer/{league}/scoreboard?dates={date.replace("-","")}&limit=200',45),league),False)]
+ if league in feeds.OPENLIGA:
+  candidates.append(('OpenLigaDB',lambda:feeds.openliga_games(source_call('OpenLigaDB',feeds.openliga_matches_url(date,league),120),league,date),True))
+ if league in feeds.SPORTSDB:
+  candidates.append(('TheSportsDB',lambda:feeds.sportsdb_games(source_call('TheSportsDB',feeds.sportsdb_matches_url(date,league),180),league),True))
+ for name,fn,partial in candidates:
+  try:
+   rows=fn()
+   if not isinstance(rows,list):raise ValueError('Uyğunsuz məlumat formatı')
+   result={'items':rows,'available':True,'partial':partial,'source':name,
+     'message':('Pulsuz plan məhdud sayda matç qaytara bilər.' if partial else '')}
+   if rows:
+    snapshot_save('matches',league,date,result)
+    return result
+   if empty_success is None:empty_success=result
+  except Exception as ex:errors.append(name+': '+type(ex).__name__)
+ if empty_success is not None:return empty_success
+ prior=snapshot_load('matches',league,date)
+ if prior:return prior
+ return {'items':[],'available':False,'source':'Bağlantı alınmadı',
+   'message':'Yoxlanan mənbələr: '+', '.join(errors)+'; serverdəki Mənbə diaqnostikasına baxın.'}
+
+
+def table_from_sources(league):
+ errors=[]; empty_success=None
+ candidates=[('ESPN',lambda:espn_standings(league))]
+ if league in feeds.OPENLIGA:
+  date=_dt.date.today().isoformat()
+  candidates.append(('OpenLigaDB',lambda:feeds.openliga_table(source_call('OpenLigaDB',feeds.openliga_table_url(league,date),900))))
+ if league in feeds.SPORTSDB:
+  candidates.append(('TheSportsDB',lambda:feeds.sportsdb_table(source_call('TheSportsDB',feeds.sportsdb_table_url(league),900))))
+ for name,fn in candidates:
+  try:
+   rows=fn()
+   if not isinstance(rows,list):raise ValueError('Uyğunsuz cədvəl')
+   result={'items':rows,'available':True,'source':name,'partial':name!='ESPN'}
+   if rows:
+    snapshot_save('table',league,'',result)
+    return result
+   if empty_success is None:empty_success=result
+  except Exception as ex:errors.append(name+': '+type(ex).__name__)
+ if empty_success is not None:return empty_success
+ prior=snapshot_load('table',league,'')
+ if prior:return prior
+ return {'items':[],'available':False,'message':'Cədvəl mənbələri əlçatan deyil: '+', '.join(errors)}
+
+
+def media_by_qid(qid,kind='players'):
+ if kind=='players':
+  try:
+   from urllib.parse import quote
+   media=json.loads((ROOT/'featured_media.js').read_text(encoding='utf8').split('=',1)[1].rstrip(';'))
+   if qid in media:return {'url':media[qid],'source':'Wikimedia Commons · şəkil kreditləri ayrıca'}
+  except (OSError,ValueError):pass
+ # Always bind portraits to a verified Wikidata identity. Never guess by an ambiguous name.
+ e=wd_entities([qid]).get(qid,{})
+ if not e:return {'url':'','source':''}
+ prop='P154' if kind=='teams' else 'P18'
+ filename=next((wd_val(v) for v in claims(e,prop) if isinstance(wd_val(v),str)),None)
+ if filename and len(filename)<230:
+  return {'url':'https://commons.wikimedia.org/wiki/Special:FilePath/'+urllib.parse.quote(filename,safe='')+'?width=300',
+          'source':'Wikidata / Wikimedia Commons'}
+ # Wikipedia thumbnails are accepted only when the article's Wikidata ID matches.
+ raw=wd_query('wbgetentities',ids=qid,props='sitelinks',sitefilter='enwiki')
+ title=(raw.get('entities',{}).get(qid,{}).get('sitelinks',{}).get('enwiki') or {}).get('title')
+ if not title:return {'url':'','source':''}
+ j=get_json('https://en.wikipedia.org/api/rest_v1/page/summary/'+urllib.parse.quote(title.replace(' ','_'),safe=''),ttl=86400)
+ if j.get('wikibase_item')!=qid or j.get('type')=='disambiguation':return {'url':'','source':''}
+ url=(j.get('thumbnail') or {}).get('source','')
+ if not url.startswith('https://upload.wikimedia.org/'):url=''
+ return {'url':url,'source':'Wikipedia — image license varies'}
+
+def send_data(path,params):
+ if path=='/api/status':return {'ok':True,'backend':True,'version':'0.9.4','catalog':len(CATALOG),'world':world_db.counts(),'liveGuaranteed':False,'canInstall':True,'wikipedia':{'mode':'on_demand_cache','verifiedSeedCount':len(wiki.SEED),'linkedQids':158924}}
+ if path=='/api/sources':return {'sources':SOURCE_STATUS,'providers':['ESPN (qeyri-rəsmi)','OpenLigaDB (icma)','TheSportsDB (pulsuz/limitli)'],'internetVerifiedHere':False}
+ if path=='/api/photos':
+  values=params.get('qids',[''])[0].split(',')[:20]
+  kind=params.get('kind',['players'])[0]
+  if kind not in ('players','coaches','teams'):kind='players'
+  output={}
+  qids=list(dict.fromkeys(v for v in values if QID.fullmatch(v)))
+  if kind=='players':
+   try:
+    curated=json.loads((ROOT/'featured_media.js').read_text(encoding='utf8').split('=',1)[1].rstrip(';'))
+    output.update({qid:curated[qid] for qid in qids if qid in curated})
+   except (OSError,ValueError):pass
+  remaining=[qid for qid in qids if qid not in output]
+  try:
+   entities=wd_entities(remaining)
+   for qid in remaining:
+    e=entities.get(qid,{})
+    prop='P154' if kind=='teams' else 'P18'
+    img=next((wd_val(v) for v in claims(e,prop) if isinstance(wd_val(v),str)),None)
+    if img and len(img)<230:output[qid]='https://commons.wikimedia.org/wiki/Special:FilePath/'+urllib.parse.quote(img,safe='')+'?width=240'
+  except Exception:pass
+  return {'items':output,'source':'Wikidata / Wikimedia Commons'}
+ if path=='/api/world/countries':return {'items':world_db.countries(),'installed':bool(world_db.counts())}
+ if path=='/api/install-status':
+  with INSTALL_LOCK: state=INSTALL.copy()
+  state['world']=world_db.counts()
+  state['files']={'entities':(ROOT/'entities.csv.gz').exists(),'overlay':(ROOT/'overlay_links.csv.gz').exists()}
+  return state
+ if path=='/api/search':
+  q=params.get('q',[''])[0].strip()[:80];kind=params.get('kind',['all'])[0]
+  country=params.get('country',[''])[0].strip()[:100]
+  try:offset=max(0,min(3_500_000,int(params.get('offset',['0'])[0])))
+  except:offset=0
+  if kind not in ['all','players','teams','coaches']:return {'items':[],'error':'Yanlış filtr'}
+  local=local_search(q,kind,limit=100) if q else [x for x in CATALOG if kind=='all' or x['kind']==kind]
+  world,ready=world_db.search(q,kind,limit=75,offset=offset,country=country)
+  if ready:
+   # Always return real register rows first, never count the catalogue as part of the archive.
+   ids=set();out=[]
+   for x in ((local if q and offset==0 and not country else []) + world):
+    if x['id'] not in ids:out.append(x);ids.add(x['id'])
+   return {'items':out,'online':False,'source':'Reep CC0 yerli dünya arxivi','worldInstalled':True,'nextOffset':offset+75 if len(world)==75 else None,'registryCount':world_db.counts()}
+  if not q:
+   page=local[offset:offset+75]
+   return {'items':page,'online':False,'source':'Başlanğıc kataloq','worldInstalled':False,'nextOffset':offset+75 if offset+75<len(local) else None,'count':len(local)}
+  if offset>0:return {'items':[],'worldInstalled':False,'nextOffset':None}
+  try:
+   remote=wd_search(q,kind)
+   ids=set();merged=[]
+   for x in local+remote:
+    name=norm(x['name']);key=x['kind']+':'+name
+    if key not in ids:merged.append(x);ids.add(key)
+   return {'items':merged[:100],'online':True,'source':'Wikidata + başlanğıc kataloq','worldInstalled':False}
+  except Exception:
+   return {'items':local[:75],'online':False,'source':'Yerli kataloq','worldInstalled':False,'message':'Xarici server cavab vermədi; yerli real adlar göstərilir.'}
+ if path=='/api/profile':
+  identifier=params.get('id',[''])[0]
+  local=CATBYID.get(identifier)
+  world_profile=world_db.profile(identifier)
+  profile=world_profile or None
+  if profile:
+   qid=profile.get('wikidataId','')
+   if qid and qid not in wiki.SEED:
+    try:
+     wd=wd_profile(qid)
+     if wd:
+      profile.update({'image':wd.get('image',''),'position':wd.get('position',''),'clubs':wd.get('clubs',[]),'coached':wd.get('coached',[]),'awards':wd.get('awards',[]),'birth':wd.get('birth',''),'death':wd.get('death',''),'lifeStatus':wd.get('lifeStatus','unknown'),'roles':list(dict.fromkeys(profile.get('roles',[])+wd.get('roles',[])))})
+    except Exception:pass
+  elif QID.fullmatch(identifier):
+   try:profile=wd_profile(identifier)
+   except Exception:profile=None
+  if profile is None and local:profile=dict(local)
+  if profile is None:return {'profile':None,'online':False,'message':'Bu profilə dair məlumat tapılmadı.'}
+  qid=profile.get('wikidataId') or profile.get('qid') or (identifier if QID.fullmatch(identifier) else '')
+  if qid and profile.get('kind') in ('players','coaches'):
+   # Curated snapshots work offline; other profiles are looked up by exact Wikidata identity.
+   info=wiki.SEED.get(qid) or wiki.enrich(qid,get_json)
+  else:
+   info=wiki.seed_by_profile(profile)
+  if info:profile=wiki.with_wikipedia(profile,info)
+  elif local and not profile.get('clubs'):profile['localHistoricalClubs']=local.get('clubs',[])
+  return {'profile':profile,'online':bool(profile.get('image')),'source':profile.get('source','Reep CC0')}
+ if path=='/api/wikipedia-refresh':
+  identifier=params.get('id',[''])[0]
+  profile=world_db.profile(identifier) or CATBYID.get(identifier,{})
+  qid=profile.get('wikidataId') or profile.get('qid') or (identifier if QID.fullmatch(identifier) else '')
+  if not QID.fullmatch(qid or '') or profile.get('kind') not in ('players','coaches'):return {'available':False,'message':'Bu futbolçu və ya məşqçinin təsdiqlənmiş Wikipedia bağlantısı yoxdur.'}
+  data=wiki.enrich(qid,get_json,refresh=True)
+  updated=bool(data and not data.get('verifiedSnapshot',False))
+  return {'available':bool(data),'updated':updated,'data':data or {},'message':'Wikipedia məlumatı yeniləndi' if updated else 'Yalnız saxlanmış məlumat var; canlı Wikipedia yeniləməsi təsdiqlənmədi.'}
+ if path=='/api/live':
+  league=params.get('league',['eng.1'])[0];date=params.get('date',[''])[0]
+  if league not in LEAGUES or not re.fullmatch(r'\d{4}-\d{2}-\d{2}',date):return {'items':[],'available':False,'message':'Liqa və ya tarix düzgün deyil'}
+  try:_dt.date.fromisoformat(date)
+  except ValueError:return {'items':[],'available':False,'message':'Tarix mövcud deyil'}
+  return live_from_sources(league,date)
+ if path=='/api/standings':
+  league=params.get('league',['eng.1'])[0]
+  if league not in LEAGUES:return {'items':[],'available':False,'message':'Liqa dəstəklənmir'}
+  return table_from_sources(league)
+ if path=='/api/roster':
+  league=params.get('league',[''])[0];id=params.get('id',[''])[0]
+  if league not in LEAGUES or not id.isdigit():return {'items':[],'available':False}
+  try:
+   j=get_json(f'https://site.api.espn.com/apis/site/v2/sports/soccer/{league}/teams/{id}/roster',300)
+   result=[]
+   for a in j.get('athletes',[]):
+    for x in (a.get('items',[]) if isinstance(a.get('items'),list) else [a.get('athlete',a)]):
+     if isinstance(x,dict) and (x.get('displayName') or x.get('fullName')):
+      photo=x.get('headshot') or ''
+      result.append({'id':str(x.get('id','')),'name':x.get('displayName') or x.get('fullName'),'image':photo.get('href','') if isinstance(photo,dict) else photo,'position':x.get('position',{}).get('displayName',''),'number':x.get('jersey','')})
+   return {'items':result,'available':True,'source':'ESPN'}
+  except Exception:return {'items':[],'available':False,'message':'Rəsmi cari heyət mənbəsi əlçatan deyil.'}
+ if path=='/api/photo':
+  qid=params.get('qid',[''])[0].strip()
+  kind=params.get('kind',['players'])[0]
+  if not QID.fullmatch(qid):return {'url':'','source':'Kimlik bağlantısı yoxdur'}
+  try:return media_by_qid(qid,kind)
+  except Exception:return {'url':'','source':'Şəkil mənbəsinə çıxış yoxdur'}
+ if path=='/api/summary':
+  league=params.get('league',[''])[0];id=params.get('id',[''])[0]
+  if league not in LEAGUES or not id.isdigit():return {'events':[],'available':False}
+  try:
+   j=get_json(f'https://site.api.espn.com/apis/site/v2/sports/soccer/{league}/summary?event={id}',120)
+   plays=j.get('scoringPlays') or j.get('plays') or j.get('details') or []
+   return {'events':[{'text':p.get('text') or p.get('description') or p.get('type',{}).get('text',''),'clock':p.get('clock',{}).get('displayValue','')} for p in plays[:70] if isinstance(p,dict)],'available':True}
+  except Exception:return {'events':[],'available':False}
+ return None
+
+def set_install(**kw):
+ with INSTALL_LOCK:INSTALL.update(kw)
+
+def run_install():
+ import import_world
+ try:
+  set_install(state='downloading',message='Reep arxivi endirilir; bu proqram pəncərəsini açıq saxla',done=False,error='')
+  archive=ROOT/'entities.csv.gz';overlay=ROOT/'overlay_links.csv.gz'
+  if not archive.exists():import_world.download([import_world.PINNED,import_world.MIRROR],archive,import_world.SHA256)
+  if not overlay.exists():
+   try:import_world.download([import_world.OVERLAY_URL],overlay,import_world.OVERLAY_SHA)
+   except Exception:pass
+  set_install(state='indexing',message='Futbolçu, klub və məşqçilər SQLite bazasına idxal edilir')
+  counts=import_world.install(archive,overlay if overlay.exists() else None)
+  set_install(state='ready',message='Dünya arxivi quraşdırıldı: '+str(sum(counts.values()))+' qeyd',done=True,error='')
+ except Exception as ex:
+  set_install(state='error',message='Yükləmə və ya idxal alınmadı',done=True,error=str(ex)[:240])
+
+def start_install():
+ with INSTALL_LOCK:
+  if INSTALL['state'] in ('downloading','indexing'):return False
+  INSTALL.update({'state':'downloading','message':'Başladılır','bytes':0,'done':False,'error':''})
+ threading.Thread(target=run_install,name='world-database-import',daemon=True).start()
+ return True
+
+class Handler(SimpleHTTPRequestHandler):
+ def __init__(self,*a,**kw):super().__init__(*a,directory=str(ROOT),**kw)
+ def log_message(self,fmt,*args):pass
+ def do_POST(self):
+  # Browser forms from unrelated sites must not start a large database installation.
+  origin=self.headers.get('Origin','')
+  if origin:
+   parsed_origin=urllib.parse.urlsplit(origin)
+   own_host=self.headers.get('Host','')
+   if parsed_origin.scheme!='http' or parsed_origin.netloc!=own_host or parsed_origin.hostname not in ('127.0.0.1','localhost'):
+    return self.json_response(403,{'error':'Yalnız yerli proqramın sorğularına icazə verilir'})
+  import import_world
+  parsed=urllib.parse.urlsplit(self.path)
+  if parsed.path=='/api/install-start':
+   started=start_install();return self.json_response(200,{'started':started,'state':INSTALL['state']})
+  if parsed.path!='/api/install-upload':return self.json_response(404,{'error':'Not found'})
+  kind=urllib.parse.parse_qs(parsed.query).get('kind',[''])[0]
+  if kind not in ('entities','overlay'):return self.json_response(400,{'error':'Yalnız entities və overlay faylları qəbul olunur'})
+  with INSTALL_LOCK:
+   if INSTALL['state'] in ('downloading','indexing'):return self.json_response(409,{'error':'İdxal davam edir'})
+  try:n=int(self.headers.get('Content-Length','0'))
+  except:n=0
+  if not 20<n<160*1024*1024:return self.json_response(413,{'error':'Fayl ölçüsü düzgün deyil; ən çox 160 MB'})
+  target=ROOT/('entities.csv.gz' if kind=='entities' else 'overlay_links.csv.gz');temp=target.with_suffix('.uploading')
+  expected=import_world.SHA256 if kind=='entities' else import_world.OVERLAY_SHA
+  try:
+   digest=hashlib.sha256();remaining=n
+   with temp.open('wb') as out:
+    while remaining>0:
+     chunk=self.rfile.read(min(256*1024,remaining))
+     if not chunk:raise ValueError('Yarımçıq fayl')
+     out.write(chunk);digest.update(chunk);remaining-=len(chunk)
+   if digest.hexdigest().lower()!=expected.lower():raise ValueError('SHA-256 uyğun deyil. Yalnız 2026-10-25.1 rəsmi buraxılışı qəbul edilir.')
+   os.replace(temp,target)
+   return self.json_response(200,{'ok':True,'type':kind,'message':'Fayl doğrulandı; idxalı başlat düyməsini bas'})
+  except Exception as ex:
+   temp.unlink(missing_ok=True);return self.json_response(422,{'error':str(ex)[:240]})
+ def json_response(self,code,payload):
+  raw=json.dumps(payload,ensure_ascii=False,separators=(',',':')).encode('utf8')
+  self.send_response(code);self.send_header('Content-Type','application/json; charset=utf-8');self.send_header('Cache-Control','no-store');self.send_header('X-Content-Type-Options','nosniff');self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw)
+ def do_GET(self):
+  parsed=urllib.parse.urlsplit(self.path)
+  if parsed.path.startswith('/api/'):
+   params=urllib.parse.parse_qs(parsed.query)
+   try:
+    payload=send_data(parsed.path,params)
+    code=200 if payload is not None else 404
+    if payload is None:payload={'error':'Not found'}
+   except Exception: code=503;payload={'error':'Məlumat alına bilmədi','available':False}
+   raw=json.dumps(payload,ensure_ascii=False,separators=(',',':')).encode('utf-8')
+   self.send_response(code);self.send_header('Content-Type','application/json; charset=utf-8');self.send_header('Cache-Control','no-store');self.send_header('X-Content-Type-Options','nosniff');self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw)
+   return
+  # Serve ONLY frontend assets. SQLite, source code, local logs and uploads never leave this process.
+  public={'/index.html','/app.js','/catalog.js','/featured_media.js','/styles.css','/assets/icon.svg'}
+  requested=urllib.parse.unquote(parsed.path)
+  if requested in ('','/'):requested='/index.html'
+  if requested not in public:
+   self.send_error(404)
+   return
+  self.path=requested
+  super().do_GET()
+
+def main():
+ ap=argparse.ArgumentParser(description='MATCHLAB AZ — HTML + local server (no VBS/PYW/CMD launcher)')
+ ap.add_argument('--port',type=int,default=8765,help='Default 8765; 0 chooses a free port')
+ ap.add_argument('--no-browser',action='store_true',help='Do not open browser automatically')
+ ns=ap.parse_args()
+ must_have=['index.html','app.js','styles.css','world_football.sqlite']
+ missing=[name for name in must_have if not (ROOT/name).is_file()]
+ if missing:
+  print('XƏTA: Bu fayllar yoxdur: '+', '.join(missing))
+  print('ZIP arxivini tam çıxart və server.py faylını çıxarılan qovluqdan aç.')
+  return 2
+ try:
+  server=ThreadingHTTPServer(('127.0.0.1',ns.port),Handler)
+ except OSError as exc:
+  if ns.port==8765:
+   print('8765 portu məşğuldur, avtomatik başqa boş port seçilir.',flush=True)
+   server=ThreadingHTTPServer(('127.0.0.1',0),Handler)
+  else:
+   print('Serveri başlatmaq mümkün olmadı: '+str(exc),flush=True)
+   return 1
+ actual_port=server.server_address[1]
+ url=f'http://127.0.0.1:{actual_port}/'
+ print('MATCHLAB AZ — HTML + SERVER',flush=True)
+ print('Brauzer ünvanı: '+url,flush=True)
+ print('Server işləyərkən bu Python pəncərəsini bağlama. Dayandırmaq üçün Ctrl+C.',flush=True)
+ if not ns.no_browser:
+  threading.Timer(0.6,lambda:webbrowser.open(url)).start()
+ try:server.serve_forever(poll_interval=0.2)
+ except KeyboardInterrupt:pass
+ finally:server.server_close()
+ return 0
+if __name__=='__main__':raise SystemExit(main())
