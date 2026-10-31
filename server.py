@@ -9,6 +9,7 @@ import world_db
 import match_sources as feeds
 import datetime as _dt
 import wikipedia_enrichment as wiki
+import live_center
 
 ROOT=Path(__file__).resolve().parent
 INSTALL={'state':'idle','message':'Hələ quraşdırılmayıb','bytes':0,'done':False,'error':''}
@@ -256,7 +257,7 @@ def live_from_sources(league,date):
  # ESPN is often the broadest source; alternative APIs are used on failure or empty result.
  errors=[]; empty_success=None
  candidates=[('ESPN',lambda:feeds.espn_games(source_call('ESPN',
-  f'https://site.api.espn.com/apis/site/v2/sports/soccer/{league}/scoreboard?dates={date.replace("-","")}&limit=200',45),league),False)]
+  f'https://site.api.espn.com/apis/site/v2/sports/soccer/{league}/scoreboard?dates={date.replace("-","")}&limit=200',23),league),False)]
  if league in feeds.OPENLIGA:
   candidates.append(('OpenLigaDB',lambda:feeds.openliga_games(source_call('OpenLigaDB',feeds.openliga_matches_url(date,league),120),league,date),True))
  if league in feeds.SPORTSDB:
@@ -303,8 +304,8 @@ def table_from_sources(league):
  return {'items':[],'available':False,'message':'Cədvəl mənbələri əlçatan deyil: '+', '.join(errors)}
 
 
-def media_by_qid(qid,kind='players'):
- if kind=='players':
+def media_by_qid(qid,kind='players',retry=False):
+ if kind=='players' and not retry:
   try:
    from urllib.parse import quote
    media=json.loads((ROOT/'featured_media.js').read_text(encoding='utf8').split('=',1)[1].rstrip(';'))
@@ -313,8 +314,8 @@ def media_by_qid(qid,kind='players'):
  # Always bind portraits to a verified Wikidata identity. Never guess by an ambiguous name.
  e=wd_entities([qid]).get(qid,{})
  if not e:return {'url':'','source':''}
- prop='P154' if kind=='teams' else 'P18'
- filename=next((wd_val(v) for v in claims(e,prop) if isinstance(wd_val(v),str)),None)
+ props=('P154','P18') if kind=='teams' else ('P18',)
+ filename=next((wd_val(v) for prop in props for v in claims(e,prop) if isinstance(wd_val(v),str)),None)
  if filename and len(filename)<230:
   return {'url':'https://commons.wikimedia.org/wiki/Special:FilePath/'+urllib.parse.quote(filename,safe='')+'?width=300',
           'source':'Wikidata / Wikimedia Commons'}
@@ -329,7 +330,7 @@ def media_by_qid(qid,kind='players'):
  return {'url':url,'source':'Wikipedia — image license varies'}
 
 def send_data(path,params):
- if path=='/api/status':return {'ok':True,'backend':True,'version':'0.9.4','catalog':len(CATALOG),'world':world_db.counts(),'liveGuaranteed':False,'canInstall':True,'wikipedia':{'mode':'on_demand_cache','verifiedSeedCount':len(wiki.SEED),'linkedQids':158924}}
+ if path=='/api/status':return {'ok':True,'backend':True,'version':'0.9.6','catalog':len(CATALOG),'world':world_db.counts(),'liveGuaranteed':False,'livePollingSeconds':25,'canInstall':True,'wikipedia':{'mode':'on_demand_cache','verifiedSeedCount':len(wiki.SEED),'linkedQids':158924}}
  if path=='/api/sources':return {'sources':SOURCE_STATUS,'providers':['ESPN (qeyri-rəsmi)','OpenLigaDB (icma)','TheSportsDB (pulsuz/limitli)'],'internetVerifiedHere':False}
  if path=='/api/photos':
   values=params.get('qids',[''])[0].split(',')[:20]
@@ -347,8 +348,8 @@ def send_data(path,params):
    entities=wd_entities(remaining)
    for qid in remaining:
     e=entities.get(qid,{})
-    prop='P154' if kind=='teams' else 'P18'
-    img=next((wd_val(v) for v in claims(e,prop) if isinstance(wd_val(v),str)),None)
+    props=('P154','P18') if kind=='teams' else ('P18',)
+    img=next((wd_val(v) for prop in props for v in claims(e,prop) if isinstance(wd_val(v),str)),None)
     if img and len(img)<230:output[qid]='https://commons.wikimedia.org/wiki/Special:FilePath/'+urllib.parse.quote(img,safe='')+'?width=240'
   except Exception:pass
   return {'items':output,'source':'Wikidata / Wikimedia Commons'}
@@ -422,10 +423,10 @@ def send_data(path,params):
   return {'available':bool(data),'updated':updated,'data':data or {},'message':'Wikipedia məlumatı yeniləndi' if updated else 'Yalnız saxlanmış məlumat var; canlı Wikipedia yeniləməsi təsdiqlənmədi.'}
  if path=='/api/live':
   league=params.get('league',['eng.1'])[0];date=params.get('date',[''])[0]
-  if league not in LEAGUES or not re.fullmatch(r'\d{4}-\d{2}-\d{2}',date):return {'items':[],'available':False,'message':'Liqa və ya tarix düzgün deyil'}
+  if (league not in LEAGUES and league!='all') or not re.fullmatch(r'\d{4}-\d{2}-\d{2}',date):return {'items':[],'available':False,'message':'Liqa və ya tarix düzgün deyil'}
   try:_dt.date.fromisoformat(date)
   except ValueError:return {'items':[],'available':False,'message':'Tarix mövcud deyil'}
-  return live_from_sources(league,date)
+  return live_center.view(league,date,live_from_sources)
  if path=='/api/standings':
   league=params.get('league',['eng.1'])[0]
   if league not in LEAGUES:return {'items':[],'available':False,'message':'Liqa dəstəklənmir'}
@@ -447,7 +448,7 @@ def send_data(path,params):
   qid=params.get('qid',[''])[0].strip()
   kind=params.get('kind',['players'])[0]
   if not QID.fullmatch(qid):return {'url':'','source':'Kimlik bağlantısı yoxdur'}
-  try:return media_by_qid(qid,kind)
+  try:return media_by_qid(qid,kind,retry=params.get('retry',['0'])[0]=='1')
   except Exception:return {'url':'','source':'Şəkil mənbəsinə çıxış yoxdur'}
  if path=='/api/summary':
   league=params.get('league',[''])[0];id=params.get('id',[''])[0]
