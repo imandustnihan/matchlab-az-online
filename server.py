@@ -23,7 +23,9 @@ CACHE={}; CACHE_LOCK=threading.Lock(); HOST_COOLDOWN={}; UPSTREAM_TIMEOUT=8
 SOURCE_STATUS={}
 SCORE_CACHE=ROOT/'score_cache'
 SCORE_CACHE.mkdir(exist_ok=True)
-USER_AGENT=os.environ.get('MATCHLAB_WIKIMEDIA_UA','MatchlabAZ/0.9 (local personal football archive; https://www.mediawiki.org/wiki/Wikimedia_APIs/Access_policy)')
+USER_AGENT=os.environ.get('MATCHLAB_WIKIMEDIA_UA','MatchlabAZ/0.9.14 (https://github.com/imandustnihan/matchlab-az-online; community football archive)')
+WIKI_REQUEST_LOCK=threading.Lock()
+WIKI_NEXT_REQUEST=0.0
 
 def norm(s):
  import unicodedata
@@ -55,6 +57,14 @@ def get_json(url,ttl=300):
   if entry and entry[0]>now:
    if isinstance(entry[1],Exception):raise entry[1]
    return entry[1]
+ # Wikimedia's 2026 anonymous API limits apply to our server too. Throttle
+ # on cache miss, and share the pace across Wikipedia + Wikidata requests.
+ if host=='www.wikidata.org' or host.endswith('.wikipedia.org'):
+  global WIKI_NEXT_REQUEST
+  with WIKI_REQUEST_LOCK:
+   pause=max(0,WIKI_NEXT_REQUEST-time.monotonic())
+   if pause:time.sleep(pause)
+   WIKI_NEXT_REQUEST=time.monotonic()+0.55
  req=urllib.request.Request(url,headers={
   'Accept':'application/json','User-Agent':USER_AGENT,
   'Accept-Encoding':'identity','Cache-Control':'no-cache'})
@@ -67,7 +77,7 @@ def get_json(url,ttl=300):
  except Exception as ex:
   with CACHE_LOCK:
    CACHE[url]=(now+8,ex) # transient outages shouldn't disable whole competitions
-   if isinstance(ex,urllib.error.HTTPError) and ex.code==429:
+   if isinstance(ex,urllib.error.HTTPError) and ex.code in (429,503):
     retry=ex.headers.get('Retry-After','')
     HOST_COOLDOWN[host]=now+(min(300,max(25,int(retry))) if str(retry).isdigit() else 45)
   raise
@@ -354,8 +364,8 @@ def media_by_qid(qid,kind='players',retry=False):
  return {'url':url,'source':'Wikipedia — image license varies'}
 
 def send_data(path,params):
- if path=='/api/status':return {'ok':True,'backend':True,'version':'0.9.13-local','catalog':len(CATALOG),'world':world_db.counts(),'liveGuaranteed':False,'livePollingSeconds':25,'canInstall':True,'wikipedia':{'mode':'on_demand_cache','verifiedSeedCount':len(wiki.SEED),'linkedQids':158924}}
- if path=='/api/sources':return {'sources':SOURCE_STATUS,'providers':['ESPN (qeyri-rəsmi)','OpenLigaDB (icma)','TheSportsDB (pulsuz/limitli)'],'internetVerifiedHere':False}
+ if path=='/api/status':return {'ok':True,'backend':True,'version':'0.9.14-local','catalog':len(CATALOG),'world':world_db.counts(),'liveGuaranteed':False,'livePollingSeconds':25,'canInstall':True,'wikipedia':{'mode':'on_demand_verified_qid','verifiedSeedCount':len(wiki.SEED),'linkedQids':158924,'teamProfiles':True,'shortExtracts':True}}
+ if path=='/api/sources':return {'sources':SOURCE_STATUS,'providers':['ESPN (qeyri-rəsmi)','OpenLigaDB (icma)','TheSportsDB (pulsuz/limitli)','Wikipedia/Wikidata (mənbəli profil)'],'internetVerifiedHere':False}
  if path=='/api/photos':
   values=params.get('qids',[''])[0].split(',')[:20]
   kind=params.get('kind',['players'])[0]
@@ -428,9 +438,9 @@ def send_data(path,params):
   if profile is None and local:profile=dict(local)
   if profile is None:return {'profile':None,'online':False,'message':'Bu profilə dair məlumat tapılmadı.'}
   qid=profile.get('wikidataId') or profile.get('qid') or (identifier if QID.fullmatch(identifier) else '')
-  if qid and profile.get('kind') in ('players','coaches'):
-   # Curated snapshots work offline; other profiles are looked up by exact Wikidata identity.
-   info=wiki.SEED.get(qid) or wiki.enrich(qid,get_json)
+  if qid and profile.get('kind') in ('players','coaches','teams'):
+   # Always try on-demand Wikipedia first; curated snapshots are offline fallback.
+   info=wiki.enrich(qid,get_json,kind=profile.get('kind')) or wiki.SEED.get(qid)
   else:
    info=wiki.seed_by_profile(profile)
   if info:profile=wiki.with_wikipedia(profile,info)
@@ -440,8 +450,8 @@ def send_data(path,params):
   identifier=params.get('id',[''])[0]
   profile=world_db.profile(identifier) or CATBYID.get(identifier,{})
   qid=profile.get('wikidataId') or profile.get('qid') or (identifier if QID.fullmatch(identifier) else '')
-  if not QID.fullmatch(qid or '') or profile.get('kind') not in ('players','coaches'):return {'available':False,'message':'Bu futbolçu və ya məşqçinin təsdiqlənmiş Wikipedia bağlantısı yoxdur.'}
-  data=wiki.enrich(qid,get_json,refresh=True)
+  if not QID.fullmatch(qid or '') or profile.get('kind') not in ('players','coaches','teams'):return {'available':False,'message':'Bu profilin təsdiqlənmiş Wikipedia bağlantısı yoxdur.'}
+  data=wiki.enrich(qid,get_json,refresh=True,kind=profile.get('kind'))
   updated=bool(data and not data.get('verifiedSnapshot',False))
   return {'available':bool(data),'updated':updated,'data':data or {},'message':'Wikipedia məlumatı yeniləndi' if updated else 'Yalnız saxlanmış məlumat var; canlı Wikipedia yeniləməsi təsdiqlənmədi.'}
  if path=='/api/live':
