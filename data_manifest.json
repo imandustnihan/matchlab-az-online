@@ -1,0 +1,86 @@
+{
+  "sqlite_sha256": "aaac55eeba71ad8bcfb4a88eeb93eed8cf959eb77fbe26f54eac36ba923aa2e0",
+  "total": 506207,
+  "parts": [
+    {
+      "name": "world_football.sqlite.gz.part001",
+      "sha256": "13231528edc74786e5faa7883a6b80903d4cd95e959a8280562aef32f38b8779",
+      "bytes": 4194304
+    },
+    {
+      "name": "world_football.sqlite.gz.part002",
+      "sha256": "939013db0984f6534a89e7e9087fffd1a34743ba97483fafd8921917a2058f6b",
+      "bytes": 4194304
+    },
+    {
+      "name": "world_football.sqlite.gz.part003",
+      "sha256": "a51ce5198ac76d1fd23194d0bd9a2956f43a593d4e01af3e214608f6b693f79f",
+      "bytes": 4194304
+    },
+    {
+      "name": "world_football.sqlite.gz.part004",
+      "sha256": "3ff1a521997ee80ea20ac1a929719f8df2a99f091d537fce95c0898ab15e73f6",
+      "bytes": 4194304
+    },
+    {
+      "name": "world_football.sqlite.gz.part005",
+      "sha256": "e601ef92b310f2126980d310388aee62b8a39e59a10963f4180d719272227692",
+      "bytes": 4194304
+    },
+    {
+      "name": "world_football.sqlite.gz.part006",
+      "sha256": "60f415b96693147abc736b30f396d1d90a12487919571fc607f377de4f902aa4",
+      "bytes": 4194304
+    },
+    {
+      "name": "world_football.sqlite.gz.part007",
+      "sha256": "874b00efec420797a4a756b5370d1f068fe05a828178a4fb26239f84067a9d6a",
+      "bytes": 4194304
+    },
+    {
+      "name": "world_football.sqlite.gz.part008",
+      "sha256": "fa9a1735c8bea98621cc39f040f513058dfcace064d8783331d1ab8c829b48c8",
+      "bytes": 4194304
+    },
+    {
+      "name": "world_football.sqlite.gz.part009",
+      "sha256": "73eb1962f3c15e6be45f204e32066560dbf3c8c4d48e622f28963608eb5a82d6",
+      "bytes": 4194304
+    },
+    {
+      "name": "world_football.sqlite.gz.part010",
+      "sha256": "83ebd7083c781a46fe2e5429642560d2400d96e3be65691dea620a109a7d7cb6",
+      "bytes": 4194304
+    },
+    {
+      "name": "world_football.sqlite.gz.part011",
+      "sha256": "af3e14840ae31b13111c28fb15df58777d8fad1529f408b020d124f113d006ec",
+      "bytes": 4194304
+    },
+    {
+      "name": "world_football.sqlite.gz.part012",
+      "sha256": "dc3b117545ed651d38259e0ac1be0bf8485057d8c0274ccac71fa7e434f546d1",
+      "bytes": 4194304
+    },
+    {
+      "name": "world_football.sqlite.gz.part013",
+      "sha256": "0d654b38598841bcf27b02bdc178a2e9c8013fe890207d91700d54d1e3430f85",
+      "bytes": 4194304
+    },
+    {
+      "name": "world_football.sqlite.gz.part014",
+      "sha256": "aa66d366d92ef4c0161655e117e38ea9e629af4b0c6e3bf65ca37afe8e55b668",
+      "bytes": 4194304
+    },
+    {
+      "name": "world_football.sqlite.gz.part015",
+      "sha256": "e7ce9cd4169cd939551a7a8e1b64f1deb989e538c2be6befaa4306bead200413",
+      "bytes": 4194304
+    },
+    {
+      "name": "world_football.sqlite.gz.part016",
+      "sha256": "b459b1a05dba717b18bf912c0a6dff1bec7752b043d56200568ba4df4cd7685a",
+      "bytes": 1179018
+    }
+  ]
+}
