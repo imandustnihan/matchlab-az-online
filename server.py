@@ -1,4 +1,4 @@
-"""MATCHLAB AZ v0.9.20 HTML + local Python server (stdlib only, no user API key).
+"""MATCHLAB AZ v0.9.21 HTML + local Python server (stdlib only, no user API key).
 Respects upstream failures, returns explicit availability flags, never synthesizes match results.
 Sources: Wikidata CC0, Wikipedia pageimages (image rights vary), OpenLigaDB and unofficial ESPN.
 """
@@ -14,6 +14,7 @@ import live_center
 import media_expansion as extra_media
 import identity_unification as people
 import club_history
+import season_stats
 
 ROOT=Path(__file__).resolve().parent
 INSTALL={'state':'idle','message':'Hələ quraşdırılmayıb','bytes':0,'done':False,'error':''}
@@ -26,7 +27,7 @@ CACHE={}; CACHE_LOCK=threading.Lock(); HOST_COOLDOWN={}; UPSTREAM_TIMEOUT=8
 SOURCE_STATUS={}
 SCORE_CACHE=ROOT/'score_cache'
 SCORE_CACHE.mkdir(exist_ok=True)
-USER_AGENT=os.environ.get('MATCHLAB_WIKIMEDIA_UA','MatchlabAZ/0.9.20 (https://github.com/imandustnihan/matchlab-az-online; community football archive)')
+USER_AGENT=os.environ.get('MATCHLAB_WIKIMEDIA_UA','MatchlabAZ/0.9.21 (https://github.com/imandustnihan/matchlab-az-online; community football archive)')
 WIKI_REQUEST_LOCK=threading.Lock()
 WIKI_NEXT_REQUEST=0.0
 
@@ -379,9 +380,21 @@ def media_by_qid(qid,kind='players',retry=False):
          'complete':complete}
 
 def send_data(path,params):
- if path=='/api/status':return {'ok':True,'backend':True,'version':'0.9.20-local','catalog':len(CATALOG),'world':world_db.counts(),'liveGuaranteed':False,'livePollingSeconds':25,'canInstall':True,'wikipedia':{'mode':'on_demand_verified_qid','verifiedSeedCount':len(wiki.SEED),'linkedQids':sum(x['linked'] for kind,x in world_db.qid_coverage().items() if kind in ('players','teams','coaches')),'teamProfiles':True,'shortExtracts':True}}
+ if path=='/api/season-stats':
+  identifier=params.get('id',[''])[0][:120]
+  if not (QID.fullmatch(identifier) or identifier in CATBYID or re.fullmatch(r'r[ctp][a-z0-9]{8,30}|reep_[a-z][a-f0-9]{8,30}',identifier)):
+   return {'available':False,'items':[],'message':'Yanlış futbolçu kimliyi','source':'TheSportsDB V1 Free'}
+  try:
+   data=send_data('/api/profile',{'id':[identifier]})
+   profile=data.get('profile') if isinstance(data,dict) else None
+   if not profile:
+    return {'available':False,'items':[],'message':'Təsdiqlənmiş futbolçu profili tapılmadı.','source':'TheSportsDB V1 Free'}
+   return season_stats.lookup(profile,get_json)
+  except Exception:
+   return {'available':False,'items':[],'message':'Pulsuz mövsüm statistikası mənbəsinə qoşulmaq mümkün olmadı.','source':'TheSportsDB V1 Free'}
+ if path=='/api/status':return {'ok':True,'backend':True,'version':'0.9.21-local','catalog':len(CATALOG),'world':world_db.counts(),'liveGuaranteed':False,'livePollingSeconds':25,'canInstall':True,'wikipedia':{'mode':'on_demand_verified_qid','verifiedSeedCount':len(wiki.SEED),'linkedQids':sum(x['linked'] for kind,x in world_db.qid_coverage().items() if kind in ('players','teams','coaches')),'teamProfiles':True,'shortExtracts':True}}
  if path=='/api/media-status':return {'source':'Verified Wikidata P18/P154 + free Wikipedia pageimages','cached':extra_media.cache_stats(),'linked':world_db.qid_coverage(),'allProfilesGuaranteed':False,'licensing':'Per-file Wikimedia Commons license applies'}
- if path=='/api/sources':return {'sources':SOURCE_STATUS,'providers':['ESPN (qeyri-rəsmi)','OpenLigaDB (icma)','TheSportsDB (pulsuz/limitli)','Wikipedia/Wikidata (mənbəli profil)'],'internetVerifiedHere':False}
+ if path=='/api/sources':return {'sources':SOURCE_STATUS,'providers':['ESPN (qeyri-rəsmi)','OpenLigaDB (icma)','TheSportsDB (pulsuz/limitli)','Wikipedia/Wikidata (mənbəli profil)','TheSportsDB V1 (məhdud mövsüm statistikası)'],'internetVerifiedHere':False}
  if path=='/api/photos':
   values=params.get('qids',[''])[0].split(',')[:20]
   kind=params.get('kind',['players'])[0]

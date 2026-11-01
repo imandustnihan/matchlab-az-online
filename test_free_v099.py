@@ -86,7 +86,7 @@ class SourceParserTests(unittest.TestCase):
     def test_server_registry_status(self):
         data=server.send_data('/api/status',{})
         self.assertEqual(data['world']['total'],506207)
-        self.assertEqual(data['version'],'0.9.20-local')
+        self.assertEqual(data['version'],'0.9.21-local')
 
     def test_local_asset_security(self):
         httpd=http.server.ThreadingHTTPServer(('127.0.0.1',0),server.Handler)
