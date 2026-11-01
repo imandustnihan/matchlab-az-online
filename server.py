@@ -1,4 +1,4 @@
-"""MATCHLAB AZ v0.9.15 HTML + local Python server (stdlib only, no user API key).
+"""MATCHLAB AZ v0.9.16 HTML + local Python server (stdlib only, no user API key).
 Respects upstream failures, returns explicit availability flags, never synthesizes match results.
 Sources: Wikidata CC0, Wikipedia pageimages (image rights vary), OpenLigaDB and unofficial ESPN.
 """
@@ -23,7 +23,7 @@ CACHE={}; CACHE_LOCK=threading.Lock(); HOST_COOLDOWN={}; UPSTREAM_TIMEOUT=8
 SOURCE_STATUS={}
 SCORE_CACHE=ROOT/'score_cache'
 SCORE_CACHE.mkdir(exist_ok=True)
-USER_AGENT=os.environ.get('MATCHLAB_WIKIMEDIA_UA','MatchlabAZ/0.9.15 (https://github.com/imandustnihan/matchlab-az-online; community football archive)')
+USER_AGENT=os.environ.get('MATCHLAB_WIKIMEDIA_UA','MatchlabAZ/0.9.16 (https://github.com/imandustnihan/matchlab-az-online; community football archive)')
 WIKI_REQUEST_LOCK=threading.Lock()
 WIKI_NEXT_REQUEST=0.0
 
@@ -369,7 +369,7 @@ def media_by_qid(qid,kind='players',retry=False):
  return {'url':url,'source':'Wikipedia — image license varies'}
 
 def send_data(path,params):
- if path=='/api/status':return {'ok':True,'backend':True,'version':'0.9.15-local','catalog':len(CATALOG),'world':world_db.counts(),'liveGuaranteed':False,'livePollingSeconds':25,'canInstall':True,'wikipedia':{'mode':'on_demand_verified_qid','verifiedSeedCount':len(wiki.SEED),'linkedQids':158924,'teamProfiles':True,'shortExtracts':True}}
+ if path=='/api/status':return {'ok':True,'backend':True,'version':'0.9.16-local','catalog':len(CATALOG),'world':world_db.counts(),'liveGuaranteed':False,'livePollingSeconds':25,'canInstall':True,'wikipedia':{'mode':'on_demand_verified_qid','verifiedSeedCount':len(wiki.SEED),'linkedQids':158924,'teamProfiles':True,'shortExtracts':True}}
  if path=='/api/sources':return {'sources':SOURCE_STATUS,'providers':['ESPN (qeyri-rəsmi)','OpenLigaDB (icma)','TheSportsDB (pulsuz/limitli)','Wikipedia/Wikidata (mənbəli profil)'],'internetVerifiedHere':False}
  if path=='/api/photos':
   values=params.get('qids',[''])[0].split(',')[:20]

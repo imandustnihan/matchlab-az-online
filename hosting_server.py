@@ -1,4 +1,4 @@
-"""MATCHLAB AZ v0.9.15 — public HTTPS hosting adapter (Python stdlib).
+"""MATCHLAB AZ v0.9.16 — public HTTPS hosting adapter (Python stdlib).
 
 Deployment uses the existing validated database and API, but blocks local maintenance,
 dangerous upload/install routes, and unnecessary user-triggered upstream refreshes.
@@ -26,7 +26,7 @@ def is_allowed(ip):
         return amount <= RATE_LIMIT
 
 class PublicHandler(LocalHandler):
-    server_version = 'MATCHLAB/0.9.15'
+    server_version = 'MATCHLAB/0.9.16'
 
     def do_POST(self):
         # Critical: Internet visitors must not start large imports or upload arbitrary files.
@@ -37,13 +37,13 @@ class PublicHandler(LocalHandler):
         if path == '/healthz':
             reg=world_db.counts()
             ok=bool(reg and reg.get('total') == 506207)
-            return self.json_response(200 if ok else 503, {'ok': ok, 'service': 'matchlab', 'version': '0.9.15', 'registryTotal':reg.get('total',0) if reg else 0, 'hosting':'render'})
+            return self.json_response(200 if ok else 503, {'ok': ok, 'service': 'matchlab', 'version': '0.9.16', 'registryTotal':reg.get('total',0) if reg else 0, 'hosting':'render'})
         if path in ('/api/install-start', '/api/install-upload', '/api/install-status', '/api/wikipedia-refresh'):
             return self.json_response(403, {'error': 'İctimai serverdə bu əməliyyat aktiv deyil.'})
         if path == '/api/status':
             try:
                 result = send_data(path,{})
-                result.update({'version': '0.9.15', 'publicHosting': True, 'canInstall': False})
+                result.update({'version': '0.9.16', 'publicHosting': True, 'canInstall': False})
                 return self.json_response(200, result)
             except Exception:
                 return self.json_response(503, {'ok': False, 'error': 'Baza əlçatan deyil'})

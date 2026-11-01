@@ -66,15 +66,28 @@ def openliga_games(raw, league, date):
   result=full or partial or (results[-1] if results else None)
   done=bool(event.get('matchIsFinished'))
   has_scores=result is not None and _num(result.get('pointsTeam1')) is not None and _num(result.get('pointsTeam2')) is not None
-  state='final' if done else 'live' if has_scores else 'scheduled'
+  # Results may include provisional/old values; never infer a live game from
+  # score fields alone. Compare kickoff against the actual clock (UTC if
+  # provided, otherwise matchDateTime is German local time).
+  kickoff=event.get('matchDateTimeUTC') or event.get('matchDateTime') or ''
+  elapsed=None
+  try:
+   start=dt.datetime.fromisoformat(kickoff.replace('Z','+00:00'))
+   if start.tzinfo is None:
+    from zoneinfo import ZoneInfo
+    start=start.replace(tzinfo=dt.timezone.utc if event.get('matchDateTimeUTC') else ZoneInfo('Europe/Berlin'))
+   elapsed=(dt.datetime.now(dt.timezone.utc)-start.astimezone(dt.timezone.utc)).total_seconds()
+  except (ValueError,TypeError,OverflowError):pass
+  is_live=bool(not done and has_scores and elapsed is not None and 0<=elapsed<=5*3600)
+  state='final' if done else 'live' if is_live else 'scheduled'
   def team(v):
    v=v or {}
    return {'id':str(v.get('teamId') or ''),'name':v.get('teamName') or '—','image':v.get('teamIconUrl') or ''}
   a=event.get('team1') or {};b=event.get('team2') or {}
   items.append({'id':'open:'+str(event.get('matchID') or ''),'eventId':str(event.get('matchID') or ''),
    'league':league,'home':team(a),'away':team(b),
-   'homeScore':_num(result.get('pointsTeam1')) if has_scores else None,
-   'awayScore':_num(result.get('pointsTeam2')) if has_scores else None,
+   'homeScore':_num(result.get('pointsTeam1')) if has_scores and state!='scheduled' else None,
+   'awayScore':_num(result.get('pointsTeam2')) if has_scores and state!='scheduled' else None,
    'state':state,'minute':'','date':local,
    'source':'OpenLigaDB (icma məlumatı)'})
  return items
@@ -95,11 +108,17 @@ def sportsdb_games(raw, league):
   finished=status in final_codes or any(x in status for x in ('finished','full time','match ended','after extra'))
   in_play=status in live_codes or any(x in status for x in ('live','in progress','half time','1st half','2nd half'))
   state='final' if finished else 'live' if in_play else 'scheduled'
-  # If feed supplies scores without status, don't assume they are current live goals.
-  if state=='scheduled' and hs is not None and as_ is not None:
-   # Old scheduled date plus reported score is a past result, not a live event.
-   old=(ev.get('dateEvent') or '') < dt.date.today().isoformat()
-   state='final' if ev.get('strStatus')=='FT' or (old and ev.get('dateEvent')) else 'scheduled'
+  # An explicit NS/TBD/PST/abandoned code wins over both stale dates and
+  # stray score fields. TheSportsDB sometimes retains earlier/placeholder scores.
+  # Unknown non-empty codes are not evidence that a game has finished.
+  if not status and state=='scheduled' and hs is not None and as_ is not None:
+   # Only as a best-effort fallback for *missing* status, accept an old
+   # dated and scored fixture as completed; never call it LIVE from scores.
+   event_date=str(ev.get('dateEvent') or '')
+   if re.fullmatch(r'\d{4}-\d{2}-\d{2}',event_date):
+    try:
+     state='final' if dt.date.fromisoformat(event_date)<dt.date.today() else 'scheduled'
+    except ValueError:pass
   when=ev.get('strTimestamp') or ((ev.get('dateEvent') or '')+'T'+(ev.get('strTime') or '00:00:00'))
   if isinstance(when,str) and len(when)>=19 and when[10]=='T' and not (when.endswith('Z') or '+' in when[10:] or '-' in when[10:]):when+='Z'
   out.append({'id':'sportsdb:'+str(ev.get('idEvent') or ''),'eventId':str(ev.get('idEvent') or ''),
