@@ -1,6 +1,14 @@
-# MATCHLAB AZ native builds
+# MATCHLAB AZ Native v0.9.30
 
-Actions -> MATCHLAB AZ - Windows EXE and Android APK -> Run workflow.
-The Windows EXE embeds index.html, JavaScript, CSS, catalog and tactics module. Live APIs are proxied to the existing Render backend; no fictitious data are created. Windows 10/11 x64 requires Edge or Chrome.
-The Android debug APK targets Android 8.0+ (API 26+) and loads the HTTPS hosted service. Debug signing is suitable for testing, not a store release. This is not a standalone offline football database.
-Find downloadable EXE and APK in the successful workflow run's Artifacts section. This folder is additive; existing main web hosting remains unchanged.
+This version is a **real application UI**, not a browser wrapper.
+
+- **Windows:** WinForms .NET 8, self-contained x64 single-file publish. Uses HttpClient to fetch the existing JSON endpoints. No WebView, no browser.
+- **Android:** Java Activity and native Android widgets, HTTPS HttpURLConnection and a custom native Canvas pitch. No WebView, no browser.
+- Matches, standings, search, profiles, favorites, match details, tactics and basic status are provided as native screens.
+- Native app screens open immediately; live scores, search and standings depend on the hosted server and third-party sources.
+- The server and web application are unchanged. This build does not ship the 506,207-identity SQLite database for offline use.
+- Native match alerts and OS push notifications are not implemented in this build. No live-coverage guarantees.
+- Android APK is debug-signed for local testing. Not Play Store ready.
+
+## Builds
+Go to GitHub Actions -> MATCHLAB AZ - Native Windows and Android -> latest successful run -> Artifacts. Unzip each artifact to get the EXE or APK.
