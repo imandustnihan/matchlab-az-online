@@ -41,7 +41,8 @@ public sealed class HtmlApp:Form
         ["/featured_media.js"]=("ML.featured_media.js","text/javascript"),
         ["/coach_tactics.js"]=("ML.coach_tactics.js","text/javascript"),
         ["/assets/icon.svg"]=("ML.assets.icon.svg","image/svg+xml"),
-        ["/shell.css"]=("ML.shell.css","text/css")
+        ["/shell.css"]=("ML.shell.css","text/css"),
+        ["/shell.js"]=("ML.shell.js","text/javascript")
     };
     readonly WebView2 browser=new(){Dock=DockStyle.Fill,DefaultBackgroundColor=Color.FromArgb(8,14,25)};
     readonly Label error=new(){Dock=DockStyle.Fill,TextAlign=ContentAlignment.MiddleCenter,
@@ -49,7 +50,7 @@ public sealed class HtmlApp:Form
         Font=new Font("Segoe UI",14),Padding=new Padding(24)};
     public HtmlApp()
     {
-        Text="MATCHLAB AZ — v0.9.40 · HTML Desktop";
+        Text="MATCHLAB AZ — v0.9.41 · HTML Desktop";
         StartPosition=FormStartPosition.CenterScreen;
         MinimumSize=new Size(760,540);Size=new Size(1280,820);
         BackColor=Color.FromArgb(8,14,25);
@@ -137,7 +138,7 @@ public sealed class HtmlApp:Form
             byte[] bytes2=buffer.ToArray();
             if(uri.AbsolutePath is "/" or "/index.html")
                 bytes2=Encoding.UTF8.GetBytes(Encoding.UTF8.GetString(bytes2).Replace(
-                    "</head>","<link rel=\"stylesheet\" href=\"shell.css\"></head>",StringComparison.OrdinalIgnoreCase));
+                    "</head>","<link rel=\"stylesheet\" href=\"shell.css\"><script defer src=\"shell.js\"></script></head>",StringComparison.OrdinalIgnoreCase));
             Reply(e,200,asset.Mime,bytes2);
         }
         catch(Exception ex)

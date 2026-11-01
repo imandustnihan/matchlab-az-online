@@ -1,6 +1,6 @@
-# MATCHLAB AZ v0.9.40 — actual HTML app packaged for Windows and Android
+# MATCHLAB AZ v0.9.41 — actual HTML app packaged for Windows and Android
 
-These two applications contain **index.html, styles.css, app.js, catalog.js, featured_media.js, coach_tactics.js, icon.svg, shell.css** from the repository. They do not open an external browser to show the main interface.
+These two applications contain **index.html, styles.css, app.js, catalog.js, featured_media.js, coach_tactics.js, icon.svg, shell.css and shell.js** from the repository. They do not open an external browser to show the main interface.
 
 - **Windows:** .NET 8 WinForms + Microsoft Edge WebView2; all HTML assets embedded inside the single-file EXE as .NET resources. A virtual HTTPS origin `https://matchlab.local` is served by the application, and only `/api/...` routes are forwarded to the existing Render backend over HTTPS. Requires WebView2 Runtime on Windows.
 - **Android:** Android Java WebView; bundled HTML and scripts in APK assets via Gradle copy. HTTPS virtual origin served from APK. All `/api/...` routes are proxied to the fixed backend; no public CORS or insecure file:// access. Android system bar insets are applied to the root view.

@@ -51,7 +51,7 @@ jobs:
           Write-Host "PASS Windows packaged HTML resources"
       - uses: actions/upload-artifact@v4
         with:
-          name: MATCHLAB_AZ_HTML_Windows_v0940
+          name: MATCHLAB_AZ_HTML_Windows_v0941
           path: native/packed-windows/out/MATCHLAB_AZ.exe
           if-no-files-found: error
           retention-days: 30
@@ -67,6 +67,7 @@ jobs:
           python-version: '3.12'
       - name: Check JavaScript syntax
         run: |
+          node --check native/packed/shell.js
           node --check app.js
           node --check catalog.js
           node --check coach_tactics.js
@@ -96,7 +97,7 @@ jobs:
           set -euo pipefail
           APK="native/android/app/build/outputs/apk/debug/app-debug.apk"
           test -s "$APK"
-          for f in index.html styles.css app.js catalog.js featured_media.js coach_tactics.js shell.css assets/icon.svg; do
+          for f in index.html styles.css app.js catalog.js featured_media.js coach_tactics.js shell.css shell.js assets/icon.svg; do
             unzip -Z1 "$APK" | grep -Fx "assets/web/$f"
             bytes="$(unzip -p "$APK" "assets/web/$f" | wc -c)"
             test "$bytes" -gt 40
@@ -127,14 +128,14 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: MATCHLAB_AZ_v0940_Android_Emulator_Screenshot
+          name: MATCHLAB_AZ_v0941_Android_Emulator_Screenshot
           path: native/android/matchlab_emulator.png
           if-no-files-found: warn
           retention-days: 14
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: MATCHLAB_AZ_HTML_Android_v0940
+          name: MATCHLAB_AZ_HTML_Android_v0941
           path: native/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: warn
           retention-days: 30

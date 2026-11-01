@@ -2,7 +2,7 @@
 <PropertyGroup>
 <OutputType>WinExe</OutputType><TargetFramework>net8.0-windows</TargetFramework>
 <UseWindowsForms>true</UseWindowsForms><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings>
-<AssemblyName>MATCHLAB_AZ</AssemblyName><Version>0.9.40</Version>
+<AssemblyName>MATCHLAB_AZ</AssemblyName><Version>0.9.41</Version>
 <ApplicationIcon>../branding/matchlab_icon.ico</ApplicationIcon>
 <RuntimeIdentifier>win-x64</RuntimeIdentifier><PublishSingleFile>true</PublishSingleFile>
 <SelfContained>true</SelfContained><IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
@@ -17,5 +17,6 @@
 <EmbeddedResource Include="../../coach_tactics.js" LogicalName="ML.coach_tactics.js"/>
 <EmbeddedResource Include="../../assets/icon.svg" LogicalName="ML.assets.icon.svg"/>
 <EmbeddedResource Include="../packed/shell.css" LogicalName="ML.shell.css"/>
+<EmbeddedResource Include="../packed/shell.js" LogicalName="ML.shell.js"/>
 </ItemGroup>
 </Project>

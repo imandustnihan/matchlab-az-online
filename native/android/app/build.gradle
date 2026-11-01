@@ -6,8 +6,8 @@ android {
   applicationId 'az.matchlab.mobile'
   minSdk 26
   targetSdk 35
-  versionCode 940
-  versionName '0.9.40-html'
+  versionCode 941
+  versionName '0.9.41-html'
  }
  buildTypes {
   release { minifyEnabled false }
@@ -26,7 +26,7 @@ tasks.register('bundleHtmlAssets',Copy) {
  from('../../../') {
   include 'index.html','styles.css','app.js','catalog.js','featured_media.js','coach_tactics.js','assets/icon.svg'
  }
- from('../../packed') { include 'shell.css' }
+ from('../../packed') { include 'shell.css','shell.js' }
  into("$buildDir/generated/matchlab-assets/web")
 }
 tasks.named('preBuild').configure { dependsOn(tasks.named('bundleHtmlAssets')) }
