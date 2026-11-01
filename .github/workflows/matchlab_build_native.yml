@@ -1,22 +1,27 @@
-name: MATCHLAB AZ - Native Windows and Android
+name: MATCHLAB AZ - full HTML packaged Windows and Android
 
 on:
   workflow_dispatch:
   push:
     branches:
-      - main
       - 'fix/**'
-      - 'improve/**'
     paths:
       - 'native/**'
+      - 'index.html'
+      - 'app.js'
+      - 'styles.css'
+      - 'catalog.js'
+      - 'featured_media.js'
+      - 'coach_tactics.js'
+      - 'assets/icon.svg'
       - '.github/workflows/matchlab_build_native.yml'
 
 permissions:
   contents: read
 
 jobs:
-  windows-native:
-    name: Windows x64 native app
+  windows-html:
+    name: Windows HTML desktop exe + embedded resource smoke
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
@@ -24,34 +29,49 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Generate branded Windows icon
+      - name: Create Windows brand icon
+        shell: pwsh
         run: |
           python -m pip install pillow
           python native/branding/generate_icons.py
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
-      - name: Publish standalone Windows Forms app
+      - name: Publish complete HTML Windows app
         shell: pwsh
         run: |
-          dotnet publish native/windows-app/MATCHLABAZ.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o native/windows-app/out
+          dotnet publish native/packed-windows/MATCHLAB.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o native/packed-windows/out
+      - name: Verify Windows executable and bundled assets
+        shell: pwsh
+        run: |
+          $exe = Join-Path (Get-Location) 'native/packed-windows/out/MATCHLAB_AZ.exe'
+          if (!(Test-Path $exe)) { throw "Windows executable missing" }
+          $p = Start-Process -FilePath $exe -ArgumentList '--self-test' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "HTML embedded resource smoke failed: $($p.ExitCode)" }
+          Write-Host "PASS Windows packaged HTML resources"
       - uses: actions/upload-artifact@v4
         with:
-          name: MATCHLAB_AZ_Native_Windows_v0933_Navigation
-          path: native/windows-app/out/MATCHLAB_AZ.exe
+          name: MATCHLAB_AZ_HTML_Windows_v0940
+          path: native/packed-windows/out/MATCHLAB_AZ.exe
           if-no-files-found: error
           retention-days: 30
 
-  android-native:
-    name: Android native Java APK
+  android-html:
+    name: Android HTML apk + emulator smoke
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Generate Android launcher icons
+      - name: Check JavaScript syntax
+        run: |
+          node --check app.js
+          node --check catalog.js
+          node --check coach_tactics.js
+          node --check featured_media.js
+      - name: Create launcher brand icons
         run: |
           python -m pip install pillow
           python native/branding/generate_icons.py
@@ -59,7 +79,7 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - name: Install Android SDK
+      - name: Install Android platform
         run: |
           set -euo pipefail
           SDK_MANAGER="$(find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | head -n 1)"
@@ -68,12 +88,53 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - name: Compile native Android UI
+      - name: Build HTML Android APK
         working-directory: native/android
         run: gradle --no-daemon --stacktrace :app:assembleDebug
-      - uses: actions/upload-artifact@v4
+      - name: Verify full HTML bundle in APK
+        run: |
+          set -euo pipefail
+          APK="native/android/app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$APK"
+          for f in index.html styles.css app.js catalog.js featured_media.js coach_tactics.js shell.css assets/icon.svg; do
+            unzip -Z1 "$APK" | grep -Fx "assets/web/$f"
+            bytes="$(unzip -p "$APK" "assets/web/$f" | wc -c)"
+            test "$bytes" -gt 40
+          done
+          echo "PASS Android APK includes production HTML"
+      - name: Enable KVM
+        run: |
+          if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; fi
+      - name: Boot Android emulator and check app process
+        uses: reactivecircus/android-emulator-runner@v2
         with:
-          name: MATCHLAB_AZ_Native_Android_v0933_Navigation
-          path: native/android/app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          profile: pixel_5
+          disable-animations: true
+          emulator-boot-timeout: 600
+          script: |
+            set -eu
+            adb install -r native/android/app/build/outputs/apk/debug/app-debug.apk
+            adb shell am start -W -n az.matchlab.mobile/.MainActivity
+            sleep 15
+            adb shell pidof az.matchlab.mobile
+            adb shell screencap -p /sdcard/matchlab_screen.png
+            adb pull /sdcard/matchlab_screen.png native/android/matchlab_emulator.png
+            echo "PASS Android app process alive and screenshot captured"
+      - name: Upload Android emulator screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MATCHLAB_AZ_v0940_Android_Emulator_Screenshot
+          path: native/android/matchlab_emulator.png
+          if-no-files-found: warn
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: MATCHLAB_AZ_HTML_Android_v0940
+          path: native/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: warn
           retention-days: 30
