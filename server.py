@@ -1,4 +1,4 @@
-"""MATCHLAB AZ v0.9.22 HTML + local Python server (stdlib only, no user API key).
+"""MATCHLAB AZ v0.9.24 HTML + local Python server (stdlib only, no user API key).
 Respects upstream failures, returns explicit availability flags, never synthesizes match results.
 Sources: Wikidata CC0, Wikipedia pageimages (image rights vary), OpenLigaDB and unofficial ESPN.
 """
@@ -15,6 +15,7 @@ import media_expansion as extra_media
 import identity_unification as people
 import club_history
 import season_stats
+import free_football_sources as open_feeds
 
 ROOT=Path(__file__).resolve().parent
 INSTALL={'state':'idle','message':'Hələ quraşdırılmayıb','bytes':0,'done':False,'error':''}
@@ -27,7 +28,7 @@ CACHE={}; CACHE_LOCK=threading.Lock(); HOST_COOLDOWN={}; UPSTREAM_TIMEOUT=8
 SOURCE_STATUS={}
 SCORE_CACHE=ROOT/'score_cache'
 SCORE_CACHE.mkdir(exist_ok=True)
-USER_AGENT=os.environ.get('MATCHLAB_WIKIMEDIA_UA','MatchlabAZ/0.9.22 (https://github.com/imandustnihan/matchlab-az-online; community football archive)')
+USER_AGENT=os.environ.get('MATCHLAB_WIKIMEDIA_UA','MatchlabAZ/0.9.24 (https://github.com/imandustnihan/matchlab-az-online; community football archive)')
 WIKI_REQUEST_LOCK=threading.Lock()
 WIKI_NEXT_REQUEST=0.0
 
@@ -303,6 +304,17 @@ def live_from_sources(league,date):
   candidates.append(('OpenLigaDB',lambda:feeds.openliga_games(source_call('OpenLigaDB',feeds.openliga_matches_url(date,league),120),league,date),True))
  if league in feeds.SPORTSDB:
   candidates.append(('TheSportsDB',lambda:feeds.sportsdb_games(source_call('TheSportsDB',feeds.sportsdb_matches_url(date,league),180),league),True))
+ # football-data.org: opt-in registered free token; delayed scores, never claimed live.
+ if league in open_feeds.FOOTBALL_DATA_CODES and os.environ.get('FOOTBALL_DATA_TOKEN'):
+  def delayed_fixtures():
+   path=open_feeds.football_data_path(league,date)
+   return open_feeds.parse_football_data_matches(open_feeds.fetch_football_data(path,os.environ['FOOTBALL_DATA_TOKEN']),league,date)
+  candidates.append(('football-data.org (pulsuz, gecikmiş)',delayed_fixtures,True))
+ # The public-domain JSON archive is historical only. Never fill current live scores with it.
+ historical_url=open_feeds.openfootball_url(league,date)
+ if historical_url:
+  candidates.append(('OpenFootball CC0 (tarixi)',lambda:open_feeds.parse_openfootball(
+   source_call('OpenFootball CC0',historical_url,21600),league,date),True))
  for name,fn,partial in candidates:
   try:
    rows=fn()
@@ -329,6 +341,11 @@ def table_from_sources(league):
   candidates.append(('OpenLigaDB',lambda:feeds.openliga_table(source_call('OpenLigaDB',feeds.openliga_table_url(league,date),900))))
  if league in feeds.SPORTSDB:
   candidates.append(('TheSportsDB',lambda:feeds.sportsdb_table(source_call('TheSportsDB',feeds.sportsdb_table_url(league),900))))
+ if league in open_feeds.FOOTBALL_DATA_CODES and os.environ.get('FOOTBALL_DATA_TOKEN'):
+  def delayed_table():
+   path=open_feeds.football_data_path(league,table=True)
+   return open_feeds.parse_football_data_table(open_feeds.fetch_football_data(path,os.environ['FOOTBALL_DATA_TOKEN']))
+  candidates.append(('football-data.org (pulsuz, gecikmiş)',delayed_table))
  for name,fn in candidates:
   try:
    rows=fn()
@@ -392,9 +409,13 @@ def send_data(path,params):
    return season_stats.lookup(profile,get_json)
   except Exception:
    return {'available':False,'items':[],'message':'Pulsuz mövsüm statistikası mənbəsinə qoşulmaq mümkün olmadı.','source':'TheSportsDB V1 Free'}
- if path=='/api/status':return {'ok':True,'backend':True,'version':'0.9.22-local','catalog':len(CATALOG),'world':world_db.counts(),'liveGuaranteed':False,'livePollingSeconds':25,'canInstall':True,'wikipedia':{'mode':'on_demand_verified_qid','verifiedSeedCount':len(wiki.SEED),'linkedQids':sum(x['linked'] for kind,x in world_db.qid_coverage().items() if kind in ('players','teams','coaches')),'teamProfiles':True,'shortExtracts':True}}
+ if path=='/api/status':return {'ok':True,'backend':True,'version':'0.9.24-local','catalog':len(CATALOG),'world':world_db.counts(),'liveGuaranteed':False,'livePollingSeconds':25,'canInstall':True,'wikipedia':{'mode':'on_demand_verified_qid','verifiedSeedCount':len(wiki.SEED),'linkedQids':sum(x['linked'] for kind,x in world_db.qid_coverage().items() if kind in ('players','teams','coaches')),'teamProfiles':True,'shortExtracts':True}}
  if path=='/api/media-status':return {'source':'Verified Wikidata P18/P154 + free Wikipedia pageimages','cached':extra_media.cache_stats(),'linked':world_db.qid_coverage(),'allProfilesGuaranteed':False,'licensing':'Per-file Wikimedia Commons license applies'}
- if path=='/api/sources':return {'sources':SOURCE_STATUS,'providers':['ESPN (qeyri-rəsmi)','OpenLigaDB (icma)','TheSportsDB (pulsuz/limitli)','Wikipedia/Wikidata (mənbəli profil)','TheSportsDB V1 (məhdud mövsüm statistikası)'],'internetVerifiedHere':False}
+ if path=='/api/sources':return {'sources':SOURCE_STATUS,
+  'providers':['ESPN (qeyri-rəsmi)','OpenLigaDB (ODbL icma)','TheSportsDB V1 (pulsuz məhdud məlumat)','Wikipedia/Wikidata (mənbəli profil)','OpenFootball (CC0, tarixi matçlar)','football-data.org (qeydiyyatlı pulsuz, gecikmiş nəticələr)'],
+  'configured':{'openFootball':True,'openLigaDB':True,'theSportsDBFree':True,'footballDataFreeToken':bool(os.environ.get('FOOTBALL_DATA_TOKEN'))},
+  'notes':{'openFootball':'Tarixi nəticələr üçündür, canlı hesab deyil','footballDataFreeToken':'Yalnız serverdə FOOTBALL_DATA_TOKEN env varsa işləyir; pulsuz plan 10 sorğu/dəqiqə, gecikmiş nəticələr','theSportsDBFree':'Bütün futbolçuların asistləri mövcud deyil; mobil mağaza nəşri üçün ayrıca şərtlər'},
+  'internetVerifiedHere':False}
  if path=='/api/photos':
   values=params.get('qids',[''])[0].split(',')[:20]
   kind=params.get('kind',['players'])[0]
@@ -464,7 +485,11 @@ def send_data(path,params):
     candidates=by_name.get((world_db.normal(row['name']),world_db.normal(row.get('country'))),set())
     if not mapped and len(candidates)==1:mapped=next(iter(candidates))
     verified.append({**row,'qid':mapped} if mapped else row)
-   out=people.unify(verified + world)
+   # Suppress only explicitly reviewed *unlinked* catalogue homonyms in
+   # the displayed search page. Never rewrite or assign a QID to them.
+   # The original register records remain accessible by their own IDs.
+   deduplicated=people.suppress_reviewed_display_duplicates(verified + world)
+   out=people.unify(deduplicated)
    return {'items':out,'online':False,'source':'Reep CC0 yerli dünya arxivi','worldInstalled':True,'nextOffset':offset+75 if len(world)==75 else None,'registryCount':world_db.counts()}
   if not q:
    page=local[offset:offset+75]

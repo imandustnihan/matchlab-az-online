@@ -360,13 +360,82 @@ def wikidata_date(value):
     return f'{yyyy}-{mm}-{dd}'
 
 
+
+def verified_wikidata_team_history(entity, get_json):
+    """Conservative P54 team affiliations with qualifiers; no fabricated senior stats.
+
+    Wikidata P54 may include national/youth teams, and an absent end date does
+    not establish a current affiliation. Such rows are labelled as affiliations,
+    not senior league statistics, and carry no invented caps/goals/assists.
+    """
+    statements=(entity.get('claims') or {}).get('P54') or []
+    raw=[]
+    for statement in statements[:90]:
+        if not isinstance(statement,dict) or statement.get('rank')=='deprecated':continue
+        team=((statement.get('mainsnak') or {}).get('datavalue') or {}).get('value') or {}
+        qid=team.get('id') if isinstance(team,dict) else None
+        if not qid or not VALID_QID.fullmatch(str(qid)):continue
+        qualifiers=statement.get('qualifiers') or {}
+        sport_ids=[((x.get('datavalue') or {}).get('value') or {}).get('id')
+                   for x in qualifiers.get('P641',[]) if isinstance(x,dict) and isinstance((x.get('datavalue') or {}).get('value'),dict)]
+        if sport_ids and 'Q2736' not in sport_ids:continue
+        def qualifying_year(prop):
+            for claim in qualifiers.get(prop,[])[:5]:
+                if not isinstance(claim,dict):continue
+                raw_time=(claim.get('datavalue') or {}).get('value')
+                date=wikidata_date(raw_time)
+                if date:return int(date[:4])
+                # Year-precision qualifiers can encode unknown month/day as 00.
+                # Parse only the year, never make up a month or day.
+                if isinstance(raw_time,dict):
+                    match=re.match(r'^\+?(\d{4})-',str(raw_time.get('time') or ''))
+                    try:precision=int(raw_time.get('precision',0))
+                    except (ValueError,TypeError):precision=0
+                    if match and precision>=9:
+                        return int(match.group(1))
+            return None
+        start,end=qualifying_year('P580'),qualifying_year('P582')
+        if start and end and start>end:continue
+        raw.append((qid,start,end))
+    if not raw:return []
+    ids=list(dict.fromkeys(team for team,_,_ in raw))[:80]
+    # No guessed labels: a networking failure must not turn QIDs into club names.
+    labels={}
+    # Wikidata wbgetentities supports bounded ID batches; preserve successful
+    # chunks if one API request fails instead of dropping the whole history.
+    for i in range(0,len(ids),40):
+        try:labels.update(entity_labels(ids[i:i+40],get_json))
+        except (OSError,ValueError,KeyError,TypeError):continue
+    rows=[]
+    for qid,start,end in raw:
+        name=labels.get(qid,'')
+        if not name or name==qid:continue
+        row={'name':name,'statScope':'unspecified_membership','source':'Wikidata P54'}
+        if start is not None:row['from']=start
+        if end is not None:row['to']=end
+        rows.append(row)
+        if len(rows)>=60:break
+    return rows
+
+
 def remote_enrich(qid,get_json,kind='players'):
     """Pass a request adapter get_json(url,ttl). Failures are handled upstream."""
     url='https://www.wikidata.org/w/api.php?'+urllib.parse.urlencode({'action':'wbgetentities','format':'json','ids':qid,'props':'sitelinks|claims|labels','languages':'az|en|tr'})
     e=get_json(url,86400).get('entities',{}).get(qid,{})
     if not e or e.get('missing') is not None:return None
     lang,title=wiki_title(e)
-    if not title:return None
+    if not title:
+        # Many QID-linked people have no Wikipedia article at all. A trusted
+        # Wikidata entity can still offer P54 team memberships; distinguish
+        # this from an encyclopedia career table and from league statistics.
+        if kind not in ('players','coaches'):return None
+        affiliations=verified_wikidata_team_history(e,get_json)
+        if not affiliations:return None
+        return {'clubs':affiliations,'coached':[],'wikiKind':kind,'wikiMatch':False,
+                'verifiedSnapshot':False,'careerSource':'Wikidata P54 · mənbəli komanda üzvlüyü',
+                'careerUrl':'https://www.wikidata.org/wiki/'+qid,
+                'statsScope':'unspecified_membership',
+                'statNotice':'Wikipedia məqaləsi yoxdur; Wikidata komanda üzvlüyü göstərilir. Bunlar təsdiqlənmiş senior liqa matçları və ya qol/asist statistikası deyil.'}
     page_url='https://'+lang+'.wikipedia.org/wiki/'+urllib.parse.quote(title.replace(' ','_'),safe='()_')
     details={}
     try:details=article_details(lang,title,qid,get_json)
@@ -392,6 +461,14 @@ def remote_enrich(qid,get_json,kind='players'):
             except Exception:pass
     data=(parse_club_infobox(wikitext) if kind=='teams' else parse_football_infobox(wikitext)) if verified else {}
     data.update({k:v for k,v in details.items() if k not in ('wikiThumbnail','articleVerified') and v})
+    history_fallback=False
+    if kind in ('players','coaches') and not data.get('clubs'):
+        # Wikipedia article verified, but no machine-readable football career
+        # infobox: use QID-linked Wikidata team memberships as a labelled fallback.
+        affiliations=verified_wikidata_team_history(e,get_json)
+        if affiliations:
+            data['clubs']=affiliations
+            history_fallback=True
     if kind=='teams':
         from club_history import parse_honours, parse_squad, colors_from_text, stadium_media
         if verified:
@@ -465,6 +542,8 @@ def remote_enrich(qid,get_json,kind='players'):
         data['imagePage']=page_url
     has_career=bool(data.get('clubs') or data.get('coached'))
     data['careerSource']=('Wikipedia ('+lang+') · '+('klub məlumatları' if kind=='teams' else 'karyera cədvəli')) if verified and has_career else ('Wikipedia ('+lang+') · xülasə; klub tarixi: Wikidata' if verified else 'Wikidata · təsdiqlənmiş struktur faktları')
+    if history_fallback:
+        data['careerSource']='Wikidata P54 · təsdiqlənmiş komanda üzvlüyü (senior liqa statistikası deyil)'
     data['careerUrl']=page_url if verified else 'https://www.wikidata.org/wiki/'+qid
     data['wikiUrl']=page_url
     data['wikiLanguage']=lang
@@ -474,8 +553,8 @@ def remote_enrich(qid,get_json,kind='players'):
     data['wikiKind']=kind
     data['statsChecked']=dt.datetime.now(dt.timezone.utc).date().isoformat()
     if kind!='teams':
-        data['statsScope']='domestic_league'
-        data['statNotice']='Matç və qollar əsasən daxili liqa üçündür; bütün yarışların cəmi deyil. Asist məlum deyilsə, 0 sayılmır.'
+        data['statsScope']='unspecified_membership' if history_fallback else 'domestic_league'
+        data['statNotice']=('Komanda üzvlüyü Wikidata P54 məlumatıdır; klub, gənclər və milli komanda ola bilər. Matç, qol və assist statistikaları burada təsdiqlənmir.' if history_fallback else 'Matç və qollar əsasən daxili liqa üçündür; bütün yarışların cəmi deyil. Asist məlum deyilsə, 0 sayılmır.')
     data['wikiMatch']=verified
     data['verifiedSnapshot']=False
     return data

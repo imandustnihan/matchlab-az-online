@@ -78,7 +78,7 @@ class ScoreStatusReliability(unittest.TestCase):
         self.assertIn("league!==(st.league==='all'?'eng.1':st.league)",js)
 
     def test_health_and_version(self):
-        self.assertEqual(server.send_data('/api/status',{})['version'],'0.9.22-local')
-        self.assertIn('v=0922',(ROOT/'index.html').read_text(encoding='utf8'))
+        self.assertEqual(server.send_data('/api/status',{})['version'],'0.9.24-local')
+        self.assertIn('v=0924',(ROOT/'index.html').read_text(encoding='utf8'))
 
 if __name__=='__main__':unittest.main(verbosity=2)

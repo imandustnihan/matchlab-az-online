@@ -49,28 +49,70 @@ def name_compatible(profile_name, provider_name):
     return len(aa & bb) >= 2
 
 
+
+def _country(value):
+    """Normalize nationality adjectives without accepting a vague country guess."""
+    known={
+        'spain':'spain','spanish':'spain','italy':'italy','italian':'italy',
+        'england':'england','english':'england','france':'france','french':'france',
+        'germany':'germany','german':'germany','portugal':'portugal','portuguese':'portugal',
+        'brazil':'brazil','brazilian':'brazil','argentina':'argentina','argentinian':'argentina',
+        'netherlands':'netherlands','dutch':'netherlands','belgium':'belgium','belgian':'belgium',
+        'turkey':'turkey','turkish':'turkey','azerbaijan':'azerbaijan','azerbaijani':'azerbaijan',
+    }
+    cleaned=normalize(value)
+    return known.get(cleaned,cleaned)
+
+
+def _team_compatible(left,right):
+    def tokens(value):
+        return {x for x in normalize(value).split() if x not in {'fc','cf','sc','afc','football','club','fk','ac','the','de'} and len(x)>2}
+    a,b=tokens(left),tokens(right)
+    return bool(a and b and a==b)
+
+
 def verified_provider_id(profile, results):
-    birth = iso_birth(profile.get('birth'))
-    if not birth or profile.get('kind') not in ('players', 'coaches'):
-        return None, 'Kimlik yoxlaması üçün tam doğum tarixi mövcud deyil.'
-    matches = []
-    for x in results if isinstance(results, list) else []:
-        if not isinstance(x, dict) or normalize(x.get('strSport')) not in ('soccer', 'football'):
+    """Only safe namesake linkages: full DOB or a stricter independent check.
+
+    In cases with unknown DOB, require an EXACT full name, same nonempty
+    nationality and a historically documented club matching the provider's
+    current club. A sole name match must never be enough.
+    """
+    birth=iso_birth(profile.get('birth'))
+    if profile.get('kind') not in ('players','coaches'):
+        return None, 'Bu profil futbolçu/məşqçi kimliyi deyil.'
+    candidates=[]
+    if not birth:
+        if not _country(profile.get('country')):
+            return None, 'Doğum tarixi və etibarlı ölkə məlumatı yoxdur.'
+        clubs=[c if isinstance(c,str) else c.get('name','') for c in (profile.get('clubs') or [])]
+        clubs+=list(profile.get('localHistoricalClubs') or [])
+        clubs=[x for x in clubs if isinstance(x,str) and x.strip()]
+        if not clubs:
+            return None, 'Tam doğum tarixi yoxdur, əlavə klub əlaqəsi ilə kimlik təsdiqlənmədi.'
+    else:clubs=[]
+    for x in results if isinstance(results,list) else []:
+        if not isinstance(x,dict) or normalize(x.get('strSport')) not in ('soccer','football'):
             continue
-        candidate_birth = iso_birth(x.get('dateBorn') or x.get('strDateBorn') or x.get('dateBirth') or '')
-        if candidate_birth != birth:
-            continue
-        if not name_compatible(profile.get('name'), x.get('strPlayer')):
-            continue
-        ident = str(x.get('idPlayer') or '')
-        if re.fullmatch(r'\d{1,12}', ident):
-            matches.append(ident)
-    uniq = list(dict.fromkeys(matches))
-    if len(uniq) == 1:
-        return uniq[0], ''
-    if len(uniq) > 1:
-        return None, 'Birdən çox uyğun şəxs tapıldı. Kimlik qeyri-müəyyəndir.'
-    return None, 'TheSportsDB-də ad və doğum tarixi ilə təsdiqlənmiş uyğun profil tapılmadı.'
+        ident=str(x.get('idPlayer') or '')
+        if not re.fullmatch(r'\d{1,12}',ident):continue
+        if birth:
+            if iso_birth(x.get('dateBorn') or x.get('strDateBorn') or x.get('dateBirth') or '')!=birth:
+                continue
+            if not name_compatible(profile.get('name'),x.get('strPlayer')):continue
+        else:
+            if normalize(profile.get('name'))!=normalize(x.get('strPlayer')):
+                continue
+            nat=_country(x.get('strNationality') or x.get('strCountry'))
+            if not nat or nat!=_country(profile.get('country')):continue
+            team=x.get('strTeam') or ''
+            if not any(_team_compatible(team,old) for old in clubs):continue
+        candidates.append(ident)
+    ids=list(dict.fromkeys(candidates))
+    if len(ids)==1:return ids[0],''
+    if len(ids)>1:return None,'Bir neçə uyğun şəxs tapıldı; yanlış assist göstərilmir.'
+    if birth:return None,'TheSportsDB-də tam doğum tarixi və ada uyğun futbolçu tapılmadı.'
+    return None,'TheSportsDB-də ad, ölkə və təsdiqli klub ilə uyğun şəxs tapılmadı.'
 
 
 def stat_category(value):
@@ -164,8 +206,8 @@ def lookup(profile, get_json):
     if not isinstance(profile, dict) or profile.get('kind') not in ('players','coaches'):
         result['message'] = 'Yalnız futbolçu karyerası üçün statistika sorğulana bilər.'
         return result
-    if not iso_birth(profile.get('birth')):
-        result['message'] = 'Dəqiq kimlik yoxlaması üçün tam doğum tarixi yoxdur; başqa şəxsin statistikası göstərilmir.'
+    if not iso_birth(profile.get('birth')) and (not profile.get('country') or not (profile.get('clubs') or profile.get('localHistoricalClubs'))):
+        result['message'] = 'Tam doğum tarixi, yaxud təsdiqlənmiş ölkə və klub əlaqəsi yoxdur; başqa şəxsin statistikası göstərilmir.'
         return result
     name = str(profile.get('name') or '').strip()[:100]
     if len(name) < 3:
@@ -178,6 +220,7 @@ def lookup(profile, get_json):
         return result
     result['identityVerified'] = True
     result['providerPlayerId'] = provider_id
+    result['identityMethod'] = 'ad + tam doğum tarixi' if iso_birth(profile.get('birth')) else 'tam ad + ölkə + mənbəli klub'
     data = get_json(ROOT + 'lookupplayerstats.php?id=' + provider_id, 7200)
     parsed = parse_player_stats(data, provider_id)
     result.update(parsed)
