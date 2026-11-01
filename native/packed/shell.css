@@ -25,3 +25,8 @@ button,select,input,[role="button"]{touch-action:manipulation}
  .ml-more-sheet button:focus-visible{outline:2px solid var(--lime)}
  .ml-more-sheet .ml-more-close{background:transparent;color:#aec5d6}
 }
+
+/* Web/PWA install action; hidden when install is unavailable or complete. */
+.pwa-install[hidden]{display:none!important}
+.pwa-install{position:fixed;right:14px;bottom:97px;z-index:1200;border-radius:28px;border:1px solid #98ef63;background:#203f27;color:#f3fef4;box-shadow:0 8px 25px #0007;padding:12px 17px;font-weight:750;font-size:14px;cursor:pointer}
+@media(min-width:801px){.pwa-install{bottom:26px;right:28px}}

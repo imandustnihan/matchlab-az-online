@@ -4,7 +4,7 @@ services:
     runtime: python
     plan: free
     region: frankfurt
-    buildCommand: python prepare_database.py
+    buildCommand: pip install Pillow && python native/branding/generate_icons.py && python prepare_database.py
     startCommand: python hosting_server.py
     healthCheckPath: /healthz
     envVars:

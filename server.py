@@ -756,6 +756,9 @@ class Handler(SimpleHTTPRequestHandler):
  def json_response(self,code,payload):
   raw=json.dumps(payload,ensure_ascii=False,separators=(',',':')).encode('utf8')
   self.send_response(code);self.send_header('Content-Type','application/json; charset=utf-8');self.send_header('Cache-Control','no-store');self.send_header('X-Content-Type-Options','nosniff');self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw)
+ def guess_type(self,path):
+  if path.endswith('.webmanifest'):return 'application/manifest+json'
+  return super().guess_type(path)
  def do_GET(self):
   parsed=urllib.parse.urlsplit(self.path)
   if parsed.path.startswith('/api/'):
@@ -769,12 +772,15 @@ class Handler(SimpleHTTPRequestHandler):
    self.send_response(code);self.send_header('Content-Type','application/json; charset=utf-8');self.send_header('Cache-Control','no-store');self.send_header('X-Content-Type-Options','nosniff');self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw)
    return
   # Serve ONLY frontend assets. SQLite, source code, local logs and uploads never leave this process.
-  public={'/index.html','/app.js','/catalog.js','/featured_media.js','/coach_tactics.js','/styles.css','/assets/icon.svg'}
+  public={'/index.html','/app.js','/catalog.js','/featured_media.js','/coach_tactics.js','/styles.css','/assets/icon.svg','/shell.css','/shell.js','/install.js','/manifest.webmanifest','/service-worker.js','/assets/pwa-192.png','/assets/pwa-512.png','/assets/pwa-512-maskable.png'}
   requested=urllib.parse.unquote(parsed.path)
   if requested in ('','/'):requested='/index.html'
   if requested not in public:
    self.send_error(404)
    return
+  # Only these two published styling files live under the native source tree.
+  if requested in ('/shell.css','/shell.js'):
+   requested='/native/packed'+requested
   self.path=requested
   super().do_GET()
 

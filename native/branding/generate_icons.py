@@ -58,3 +58,15 @@ for density,size in [("mdpi",48),("hdpi",72),("xhdpi",96),("xxhdpi",144),("xxxhd
     dest.mkdir(parents=True,exist_ok=True)
     im.resize((size,size),Image.Resampling.LANCZOS).save(dest/"ic_launcher.png")
 print("Generated Windows ICO and Android launcher icons.")
+
+# Installable PWA icons (generated on Render and in CI before publication).
+pwa_dir=ROOT/"assets"
+pwa_dir.mkdir(parents=True,exist_ok=True)
+for size in (192,512):
+    im.resize((size,size),Image.Resampling.LANCZOS).convert("RGB").save(pwa_dir/f"pwa-{size}.png",optimize=True)
+# Keep the important central glyph within Android maskable icon safe area.
+mask=Image.new("RGB",(1024,1024),"#071019")
+inset=100
+mask.paste(im.resize((1024-2*inset,1024-2*inset),Image.Resampling.LANCZOS),(inset,inset),im.resize((1024-2*inset,1024-2*inset),Image.Resampling.LANCZOS))
+mask.resize((512,512),Image.Resampling.LANCZOS).save(pwa_dir/"pwa-512-maskable.png",optimize=True)
+print("Generated installable PWA icons: 192, 512, 512 maskable")
