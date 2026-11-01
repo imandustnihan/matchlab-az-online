@@ -10,6 +10,9 @@ import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.view.Gravity;
+import android.view.WindowInsets;
+import android.os.Build;
+import android.graphics.Rect;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.*;
@@ -29,6 +32,8 @@ public final class MainActivity extends Activity {
     private final ExecutorService network=Executors.newSingleThreadExecutor();
     private final Handler ui=new Handler(Looper.getMainLooper());
     private LinearLayout body, nav, page;
+    private ScrollView contentScroll;
+    private int bottomInset=0;
     private TextView header, status;
     private String screen="matches", league="all", kind="all", searchText="";
     private Calendar day=Calendar.getInstance(TimeZone.getTimeZone("Asia/Baku"));
@@ -89,27 +94,44 @@ public final class MainActivity extends Activity {
     }
     private void showShell(){
         body=column();body.setBackgroundColor(BG);
+        if(Build.VERSION.SDK_INT>=35){getWindow().setDecorFitsSystemWindows(true);}
+        body.setFitsSystemWindows(true);
         LinearLayout top=row();top.setPadding(dp(18),dp(10),dp(18),dp(10));
         header=text("MATCHLAB AZ",21,INK,true);top.addView(header,new LinearLayout.LayoutParams(0,dp(49),1));
         status=text("●",16,ACCENT,true);top.addView(status);
         body.addView(top,new LinearLayout.LayoutParams(-1,dp(70)));
-        ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);
-        page=column();page.setPadding(dp(16),dp(6),dp(16),dp(16));scroll.addView(page);
+        ScrollView scroll=new ScrollView(this);contentScroll=scroll;scroll.setFillViewport(false);
+        scroll.setClipToPadding(false);
+        page=column();page.setPadding(dp(16),dp(6),dp(16),dp(24));scroll.addView(page);
         body.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
         nav=row();nav.setBackgroundColor(Color.rgb(14,30,46));
-        body.addView(nav,new LinearLayout.LayoutParams(-1,dp(69)));
+        nav.setMinimumHeight(dp(72));
+        body.addView(nav,new LinearLayout.LayoutParams(-1,dp(72)));
+        if(Build.VERSION.SDK_INT>=30){
+            body.setOnApplyWindowInsetsListener((v,insets)->{
+                android.graphics.Insets sys=insets.getInsets(WindowInsets.Type.navigationBars()|WindowInsets.Type.displayCutout());
+                int newBottom=sys.bottom;
+                if(newBottom!=bottomInset){bottomInset=newBottom;nav.setPadding(0,0,0,newBottom);nav.setLayoutParams(new LinearLayout.LayoutParams(-1,dp(72)+newBottom));}
+                return insets;
+            });
+        }
         setContentView(body);
     }
     private void navigate(String name){
         screen=name;generation++;page.removeAllViews();
+        if(contentScroll!=null)contentScroll.scrollTo(0,0);
         header.setText(name.equals("matches")?"Canlı matçlar":name.equals("standings")?"Turnir cədvəli":name.equals("search")?"Axtarış":name.equals("tactics")?"Taktika":name.equals("favorites")?"Seçilmişlər":name.equals("details")?"Matç mərkəzi":name.equals("profile")?"Futbol profili":"Tənzimləmələr");
         nav.removeAllViews();
         String[][] items={{"matches","⚽","Matçlar"},{"standings","▤","Cədvəl"},{"search","⌕","Axtar"},{"favorites","☆","Seçilmiş"},{"tactics","▦","Taktika"}};
         for(String[] item:items){
             LinearLayout cell=column();cell.setGravity(Gravity.CENTER);
-            TextView icon=text(item[1],23,name.equals(item[0])?ACCENT:INK,true);icon.setGravity(Gravity.CENTER);
-            TextView label=text(item[2],10,name.equals(item[0])?ACCENT:MUTED,false);label.setGravity(Gravity.CENTER);
+            boolean active=name.equals(item[0]);
+            TextView icon=text(item[1],23,active?ACCENT:MUTED,true);icon.setGravity(Gravity.CENTER);
+            TextView label=text(item[2],12,active?ACCENT:INK,active);label.setGravity(Gravity.CENTER);
             cell.addView(icon);cell.addView(label);
+            cell.setPadding(dp(2),dp(8),dp(2),dp(8));
+            cell.setContentDescription(item[2]);
+            cell.setClickable(true);
             cell.setOnClickListener(v->navigate(item[0]));
             nav.addView(cell,new LinearLayout.LayoutParams(0,-1,1));
         }
@@ -251,17 +273,25 @@ public final class MainActivity extends Activity {
     private void showSearch(){
         EditText query=new EditText(this);query.setSingleLine(true);query.setHint("Futbolçu, klub, məşqçi…");
         query.setText(searchText);query.setTextColor(INK);query.setHintTextColor(MUTED);
+        query.setTextSize(17);query.setMinHeight(dp(48));
+        query.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH);
         card(query);
         String[] types={"Hamısı","Futbolçular","Klublar","Məşqçilər"};
         Spinner typesSpinner=spinner(types,Arrays.asList(new String[]{"all","players","teams","coaches"}).indexOf(kind),i->kind=new String[]{"all","players","teams","coaches"}[i]);
         card(typesSpinner);
         Button go=button("⌕  Axtar");
         go.setOnClickListener(v->{searchText=query.getText().toString().trim();loadSearch(searchText,kind);});
+        query.setOnEditorActionListener((v,action,event)->{
+            if(action==android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH){go.performClick();return true;}
+            return false;
+        });
         card(go);
         info("Futbol arxivi serverin məlumat bazasında axtarılır.",false);
     }
     private void loadSearch(String q,String kind){
         if(q.isEmpty()){info("Ad yaz və axtar.",true);return;}
+        while(page.getChildCount()>4)page.removeViewAt(page.getChildCount()-1);
+        info("Axtarılır: "+q,false);
         int token=generation;
         fetch("/api/search?q="+encode(q)+"&kind="+kind,(json,error)->{
             if(token!=generation||!screen.equals("search"))return;
@@ -351,7 +381,7 @@ public final class MainActivity extends Activity {
         info("Düzülüş yerli olaraq çəkilir. Təsdiqlənməmiş oyunçu adları göstərilmir.",false);
     }
     private void showSettings(){
-        section("MATCHLAB AZ Native 0.9.30");
+        section("MATCHLAB AZ Native 0.9.32");
         info("Bu proqramın ekranları Android-in öz interfeysidir. WebView və brauzer yoxdur.",false);
         info("Canlı matçlar və profillər HTTPS JSON API-dən gəlir. Mənbələrdə boşluqlar ola bilər.",false);
         Button statusButton=button("Server vəziyyətini yoxla");
