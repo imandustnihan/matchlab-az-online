@@ -482,7 +482,7 @@ public sealed class PitchPanel : Panel
                 float px=x+((col+1f)/(count+1f))*w;
                 using var circle=new SolidBrush(Color.FromArgb(153,236,116));
                 g.FillEllipse(circle,px-18,py-18,36,36);
-                string n=number++.ToString();
+                string n=(number++).ToString();
                 using var f=new Font("Segoe UI Semibold",10);
                 var ts=g.MeasureString(n,f);
                 g.DrawString(n,f,Brushes.Black,px-ts.Width/2,py-ts.Height/2);
