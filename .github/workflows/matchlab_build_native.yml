@@ -63,6 +63,52 @@ jobs:
           if (!$p.WaitForExit(65000)) { $p.Kill(); throw "Windows UI smoke timeout" }
           if ($p.ExitCode -ne 0) { throw "Windows UI navigation smoke failed: $($p.ExitCode)" }
           Write-Host "PASS actual Windows HTML WebView2 navigation"
+      - name: Compile Windows desktop installer using Inno Setup
+        shell: pwsh
+        run: |
+          $innoDir = Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) 'Inno Setup 6'
+          $iscc = Join-Path $innoDir 'ISCC.exe'
+          if (!(Test-Path $iscc)) {
+            choco install innosetup --yes --no-progress --limit-output
+            if ($LASTEXITCODE -ne 0) { throw "Inno Setup installation failed" }
+          }
+          if (!(Test-Path $iscc)) { throw "Inno Setup compiler missing" }
+          & $iscc "native\packed-windows\installer.iss"
+          if ($LASTEXITCODE -ne 0) { throw "Installer compilation failed" }
+          if (!(Test-Path 'native\packed-windows\installer-out\MATCHLAB_AZ_Setup_v0943.exe')) {
+            throw "Installer not produced"
+          }
+      - name: Smoke test desktop install, Start icon, Apps registration, uninstall
+        shell: pwsh
+        run: |
+          $setup = Join-Path (Get-Location) 'native\packed-windows\installer-out\MATCHLAB_AZ_Setup_v0943.exe'
+          $process = Start-Process -FilePath $setup -ArgumentList '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /TASKS=desktopicon' -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Installer failed: $($process.ExitCode)" }
+          $exe = Join-Path $env:LOCALAPPDATA 'Programs\MATCHLAB AZ\MATCHLAB_AZ.exe'
+          if (!(Test-Path $exe)) { throw "EXE not present in Installed Apps location" }
+          $self = Start-Process -FilePath $exe -ArgumentList '--self-test' -Wait -PassThru
+          if ($self.ExitCode -ne 0) { throw "Installed application self-test failed" }
+          $startLink = Join-Path ([Environment]::GetFolderPath('Programs')) 'MATCHLAB AZ.lnk'
+          $desktopLink = Join-Path ([Environment]::GetFolderPath('DesktopDirectory')) 'MATCHLAB AZ.lnk'
+          if (!(Test-Path $startLink)) { throw "Start menu shortcut not created" }
+          if (!(Test-Path $desktopLink)) { throw "Desktop shortcut not created" }
+          $entries = @(Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*' -ErrorAction SilentlyContinue |
+            Where-Object { $_.DisplayName -like 'MATCHLAB AZ*' })
+          if ($entries.Count -ne 1) { throw "Apps > Installed Apps entry not found" }
+          $uninstaller = Join-Path (Split-Path $exe) 'unins000.exe'
+          if (!(Test-Path $uninstaller)) { throw "Uninstaller not installed" }
+          $uninstall = Start-Process -FilePath $uninstaller -ArgumentList '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART' -Wait -PassThru
+          if ($uninstall.ExitCode -ne 0) { throw "Uninstall failed: $($uninstall.ExitCode)" }
+          Start-Sleep -Seconds 3
+          if (Test-Path $exe) { throw "Uninstaller did not remove EXE" }
+          Write-Host 'PASS: Start menu, Desktop shortcut, Installed Apps registration, EXE self-test and uninstall'
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: MATCHLAB_AZ_Windows_Installer_v0943
+          path: native/packed-windows/installer-out/MATCHLAB_AZ_Setup_v0943.exe
+          if-no-files-found: error
+          retention-days: 30
       - uses: actions/upload-artifact@v4
         if: always()
         with:
