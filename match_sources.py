@@ -137,7 +137,8 @@ def sportsdb_table(raw):
  return [{'name':r.get('strTeam') or '—','image':r.get('strBadge') or r.get('strTeamBadge') or '',
   'rank':_num(r.get('intRank')) or i+1,'played':_num(r.get('intPlayed')),
   'win':_num(r.get('intWin')),'draw':_num(r.get('intDraw')),
-  'loss':_num(r.get('intLoss')),'points':_num(r.get('intPoints'))}
+  'loss':_num(r.get('intLoss')),'points':_num(r.get('intPoints')),
+  'gf':_num(r.get('intGoalsFor')),'ga':_num(r.get('intGoalsAgainst'))}
   for i,r in enumerate(rows)]
 
 
@@ -150,7 +151,8 @@ def openliga_table(raw):
    'image':team.get('teamIconUrl') or '',
    'rank':i+1,'played':_num(r.get('matches')),
    'win':_num(r.get('won')),'draw':_num(r.get('draw')),
-   'loss':_num(r.get('lost')),'points':_num(r.get('points'))})
+   'loss':_num(r.get('lost')),'points':_num(r.get('points')),
+   'gf':_num(r.get('goals')),'ga':_num(r.get('opponentGoals'))})
  return items
 
 

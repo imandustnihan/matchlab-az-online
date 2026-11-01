@@ -99,3 +99,38 @@
 @media(max-width:620px){.club-link-row{min-height:54px}.club-squad-row{padding:8px}.club-stadium-image{aspect-ratio:4/3}.club-section-header h3{font-size:17px}.honour-item{align-items:flex-start}.honour-item small{max-width:91px}}
 
 .compare-candidates{display:flex;flex-wrap:wrap;gap:7px;max-height:180px;overflow:auto;margin-top:10px}.compare-candidates .btn{white-space:normal;text-align:left}.career-table td{overflow-wrap:anywhere}
+
+/* v0.9.26: standings and tactics additions; no global .top class on the pitch */
+.stand-controls{display:grid;gap:7px;margin-bottom:18px}
+.stand-controls>.formfield{max-width:min(560px,100%)}
+.stand-controls .tabs{margin:4px 0 6px}
+.standings-table table{min-width:790px}
+.standings-table th,.standings-table td{padding:11px 9px;font-size:12px}
+.standings-table td:nth-child(n+3){font-variant-numeric:tabular-nums}
+.standings-table .table-group td{background:#26463d;color:#c8ebd3;font-weight:850;letter-spacing:.3px}
+.tactic-coach-panel{margin-bottom:18px;display:grid;gap:13px;border-color:#476954}
+.tactic-coach-panel .formgrid{margin-top:0;align-items:center}
+.tactic-coach-panel p{line-height:1.55;color:var(--muted)}
+.tactic-coach-panel .row a{text-decoration:none}
+.tactic-block{pointer-events:none;position:absolute;left:50%;height:9%;transform:translate(-50%,-50%);z-index:0;border:2px dashed #9bd0ffad;border-radius:9px;background:#9bd0ff10;max-width:94%;min-width:12%}
+.tactic-block.attack{border-color:#ffe09aad;background:#ffe09a10}
+.tactic-rival{position:absolute;z-index:1;transform:translate(-50%,-50%);height:23px;width:23px;border:2px solid #ffdada;border-radius:50%;background:#bb3436;color:#fff;display:grid;place-items:center;font-size:10px;font-weight:850;pointer-events:none;box-shadow:0 1px 7px #0007;opacity:.72}
+.tactic-tools{display:grid;gap:10px;border-top:1px solid var(--border);padding-top:13px}
+.tactic-tools .formgrid{margin-top:2px}
+.editor .club-setting-toggle{margin:8px 0}
+.editor input[type=range]{accent-color:#b8ef7e;cursor:pointer;width:100%}
+.tactic-scenes{margin-top:15px;border-radius:13px}
+.tactic-scenes h3{margin:0}
+.tactic-scenes .row{margin-top:12px}
+.tactic-scenes .footnote{margin-top:9px}
+.pitch .player-dot{z-index:3}
+#pitch .player-dot{transition:left .75s ease,top .75s ease}
+.notify-options{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:16px 0}
+.club-setting-toggle{min-width:0}
+.notify-panel>.footnote{margin-top:10px}
+.notify-panel details summary{cursor:pointer;font-weight:750}
+@media(max-width:950px){.notify-options{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:560px){.tactic-coach-panel .formgrid{grid-template-columns:1fr}.notify-options{grid-template-columns:1fr 1fr}.tactic-tools .row{gap:7px}.tactic-rival{height:18px;width:18px;font-size:9px}.standings-table table{min-width:720px}}
+
+/* v0.9.26: expose standings and tactics on mobile without squeezing eight tiny buttons */
+@media(max-width:760px){.mobilebar{display:flex;overflow-x:auto;overflow-y:hidden;gap:0;scrollbar-width:none;padding-left:5px;padding-right:5px;overscroll-behavior-x:contain}.mobilebar::-webkit-scrollbar{display:none}.mobilebar button{flex:0 0 67px;min-width:67px;line-height:1.2;justify-content:center;white-space:normal}.mobilebar button i{font-size:20px}}

@@ -128,6 +128,7 @@ def parse_football_data_table(data):
             'draw':_num(item.get('draw')),
             'loss':_num(item.get('lost')),
             'points':_num(item.get('points')),
+            'gf':_num(item.get('goalsFor')),'ga':_num(item.get('goalsAgainst')),
         })
     return rows
 

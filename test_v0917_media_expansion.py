@@ -130,6 +130,6 @@ class VerifiedMedia17(unittest.TestCase):
 
     def test_endpoint_status_includes_media_cache_metadata(self):
         self.assertIn('cached',server.send_data('/api/media-status',{}))
-        self.assertEqual(server.send_data('/api/status',{})['version'],'0.9.25-local')
+        self.assertEqual(server.send_data('/api/status',{})['version'],'0.9.26-local')
 
 if __name__=='__main__':unittest.main(verbosity=2)

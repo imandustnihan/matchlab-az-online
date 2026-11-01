@@ -1,4 +1,4 @@
-"""MATCHLAB AZ v0.9.25 HTML + local Python server (stdlib only, no user API key).
+"""MATCHLAB AZ v0.9.26 HTML + local Python server (stdlib only, no user API key).
 Respects upstream failures, returns explicit availability flags, never synthesizes match results.
 Sources: Wikidata CC0, Wikipedia pageimages (image rights vary), OpenLigaDB and unofficial ESPN.
 """
@@ -15,6 +15,7 @@ import media_expansion as extra_media
 import identity_unification as people
 import club_history
 import season_stats
+import league_catalog
 import free_football_sources as open_feeds
 
 ROOT=Path(__file__).resolve().parent
@@ -23,12 +24,12 @@ INSTALL_LOCK=threading.Lock()
 CATALOG=json.loads((ROOT/'catalog.json').read_text(encoding='utf-8'))
 CATBYID={x['id']:x for x in CATALOG}
 QID=re.compile(r'^Q[1-9]\d{0,11}$')
-LEAGUES={'eng.1','esp.1','ger.1','ita.1','fra.1','uefa.champions','uefa.europa','tur.1','por.1','ned.1','usa.1','ksa.1'}
+LEAGUES=set(league_catalog.ALL_LEAGUES)
 CACHE={}; CACHE_LOCK=threading.Lock(); HOST_COOLDOWN={}; UPSTREAM_TIMEOUT=8
 SOURCE_STATUS={}
 SCORE_CACHE=ROOT/'score_cache'
 SCORE_CACHE.mkdir(exist_ok=True)
-USER_AGENT=os.environ.get('MATCHLAB_WIKIMEDIA_UA','MatchlabAZ/0.9.25 (https://github.com/imandustnihan/matchlab-az-online; community football archive)')
+USER_AGENT=os.environ.get('MATCHLAB_WIKIMEDIA_UA','MatchlabAZ/0.9.26 (https://github.com/imandustnihan/matchlab-az-online; community football archive)')
 WIKI_REQUEST_LOCK=threading.Lock()
 WIKI_NEXT_REQUEST=0.0
 
@@ -266,15 +267,56 @@ def openliga_matches(date):
  return out
 
 def espn_standings(league):
+ """Keep ESPN's real group/goal/form fields rather than making up table data."""
  j=source_call('ESPN',f'https://site.api.espn.com/apis/v2/sports/soccer/{league}/standings',900)
- entries=list(j.get('standings',{}).get('entries',[]))
- for group in j.get('children',[]): entries+=group.get('standings',{}).get('entries',[])
- def stat(row,*names):
-  s=next((s for s in row.get('stats',[]) if s.get('name') in names or s.get('abbreviation') in names),None)
-  if not s:return None
-  try:return int(float(s.get('value',s.get('displayValue',0))))
-  except:return None
- return [{'name':r.get('team',{}).get('displayName',''),'image':r.get('team',{}).get('logos',[{}])[0].get('href','') if r.get('team',{}).get('logos') else r.get('team',{}).get('logo',''),'played':stat(r,'gamesPlayed','GP'),'win':stat(r,'wins','W'),'draw':stat(r,'ties','D'),'loss':stat(r,'losses','L'),'points':stat(r,'points','PTS'),'rank':stat(r,'rank') or i+1} for i,r in enumerate(entries)]
+ def num(v):
+  try:
+   if v is None or v=='':return None
+   return int(float(v))
+  except (TypeError,ValueError,OverflowError):return None
+ def normalize_entries(entries,group=''):
+  result=[]
+  for index,r in enumerate(entries if isinstance(entries,list) else []):
+   t=r.get('team') or {};stats=r.get('stats') or []
+   def raw(*names):
+    found=next((v for v in stats if v.get('name') in names or v.get('abbreviation') in names),None)
+    return (found.get('value') if found.get('value') is not None else found.get('displayValue')) if found else None
+   logos=t.get('logos') or []
+   gf=num(raw('pointsFor','goalsFor','goalsScored','GF'))
+   ga=num(raw('pointsAgainst','goalsAgainst','goalsConceded','GA'))
+   gd=num(raw('pointDifferential','goalDifference','GD'))
+   # Form is only displayed when explicitly reported as W/D/L sequence.
+   form=str(raw('lastFive','form','last5','lastFiveGames') or '').upper().replace(' ','')
+   if not form or len(form)>10 or any(ch not in 'WDL-' for ch in form):form=''
+   row={'name':t.get('displayName') or t.get('name') or '',
+        'image':logos[0].get('href','') if logos else t.get('logo',''),
+        'played':num(raw('gamesPlayed','GP')),'win':num(raw('wins','W')),
+        'draw':num(raw('ties','D')),'loss':num(raw('losses','L')),
+        'points':num(raw('points','PTS')),'rank':num(raw('rank','RK')) or index+1,
+        'gf':gf,'ga':ga,'gd':gd,'form':form,'group':str(group or '')[:80]}
+   if row['name']:result.append(row)
+  return result
+ out=normalize_entries((j.get('standings') or {}).get('entries'))
+ def walk(nodes,depth=0):
+  if depth>4 or not isinstance(nodes,list):return []
+  found=[]
+  for g in nodes:
+   if not isinstance(g,dict):continue
+   name=g.get('name') or g.get('abbreviation') or g.get('shortName') or ''
+   found.extend(normalize_entries((g.get('standings') or {}).get('entries'),name))
+   found.extend(walk(g.get('children'),depth+1))
+  return found
+ out.extend(walk(j.get('children')))
+ # Duplicate teams may appear at parent and group level; prefer explicit group.
+ merged={}
+ for row in out:
+  key=(row['group'],row['name'])
+  merged[key]=row
+ if any(row.get('group') for row in merged.values()):
+  # Avoid parent aggregate duplicating group members.
+  grouped={row['name'] for row in merged.values() if row['group']}
+  merged={k:v for k,v in merged.items() if v['group'] or v['name'] not in grouped}
+ return list(merged.values())
 
 def openliga_table():
  season=time.gmtime().tm_year-(time.gmtime().tm_mon<7)
@@ -409,8 +451,9 @@ def send_data(path,params):
    return season_stats.lookup(profile,get_json)
   except Exception:
    return {'available':False,'items':[],'message':'Pulsuz mövsüm statistikası mənbəsinə qoşulmaq mümkün olmadı.','source':'TheSportsDB V1 Free'}
- if path=='/api/status':return {'ok':True,'backend':True,'version':'0.9.25-local','catalog':len(CATALOG),'world':world_db.counts(),'liveGuaranteed':False,'livePollingSeconds':25,'canInstall':True,'wikipedia':{'mode':'on_demand_verified_qid','verifiedSeedCount':len(wiki.SEED),'linkedQids':sum(x['linked'] for kind,x in world_db.qid_coverage().items() if kind in ('players','teams','coaches')),'teamProfiles':True,'shortExtracts':True}}
+ if path=='/api/status':return {'ok':True,'backend':True,'version':'0.9.26-local','catalog':len(CATALOG),'world':world_db.counts(),'liveGuaranteed':False,'livePollingSeconds':25,'canInstall':True,'wikipedia':{'mode':'on_demand_verified_qid','verifiedSeedCount':len(wiki.SEED),'linkedQids':sum(x['linked'] for kind,x in world_db.qid_coverage().items() if kind in ('players','teams','coaches')),'teamProfiles':True,'shortExtracts':True}}
  if path=='/api/media-status':return {'source':'Verified Wikidata P18/P154 + free Wikipedia pageimages','cached':extra_media.cache_stats(),'linked':world_db.qid_coverage(),'allProfilesGuaranteed':False,'licensing':'Per-file Wikimedia Commons license applies'}
+ if path=='/api/leagues':return {'items':[{'id':k,'name':v,'automatic':k in league_catalog.CORE_LEAGUES} for k,v in league_catalog.ALL_LEAGUES.items()],'count':len(league_catalog.ALL_LEAGUES),'note':'Kataloqda olmaq bu turnirin cari cədvəlinin mütləq işləməsi demək deyil.'}
  if path=='/api/sources':return {'sources':SOURCE_STATUS,
   'providers':['ESPN (qeyri-rəsmi)','OpenLigaDB (ODbL icma)','TheSportsDB V1 (pulsuz məhdud məlumat)','Wikipedia/Wikidata (mənbəli profil)','OpenFootball (CC0, tarixi matçlar)','football-data.org (qeydiyyatlı pulsuz, gecikmiş nəticələr)'],
   'configured':{'openFootball':True,'openLigaDB':True,'theSportsDBFree':True,'footballDataFreeToken':bool(os.environ.get('FOOTBALL_DATA_TOKEN'))},

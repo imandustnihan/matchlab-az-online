@@ -9,6 +9,7 @@ import concurrent.futures
 import datetime
 import threading
 import time
+import league_catalog
 from zoneinfo import ZoneInfo
 
 LEAGUE_NAMES = {
@@ -18,6 +19,7 @@ LEAGUE_NAMES = {
     'por.1': 'Primeira Liga', 'ned.1': 'Eredivisie',
     'usa.1': 'MLS', 'ksa.1': 'Saudi Pro League',
 }
+LEAGUE_NAMES.update(league_catalog.EXTRA_LEAGUES)
 _LOCK = threading.Lock()
 _CACHE = {}
 _FLIGHT = {}
@@ -38,7 +40,7 @@ def _compute_view(league, date, load_one):
         old = _CACHE.get(key)
         if old and now - old[0] < ttl:
             return dict(old[1], cached=True)
-    targets = list(LEAGUE_NAMES) if league == 'all' else [league]
+    targets = list(league_catalog.CORE_LEAGUES) if league == 'all' else [league]
     results = {}
     def load(name):
         try:

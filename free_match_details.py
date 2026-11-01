@@ -87,7 +87,7 @@ def sportsdb_details(lineup_raw, stats_raw, timeline_raw):
             what=short(x.get('strTimeline') or x.get('strEvent') or x.get('strTimelineDetail'),130)
             if not (who or what):continue
             out['events'].append({'clock':str(minute)+"'" if minute is not None else '',
-                'text':short(' — '.join(v for v in [what,who,short(x.get('strAssist'),60)] if v),220),
+                'text':short(' — '.join(v for v in [what,who,('Asist: '+short(x.get('strAssist'),60) if x.get('strAssist') else '')] if v),220),
                 'side':'home' if is_yes(x.get('strHome')) else 'away'})
         out['events'].sort(key=lambda x:numeric(x['clock'].replace("'",'')) or 0)
     out['available']=bool(out['statistics'] or out['events'] or any(out['lineup'][s]['starters'] or out['lineup'][s]['substitutes'] for s in ('home','away')))
