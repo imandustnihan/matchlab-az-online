@@ -1,0 +1,9 @@
+/* MATCHLAB AZ packaged full HTML UI: improve mobile safe-area and targets. */
+html,body{min-height:100%;overscroll-behavior-y:contain}
+button,select,input,[role="button"]{touch-action:manipulation}
+@media(max-width:800px){
+.mobilebar{bottom:0!important;padding-bottom:max(7px,env(safe-area-inset-bottom));z-index:1000!important}
+.page{padding-bottom:calc(105px + env(safe-area-inset-bottom))!important}
+button,.btn,.tab{min-height:43px}
+.toast{bottom:calc(85px + env(safe-area-inset-bottom))}
+}

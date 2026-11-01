@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+<PropertyGroup>
+<OutputType>WinExe</OutputType><TargetFramework>net8.0-windows</TargetFramework>
+<UseWindowsForms>true</UseWindowsForms><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings>
+<AssemblyName>MATCHLAB_AZ</AssemblyName><Version>0.9.40</Version>
+<ApplicationIcon>../branding/matchlab_icon.ico</ApplicationIcon>
+<RuntimeIdentifier>win-x64</RuntimeIdentifier><PublishSingleFile>true</PublishSingleFile>
+<SelfContained>true</SelfContained><IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+</PropertyGroup>
+<ItemGroup>
+<PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4314.35"/>
+<EmbeddedResource Include="../../index.html" LogicalName="ML.index.html"/>
+<EmbeddedResource Include="../../styles.css" LogicalName="ML.styles.css"/>
+<EmbeddedResource Include="../../app.js" LogicalName="ML.app.js"/>
+<EmbeddedResource Include="../../catalog.js" LogicalName="ML.catalog.js"/>
+<EmbeddedResource Include="../../featured_media.js" LogicalName="ML.featured_media.js"/>
+<EmbeddedResource Include="../../coach_tactics.js" LogicalName="ML.coach_tactics.js"/>
+<EmbeddedResource Include="../../assets/icon.svg" LogicalName="ML.assets.icon.svg"/>
+<EmbeddedResource Include="../packed/shell.css" LogicalName="ML.shell.css"/>
+</ItemGroup>
+</Project>
