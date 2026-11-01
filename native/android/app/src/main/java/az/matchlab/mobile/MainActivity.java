@@ -12,9 +12,9 @@ import android.graphics.drawable.GradientDrawable;
 import android.view.Gravity;
 import android.view.WindowInsets;
 import android.os.Build;
-import android.graphics.Rect;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.*;
 import org.json.*;
 import java.io.*;
@@ -29,11 +29,11 @@ public final class MainActivity extends Activity {
         INK=Color.rgb(241,248,253), MUTED=Color.rgb(167,184,198), ACCENT=Color.rgb(155,236,118), RED=Color.rgb(248,133,130);
     private static final String[] LEAGUES={"all","eng.1","esp.1","ger.1","ita.1","fra.1","uefa.champions","uefa.europa","tur.1","por.1","ned.1"};
     private static final String[] NAMES={"Bütün liqalar","Premier League","La Liga","Bundesliga","Serie A","Ligue 1","Champions League","Europa League","Süper Lig","Primeira Liga","Eredivisie"};
-    private final ExecutorService network=Executors.newSingleThreadExecutor();
+    private final ExecutorService network=Executors.newFixedThreadPool(3);
     private final Handler ui=new Handler(Looper.getMainLooper());
     private LinearLayout body, nav, page;
     private ScrollView contentScroll;
-    private int bottomInset=0;
+    private int bottomInset=-1,topInset=-1;
     private TextView header, status;
     private String screen="matches", league="all", kind="all", searchText="";
     private Calendar day=Calendar.getInstance(TimeZone.getTimeZone("Asia/Baku"));
@@ -88,14 +88,13 @@ public final class MainActivity extends Activity {
         page.addView(t);
     }
     private Button button(String label){
-        Button b=new Button(this);b.setText(label);b.setTextSize(12);b.setAllCaps(false);
+        Button b=new Button(this);b.setText(label);b.setTextSize(14);b.setAllCaps(false);
         b.setTextColor(INK);b.setBackground(shape(RAISED,11));
-        b.setMinHeight(0);b.setMinimumHeight(0);b.setPadding(dp(10),dp(8),dp(10),dp(8));return b;
+        b.setMinHeight(dp(44));b.setMinimumHeight(dp(44));b.setPadding(dp(10),dp(8),dp(10),dp(8));return b;
     }
     private void showShell(){
         body=column();body.setBackgroundColor(BG);
-        if(Build.VERSION.SDK_INT>=35){getWindow().setDecorFitsSystemWindows(true);}
-        body.setFitsSystemWindows(true);
+        if(Build.VERSION.SDK_INT>=30){getWindow().setDecorFitsSystemWindows(false);}
         LinearLayout top=row();top.setPadding(dp(18),dp(10),dp(18),dp(10));
         header=text("MATCHLAB AZ",21,INK,true);top.addView(header,new LinearLayout.LayoutParams(0,dp(49),1));
         status=text("●",16,ACCENT,true);top.addView(status);
@@ -109,13 +108,18 @@ public final class MainActivity extends Activity {
         body.addView(nav,new LinearLayout.LayoutParams(-1,dp(72)));
         if(Build.VERSION.SDK_INT>=30){
             body.setOnApplyWindowInsetsListener((v,insets)->{
-                android.graphics.Insets sys=insets.getInsets(WindowInsets.Type.navigationBars()|WindowInsets.Type.displayCutout());
-                int newBottom=sys.bottom;
-                if(newBottom!=bottomInset){bottomInset=newBottom;nav.setPadding(0,0,0,newBottom);nav.setLayoutParams(new LinearLayout.LayoutParams(-1,dp(72)+newBottom));}
+                android.graphics.Insets sys=insets.getInsets(WindowInsets.Type.systemBars()|WindowInsets.Type.displayCutout());
+                if(sys.bottom!=bottomInset||sys.top!=topInset){
+                    bottomInset=sys.bottom;topInset=sys.top;
+                    body.setPadding(sys.left,sys.top,sys.right,sys.bottom);
+                }
                 return insets;
             });
+        }else{
+            body.setFitsSystemWindows(true);
         }
         setContentView(body);
+        if(Build.VERSION.SDK_INT>=30)body.requestApplyInsets();
     }
     private void navigate(String name){
         screen=name;generation++;page.removeAllViews();
@@ -129,7 +133,8 @@ public final class MainActivity extends Activity {
             TextView icon=text(item[1],23,active?ACCENT:MUTED,true);icon.setGravity(Gravity.CENTER);
             TextView label=text(item[2],12,active?ACCENT:INK,active);label.setGravity(Gravity.CENTER);
             cell.addView(icon);cell.addView(label);
-            cell.setPadding(dp(2),dp(8),dp(2),dp(8));
+            cell.setPadding(dp(2),dp(7),dp(2),dp(7));
+            cell.setMinimumHeight(dp(56));
             cell.setContentDescription(item[2]);
             cell.setClickable(true);
             cell.setOnClickListener(v->navigate(item[0]));
@@ -186,7 +191,7 @@ public final class MainActivity extends Activity {
                 HttpURLConnection conn=(HttpURLConnection)url.openConnection();
                 conn.setConnectTimeout(10000);conn.setReadTimeout(26000);
                 conn.setRequestProperty("Accept","application/json");
-                conn.setRequestProperty("User-Agent","MATCHLABAZ-Native/0.9.30");
+                conn.setRequestProperty("User-Agent","MATCHLABAZ-Native/0.9.33");
                 int code=conn.getResponseCode();
                 if(code<200||code>=300)throw new IOException("HTTP "+code);
                 try(InputStream input=conn.getInputStream();ByteArrayOutputStream out=new ByteArrayOutputStream()){
@@ -286,10 +291,11 @@ public final class MainActivity extends Activity {
             return false;
         });
         card(go);
-        info("Futbol arxivi serverin məlumat bazasında axtarılır.",false);
+        info("Adı yazıb Axtar düyməsinə toxun. Nəticələr serverdən alınır.",false);
     }
     private void loadSearch(String q,String kind){
         if(q.isEmpty()){info("Ad yaz və axtar.",true);return;}
+        ((InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(page.getWindowToken(),0);
         while(page.getChildCount()>4)page.removeViewAt(page.getChildCount()-1);
         info("Axtarılır: "+q,false);
         int token=generation;
