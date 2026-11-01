@@ -292,6 +292,43 @@ def verified_language_links(wikidata_entity):
     return result
 
 
+
+def restore_cached_article_links(qid,info,get_json):
+    """Rehydrate 0.9.14-0.9.24 cache rows that lack Wikipedia language links.
+
+    Request Wikidata sitelinks by *exact* QID, not by a person's ambiguous name.
+    Keep the old cached biography if the remote source is unavailable.
+    """
+    if not isinstance(info,dict) or not VALID_QID.fullmatch(qid or ''):
+        return info
+    existing=info.get('wikiPageLinks') if isinstance(info.get('wikiPageLinks'),dict) else {}
+    if info.get('wikiLinksChecked') or len(existing)>=3:
+        return info
+    recovered=dict(existing)
+    for field in ('wikiUrl','careerUrl'):
+        candidate=info.get(field)
+        if not isinstance(candidate,str):continue
+        match=re.fullmatch(r'https://(az|tr|en|es|de|fr|it|pt|ru|nl|pl)\.wikipedia\.org/wiki/[^\s?#]+',candidate)
+        if match:
+            recovered[match.group(1)]=candidate
+    try:
+        query=urllib.parse.urlencode({'action':'wbgetentities','format':'json','ids':qid,'props':'sitelinks'})
+        entity=get_json('https://www.wikidata.org/w/api.php?'+query,86400)
+        verified=(entity or {}).get('entities',{}).get(qid,{})
+        if isinstance(verified,dict) and verified.get('missing') is None and verified:
+            recovered.update(verified_language_links(verified))
+            if recovered!=existing or not info.get('wikiLinksChecked'):
+                # The HTTP request adapter caches this QID lookup for 24 hours.
+                # Do not mutate profile disk storage solely to add navigation links.
+                return {**info,'wikiPageLinks':recovered,'wikiLinksChecked':True}
+    except (OSError,TypeError,ValueError,KeyError,AttributeError):
+        pass
+    except Exception:
+        # Network exceptions vary with the request adapter; never break a profile.
+        pass
+    return {**info,'wikiPageLinks':recovered} if recovered else info
+
+
 def entity_value(entity,prop):
     for s in entity.get('claims',{}).get(prop,[]):
         if s.get('rank')=='deprecated':continue
@@ -567,8 +604,10 @@ def enrich(qid,get_json,refresh=False,kind='players'):
         if found is not None and found.get('wikiKind')==kind and (kind!='teams' or found.get('clubDataVersion')==2):
             if qid in SEED and isinstance(found,dict):
                 seeded=SEED[qid]
-                return {**seeded,**{k:v for k,v in found.items() if v not in ('',None) and v != []}}
-            return found or SEED.get(qid)
+                resolved={**seeded,**{k:v for k,v in found.items() if v not in ('',None) and v != []}}
+            else:
+                resolved=found or SEED.get(qid)
+            return restore_cached_article_links(qid,resolved,get_json)
     try:
         info=remote_enrich(qid,get_json,kind=kind)
         if info:
