@@ -26,6 +26,11 @@ def clean_text(text):
     """Remove common Wikipedia markup without relying on a full wiki parser."""
     text=str(text or '')
     text=re.sub(r'<!--.*?-->','',text,flags=re.S)
+    text=re.sub(r'<br\s*/?>','; ',text,flags=re.I)
+    text=re.sub(r'\{\{\s*(?:hlist|ubl|ubt|unbulleted list|flatlist)\s*\|([^{}]*)\}\}',lambda m:'; '.join(x for x in (clean_text(v) for v in m.group(1).split('|')) if x),text,flags=re.I)
+    text=re.sub(r'\{\{\s*plainlist\s*\|','',text,flags=re.I)
+    text=text.replace('{{endplainlist}}','').replace('{{Endplainlist}}','')
+    text=text.replace('*','; ')
     text=re.sub(r'<ref\b[^>]*>.*?</ref\s*>|<ref\b[^>]*/>', '',text,flags=re.S|re.I)
     text=re.sub(r'<[^>]+>','',text)
     text=re.sub(r'\{\{(?:nowrap|small|flagicon|flag|flagcountry|nobold)\|([^{}|]*)\}\}',r'\1',text,flags=re.I)
@@ -33,9 +38,22 @@ def clean_text(text):
     text=re.sub(r'\[(?:https?://\S+)(?:\s+([^\]]*))?\]',lambda m:m.group(1) or '',text)
     text=re.sub(r"'{2,}", '',text)
     text=re.sub(r'\{\{[^{}]*\}\}', '',text)
-    text=re.sub(r'\s+', ' ',text).strip(' \n\t|')
+    text=re.sub(r'\s*;\s*','; ',text)
+    text=re.sub(r'\s+', ' ',text).strip(' \n\t|;')
     return text[:250]
 
+
+def split_values(raw,limit=12):
+    text=clean_text(raw)
+    if not text:return []
+    text=text.replace(' / ','; ').replace(' • ','; ').replace(' · ','; ')
+    parts=[x.strip(' ,') for x in re.split(r';|\u2022|\u00b7|\s{2,}|(?<!\d),(?!\d)',text) if x.strip(' ,')]
+    out=[]
+    for part in parts:
+        if part not in out:
+            out.append(part)
+        if len(out)>=limit:break
+    return out
 
 def extract_infobox(wikitext):
     """Extract the first {{Infobox football biography}} or equivalent, balanced."""
@@ -169,24 +187,38 @@ def parse_club_infobox(source):
     if date:
         yr=date.group(1) if date.lastindex else date.group(0)
         if 1800<=int(yr)<=dt.date.today().year:out['foundedYear']=int(yr)
-    for target,fields in (
-        ('stadium',('ground','stadium','arena')),
-        ('city',('city','location','headquarters')),
+    field_map=(
+        ('fullName',('fullname','clubname','fullclubname')),
+        ('shortName',('shortname','nicknameabbrev')),
+        ('stadium',('ground','stadium','arena','homeground')),
+        ('city',('city','location','headquarters','basedin')),
+        ('country',('country',)),
         ('manager',('manager','headcoach','coach')),
         ('league',('league','competition')),
-        ('nickname',('nickname','nicknames')),
-    ):
+        ('chairman',('chairman','chairperson','president')),
+        ('owner',('owner','owners')),
+        ('colors',('colours','colors','colour','color')),
+    )
+    for target,fields in field_map:
         for field in fields:
             value=clean_text(f.get(field,''))
             if value and len(value)<=180:
-                out[target]=value;break
+                out[target]=value
+                break
+    nick_raw=''
+    for field in ('nickname','nicknames','nickname(s)'):
+        nick_raw=f.get(field,'')
+        if nick_raw:break
+    nicknames=split_values(nick_raw,limit=10)
+    if nicknames:
+        out['nicknames']=nicknames
+        out['nickname']=' · '.join(nicknames[:6])
     raw=f.get('capacity') or f.get('groundcapacity') or ''
     m=re.search(r'(?<!\d)(\d{1,3}(?:[,. ]\d{3})+|\d{4,6})(?!\d)',clean_text(raw))
     if m:
         n=int(re.sub(r'[^\d]','',m.group(1)))
         if 1000<=n<=300000:out['stadiumCapacity']=n
     return out
-
 
 def article_details(lang,title,qid,get_json):
     """Get a short intro only if pageprops.wikibase_item matches the profile QID."""
@@ -265,6 +297,44 @@ def entity_value(entity,prop):
     return None
 
 
+def entity_values(entity,prop):
+    out=[]
+    for s in entity.get('claims',{}).get(prop,[]):
+        if s.get('rank')=='deprecated':
+            continue
+        raw=s.get('mainsnak',{}).get('datavalue',{}).get('value')
+        if raw is not None:
+            out.append(raw)
+    return out
+
+
+def entity_labels(ids,get_json):
+    ids=[x for x in dict.fromkeys(ids) if VALID_QID.fullmatch(str(x))]
+    if not ids:return {}
+    url='https://www.wikidata.org/w/api.php?'+urllib.parse.urlencode({'action':'wbgetentities','format':'json','ids':'|'.join(ids),'props':'labels','languages':'az|tr|en','languagefallback':'1'})
+    payload=get_json(url,86400).get('entities',{})
+    out={}
+    for qid,entity in payload.items():
+        label=''
+        for lang in ('az','tr','en'):
+            value=((entity.get('labels') or {}).get(lang) or {}).get('value')
+            if value:
+                label=value
+                break
+        out[qid]=label or qid
+    return out
+
+
+def first_labeled(entity,prop,labels):
+    for raw in entity_values(entity,prop):
+        if isinstance(raw,dict) and raw.get('id') in labels:
+            return labels[raw['id']]
+        if isinstance(raw,dict) and raw.get('id'):
+            return raw['id']
+        if isinstance(raw,str) and raw.strip():
+            return raw.strip()
+    return ''
+
 def wikidata_date(value):
     """Respect Wikidata precision: year/month-only dates are NOT January 1.
 
@@ -320,10 +390,64 @@ def remote_enrich(qid,get_json,kind='players'):
     data=(parse_club_infobox(wikitext) if kind=='teams' else parse_football_infobox(wikitext)) if verified else {}
     data.update({k:v for k,v in details.items() if k not in ('wikiThumbnail','articleVerified') and v})
     if kind=='teams':
+        from club_history import parse_honours, parse_squad, colors_from_text, stadium_media
+        if verified:
+            honours=parse_honours(wikitext)
+            squad=parse_squad(wikitext)
+            if honours:data['honours']=honours
+            if squad:
+                data['squadSnapshot']=squad
+                data['squadSource']='Wikipedia ('+lang+') · Current squad (tarixə bağlı görüntü)'
+                data['squadChecked']=dt.datetime.now(dt.timezone.utc).date().isoformat()
+            # Capture hex values only when declared in the matched infobox.
+            color_match=re.search(r'(?im)^\s*\|\s*(?:colors|colours|colour|color)\s*=\s*([^\n]+)',wikitext)
+            if color_match:
+                swatches=colors_from_text(color_match.group(1))
+                if swatches:data['colorHexes']=swatches
+        # Stadium P115 -> P18 is a stadium photograph, never a club crest.
+        try:
+            stadium=stadium_media(e,get_json)
+            if stadium:data.update(stadium)
+        except Exception:
+            pass
+        data['clubDataVersion']=2
+    if kind=='teams':
         founded=entity_value(e,'P571')
         if not data.get('foundedYear') and isinstance(founded,dict) and founded.get('time'):
             match=re.search(r'(?:18|19|20)\d{2}',founded['time'])
             if match:data['foundedYear']=int(match.group())
+        related_ids=[]
+        for prop in ('P17','P118','P115','P159','P286','P488','P127'):
+            for raw in entity_values(e,prop):
+                if isinstance(raw,dict) and VALID_QID.fullmatch(str(raw.get('id') or '')):
+                    related_ids.append(raw['id'])
+        labels=entity_labels(related_ids,get_json) if related_ids else {}
+        if not data.get('country'):
+            vals=[labels.get(x.get('id'),x.get('id')) for x in entity_values(e,'P17') if isinstance(x,dict) and x.get('id')]
+            vals=[x for x in vals if x]
+            if vals:data['country']=', '.join(dict.fromkeys(vals))
+        if not data.get('league'):
+            value=first_labeled(e,'P118',labels)
+            if value:data['league']=value
+        if not data.get('stadium'):
+            value=first_labeled(e,'P115',labels)
+            if value:data['stadium']=value
+        if not data.get('city'):
+            value=first_labeled(e,'P159',labels)
+            if value:data['city']=value
+        if not data.get('manager'):
+            value=first_labeled(e,'P286',labels)
+            if value:data['manager']=value
+        if not data.get('chairman'):
+            value=first_labeled(e,'P488',labels)
+            if value:data['chairman']=value
+        if not data.get('owner'):
+            owners=[labels.get(x.get('id'),x.get('id')) for x in entity_values(e,'P127') if isinstance(x,dict) and x.get('id')]
+            owners=[x for x in owners if x]
+            if owners:data['owner']=', '.join(list(dict.fromkeys(owners))[:3])
+        site=entity_value(e,'P856')
+        if not data.get('website') and isinstance(site,str) and site.startswith('http'):
+            data['website']=site
     birth=entity_value(e,'P569');death=entity_value(e,'P570')
     if kind!='teams':
         if (value:=wikidata_date(birth)):data['birth']=value
@@ -353,13 +477,12 @@ def remote_enrich(qid,get_json,kind='players'):
     data['verifiedSnapshot']=False
     return data
 
-
 def enrich(qid,get_json,refresh=False,kind='players'):
     """Return cached or on-demand Wikipedia data; offline seed for curated stars."""
     if not VALID_QID.fullmatch(qid or ''):return None
     if not refresh:
         found=cached(qid)
-        if found is not None and found.get('wikiKind')==kind:return found or SEED.get(qid)
+        if found is not None and found.get('wikiKind')==kind and (kind!='teams' or found.get('clubDataVersion')==2):return found or SEED.get(qid)
     try:
         info=remote_enrich(qid,get_json,kind=kind)
         if info:
@@ -381,9 +504,13 @@ def enrich(qid,get_json,refresh=False,kind='players'):
 def with_wikipedia(profile,info):
     if not info:return profile
     p=dict(profile)
-    for field in ('birth','death','image','position','foundedYear','stadium','stadiumCapacity',
-                  'city','manager','league','nickname','wikiSummary','wikiUrl','wikiLanguage',
+    for field in ('birth','death','image','position','country','foundedYear','stadium','stadiumCapacity',
+                  'city','manager','league','nickname','nicknames','fullName','shortName','chairman','owner','website','colors','wikiSummary','wikiUrl','wikiLanguage',
                   'wikiPageLinks','wikiLicense','wikiLicenseUrl','wikiKind','imagePage'):
+        if info.get(field):p[field]=info[field]
+    for field in ('honours','squadSnapshot','colorHexes'):
+        if info.get(field):p[field]=info[field]
+    for field in ('squadSource','squadChecked','clubDataVersion','stadiumPhoto','stadiumPhotoPage','stadiumPhotoLicense','stadiumPhotoLicenseUrl','stadiumPhotoCredit','stadiumQid','stadiumImageName'):
         if info.get(field):p[field]=info[field]
     for field in ('clubs','coached','nationalTeams'):
         if info.get(field):p[field]=info[field]
@@ -397,7 +524,6 @@ def with_wikipedia(profile,info):
             p['source']=(p.get('source','').split(' + Wikipedia')[0] or 'Wikidata')+' + Wikipedia'
         p['statsAvailable']=any(c.get('apps') is not None or c.get('goals') is not None for c in info.get('clubs',[]))
     return p
-
 
 def seed_by_profile(profile):
     qid=profile.get('wikidataId') or profile.get('qid') or (profile['id'] if VALID_QID.fullmatch(profile.get('id','')) else '')

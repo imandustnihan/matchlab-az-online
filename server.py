@@ -1,4 +1,4 @@
-"""MATCHLAB AZ v0.9.18 HTML + local Python server (stdlib only, no user API key).
+"""MATCHLAB AZ v0.9.20 HTML + local Python server (stdlib only, no user API key).
 Respects upstream failures, returns explicit availability flags, never synthesizes match results.
 Sources: Wikidata CC0, Wikipedia pageimages (image rights vary), OpenLigaDB and unofficial ESPN.
 """
@@ -13,6 +13,7 @@ import wikipedia_enrichment as wiki
 import live_center
 import media_expansion as extra_media
 import identity_unification as people
+import club_history
 
 ROOT=Path(__file__).resolve().parent
 INSTALL={'state':'idle','message':'Hələ quraşdırılmayıb','bytes':0,'done':False,'error':''}
@@ -25,7 +26,7 @@ CACHE={}; CACHE_LOCK=threading.Lock(); HOST_COOLDOWN={}; UPSTREAM_TIMEOUT=8
 SOURCE_STATUS={}
 SCORE_CACHE=ROOT/'score_cache'
 SCORE_CACHE.mkdir(exist_ok=True)
-USER_AGENT=os.environ.get('MATCHLAB_WIKIMEDIA_UA','MatchlabAZ/0.9.18 (https://github.com/imandustnihan/matchlab-az-online; community football archive)')
+USER_AGENT=os.environ.get('MATCHLAB_WIKIMEDIA_UA','MatchlabAZ/0.9.20 (https://github.com/imandustnihan/matchlab-az-online; community football archive)')
 WIKI_REQUEST_LOCK=threading.Lock()
 WIKI_NEXT_REQUEST=0.0
 
@@ -378,7 +379,7 @@ def media_by_qid(qid,kind='players',retry=False):
          'complete':complete}
 
 def send_data(path,params):
- if path=='/api/status':return {'ok':True,'backend':True,'version':'0.9.18-local','catalog':len(CATALOG),'world':world_db.counts(),'liveGuaranteed':False,'livePollingSeconds':25,'canInstall':True,'wikipedia':{'mode':'on_demand_verified_qid','verifiedSeedCount':len(wiki.SEED),'linkedQids':sum(x['linked'] for kind,x in world_db.qid_coverage().items() if kind in ('players','teams','coaches')),'teamProfiles':True,'shortExtracts':True}}
+ if path=='/api/status':return {'ok':True,'backend':True,'version':'0.9.20-local','catalog':len(CATALOG),'world':world_db.counts(),'liveGuaranteed':False,'livePollingSeconds':25,'canInstall':True,'wikipedia':{'mode':'on_demand_verified_qid','verifiedSeedCount':len(wiki.SEED),'linkedQids':sum(x['linked'] for kind,x in world_db.qid_coverage().items() if kind in ('players','teams','coaches')),'teamProfiles':True,'shortExtracts':True}}
  if path=='/api/media-status':return {'source':'Verified Wikidata P18/P154 + free Wikipedia pageimages','cached':extra_media.cache_stats(),'linked':world_db.qid_coverage(),'allProfilesGuaranteed':False,'licensing':'Per-file Wikimedia Commons license applies'}
  if path=='/api/sources':return {'sources':SOURCE_STATUS,'providers':['ESPN (qeyri-rəsmi)','OpenLigaDB (icma)','TheSportsDB (pulsuz/limitli)','Wikipedia/Wikidata (mənbəli profil)'],'internetVerifiedHere':False}
  if path=='/api/photos':
@@ -479,6 +480,13 @@ def send_data(path,params):
    info=wiki.seed_by_profile(profile)
   if info:profile=wiki.with_wikipedia(profile,info)
   elif local and not profile.get('clubs'):profile['localHistoricalClubs']=local.get('clubs',[])
+  # Only identity-verified club profiles may be linked to curated career rows.
+  # These historical links are not a claim that these people are the current roster.
+  if profile.get('kind')=='teams' and QID.fullmatch(qid or ''):
+   profile['historicalConnections']=club_history.historical_links(
+    profile.get('name',''), wiki.SEED, qid,
+    aliases=[profile.get('fullName',''),profile.get('shortName','')])
+
   # The same person can have multiple historical football and coaching rows.
   # They are roles of one QID, not independent people to show as duplicates.
   profile=people.decorate(profile)

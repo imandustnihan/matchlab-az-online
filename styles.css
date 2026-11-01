@@ -59,3 +59,41 @@
 /* v0.9.18: tactica pitch lines never inherit the sticky nav background. */
 .pitch .area,.pitch .goal{background:transparent;backdrop-filter:none;z-index:0;box-shadow:none}
 .pitch .area{pointer-events:none}
+
+/* v0.9.20 club profiles: sourced trophy lists, photo credits, squad snapshots, connections */
+.club-feature {min-width:0}
+.club-section-header {display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:15px}
+.club-section-header h3{margin:0}
+.honours-group{border:1px solid var(--border);border-radius:12px;padding:12px;margin-top:11px;background:rgba(255,255,255,.022)}
+.honours-group h4{color:var(--muted);font-size:12px;letter-spacing:.04em;margin:0 0 9px;text-transform:uppercase}
+.honour-item{display:flex;align-items:center;gap:10px;min-height:40px;padding:8px 2px;border-top:1px solid rgba(150,169,185,.15);font-size:13px;line-height:1.45}
+.honour-item .honour-icon{flex:0 0 20px;text-align:center}
+.honour-item>span:nth-child(2){flex:1;min-width:0;overflow-wrap:anywhere}
+.honour-item b{white-space:nowrap;color:var(--lime)}
+.honour-item small{color:var(--muted);text-align:right;font-size:11px}
+.club-stadium-image{position:relative;overflow:hidden;border:1px solid var(--border);border-radius:15px;margin:16px 0 12px;aspect-ratio:16/9;background:#15283b}
+.club-stadium-image img{height:100%;width:100%;object-fit:cover;display:block}
+.club-stadium-image figcaption{position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(0,0,0,.78));padding:26px 14px 12px;font-weight:700;color:#fff}
+.club-color-panel{padding:12px 14px;border:1px solid var(--border);background:rgba(120,180,200,.035);border-radius:12px;margin:12px 0}
+.club-color-panel p{font-size:13px;color:var(--muted);margin:5px 0}
+.club-swatches{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 0}
+.club-swatch{width:28px;height:28px;border:2px solid rgba(230,240,245,.7);border-radius:50%;box-shadow:0 1px 6px rgba(0,0,0,.2)}
+.club-squad-list{display:grid;gap:7px;margin-top:13px}
+.club-squad-row{display:flex;align-items:center;gap:12px;min-height:49px;background:rgba(160,200,225,.04);border:1px solid var(--border);border-radius:10px;padding:7px 12px}
+.club-squad-no{width:29px;height:29px;border-radius:8px;display:grid;place-items:center;background:#23384c;color:var(--lime);font-weight:850;font-size:12px;flex-shrink:0}
+.club-squad-name{font-size:13px;font-weight:650;min-width:0;flex:1;overflow-wrap:anywhere}
+.club-squad-row .tag{font-size:10px}
+.club-muted{font-size:12px;color:var(--muted);line-height:1.7;margin:10px 0}
+.club-subhead{font-size:14px;margin:22px 0 12px}
+.club-links{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:8px}
+.club-link-row{display:flex;align-items:center;gap:10px;min-width:0;border:1px solid var(--border);background:rgba(120,165,200,.05);color:var(--text);padding:10px 12px;border-radius:12px;text-align:left;cursor:pointer}
+.club-link-row:hover{border-color:var(--lime);background:rgba(185,250,100,.055)}
+.club-link-initial{width:36px;height:36px;border:1px solid var(--border);border-radius:50%;display:grid;place-items:center;background:#1d3546;color:var(--lime);font-size:11px;font-weight:800;flex-shrink:0}
+.club-link-row>span:nth-child(2){flex:1;min-width:0}
+.club-link-row b{display:block;font-size:13px;line-height:1.4;overflow-wrap:anywhere}
+.club-link-row small{display:block;font-size:11px;color:var(--muted);margin-top:3px}
+.club-settings{border-top:1px solid var(--border);padding-top:14px;margin-top:18px}
+.club-settings h4{font-size:14px;margin:0 0 11px}
+.club-setting-toggle{display:flex;align-items:center;gap:10px;line-height:1.5;font-size:13px;padding:8px 0;cursor:pointer}
+.club-setting-toggle input{appearance:auto;accent-color:var(--lime);width:17px;height:17px;flex-shrink:0}
+@media(max-width:620px){.club-link-row{min-height:54px}.club-squad-row{padding:8px}.club-stadium-image{aspect-ratio:4/3}.club-section-header h3{font-size:17px}.honour-item{align-items:flex-start}.honour-item small{max-width:91px}}
