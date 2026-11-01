@@ -769,7 +769,7 @@ class Handler(SimpleHTTPRequestHandler):
    self.send_response(code);self.send_header('Content-Type','application/json; charset=utf-8');self.send_header('Cache-Control','no-store');self.send_header('X-Content-Type-Options','nosniff');self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw)
    return
   # Serve ONLY frontend assets. SQLite, source code, local logs and uploads never leave this process.
-  public={'/index.html','/app.js','/catalog.js','/featured_media.js','/styles.css','/assets/icon.svg'}
+  public={'/index.html','/app.js','/catalog.js','/featured_media.js','/coach_tactics.js','/styles.css','/assets/icon.svg'}
   requested=urllib.parse.unquote(parsed.path)
   if requested in ('','/'):requested='/index.html'
   if requested not in public:
