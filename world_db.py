@@ -110,3 +110,21 @@ def countries(limit=240):
  try:
   return [{'country':r[0],'count':r[1]} for r in con.execute('SELECT country,COUNT(*) FROM identities WHERE country!="" GROUP BY country ORDER BY COUNT(*) DESC,country LIMIT ?',(limit,))]
  finally:con.close()
+
+
+@lru_cache(maxsize=2048)
+def unique_verified_identity(name,country):
+ """Return a QID only for one unambiguous, full-name, country-matched register identity.
+
+ The fuzzy search is used to locate candidates, NOT as proof of identity.
+ Any conflicting/unlinked same-name record makes the association ambiguous.
+ """
+ name_key=normal(name)
+ country_key=normal(country)
+ if not name_key or not country_key or len(name_key)<7:return None
+ hits,ready=search(name,'all',limit=100)
+ if not ready:return None
+ matches=[r for r in hits if normal(r['name'])==name_key and normal(r.get('country'))==country_key]
+ if not matches or any(not r.get('qid') for r in matches):return None
+ qids={r['qid'] for r in matches}
+ return next(iter(qids)) if len(qids)==1 else None

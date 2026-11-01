@@ -27,7 +27,7 @@ class HttpV0915(unittest.TestCase):
   status,body=self.request('local','/api/status')
   self.assertEqual(status,200)
   data=json.loads(body)
-  self.assertEqual(data['version'],'0.9.21-local')
+  self.assertEqual(data['version'],'0.9.22-local')
   self.assertEqual(data['world']['total'],506207)
   for p in ['/','/index.html','/app.js?v=0916','/styles.css?v=0916','/catalog.js','/assets/icon.svg']:
    self.assertEqual(self.request('local',p)[0],200,p)
@@ -35,7 +35,7 @@ class HttpV0915(unittest.TestCase):
   status,body=self.request('public','/healthz')
   self.assertEqual(status,200)
   self.assertTrue(json.loads(body)['ok'])
-  self.assertEqual(json.loads(body)['version'],'0.9.20')
+  self.assertEqual(json.loads(body)['version'],'0.9.22')
   for p in ['/server.py','/world_football.sqlite','/wikipedia_profiles.sqlite','/api/wikipedia-refresh?id=Q5705']:
    self.assertIn(self.request('public',p)[0],(403,404),p)
  def test_public_profile_lookup_by_invalid_id(self):

@@ -1,4 +1,4 @@
-"""MATCHLAB AZ v0.9.21 HTML + local Python server (stdlib only, no user API key).
+"""MATCHLAB AZ v0.9.22 HTML + local Python server (stdlib only, no user API key).
 Respects upstream failures, returns explicit availability flags, never synthesizes match results.
 Sources: Wikidata CC0, Wikipedia pageimages (image rights vary), OpenLigaDB and unofficial ESPN.
 """
@@ -27,7 +27,7 @@ CACHE={}; CACHE_LOCK=threading.Lock(); HOST_COOLDOWN={}; UPSTREAM_TIMEOUT=8
 SOURCE_STATUS={}
 SCORE_CACHE=ROOT/'score_cache'
 SCORE_CACHE.mkdir(exist_ok=True)
-USER_AGENT=os.environ.get('MATCHLAB_WIKIMEDIA_UA','MatchlabAZ/0.9.21 (https://github.com/imandustnihan/matchlab-az-online; community football archive)')
+USER_AGENT=os.environ.get('MATCHLAB_WIKIMEDIA_UA','MatchlabAZ/0.9.22 (https://github.com/imandustnihan/matchlab-az-online; community football archive)')
 WIKI_REQUEST_LOCK=threading.Lock()
 WIKI_NEXT_REQUEST=0.0
 
@@ -392,7 +392,7 @@ def send_data(path,params):
    return season_stats.lookup(profile,get_json)
   except Exception:
    return {'available':False,'items':[],'message':'Pulsuz mövsüm statistikası mənbəsinə qoşulmaq mümkün olmadı.','source':'TheSportsDB V1 Free'}
- if path=='/api/status':return {'ok':True,'backend':True,'version':'0.9.21-local','catalog':len(CATALOG),'world':world_db.counts(),'liveGuaranteed':False,'livePollingSeconds':25,'canInstall':True,'wikipedia':{'mode':'on_demand_verified_qid','verifiedSeedCount':len(wiki.SEED),'linkedQids':sum(x['linked'] for kind,x in world_db.qid_coverage().items() if kind in ('players','teams','coaches')),'teamProfiles':True,'shortExtracts':True}}
+ if path=='/api/status':return {'ok':True,'backend':True,'version':'0.9.22-local','catalog':len(CATALOG),'world':world_db.counts(),'liveGuaranteed':False,'livePollingSeconds':25,'canInstall':True,'wikipedia':{'mode':'on_demand_verified_qid','verifiedSeedCount':len(wiki.SEED),'linkedQids':sum(x['linked'] for kind,x in world_db.qid_coverage().items() if kind in ('players','teams','coaches')),'teamProfiles':True,'shortExtracts':True}}
  if path=='/api/media-status':return {'source':'Verified Wikidata P18/P154 + free Wikipedia pageimages','cached':extra_media.cache_stats(),'linked':world_db.qid_coverage(),'allProfilesGuaranteed':False,'licensing':'Per-file Wikimedia Commons license applies'}
  if path=='/api/sources':return {'sources':SOURCE_STATUS,'providers':['ESPN (qeyri-rəsmi)','OpenLigaDB (icma)','TheSportsDB (pulsuz/limitli)','Wikipedia/Wikidata (mənbəli profil)','TheSportsDB V1 (məhdud mövsüm statistikası)'],'internetVerifiedHere':False}
  if path=='/api/photos':
@@ -453,7 +453,18 @@ def send_data(path,params):
   world,ready=world_db.search(q,kind,limit=75,offset=offset,country=country)
   if ready:
    # Always return real register rows first, never count the catalogue as part of the archive.
-   out=people.unify((local if q and offset==0 and not country else []) + world)
+   curated=(local if q and offset==0 and not country else [])
+   by_name={}
+   for row in world:
+    if row.get('qid') and row.get('country'):
+     by_name.setdefault((world_db.normal(row['name']),world_db.normal(row['country'])),set()).add(row['qid'])
+   verified=[]
+   for row in curated:
+    mapped=people.VERIFIED_LEGACY_QIDS.get(row['id'])
+    candidates=by_name.get((world_db.normal(row['name']),world_db.normal(row.get('country'))),set())
+    if not mapped and len(candidates)==1:mapped=next(iter(candidates))
+    verified.append({**row,'qid':mapped} if mapped else row)
+   out=people.unify(verified + world)
    return {'items':out,'online':False,'source':'Reep CC0 yerli dünya arxivi','worldInstalled':True,'nextOffset':offset+75 if len(world)==75 else None,'registryCount':world_db.counts()}
   if not q:
    page=local[offset:offset+75]
@@ -467,9 +478,9 @@ def send_data(path,params):
    return {'items':people.unify(local[:75]),'online':False,'source':'Yerli kataloq','worldInstalled':False,'message':'Xarici server cavab vermədi; yerli real adlar göstərilir.'}
  if path=='/api/profile':
   identifier=params.get('id',[''])[0]
-  alias_qid=people.VERIFIED_LEGACY_QIDS.get(identifier,'')
-  profile_identifier=world_db.preferred_person_id(alias_qid) or identifier
   local=CATBYID.get(identifier)
+  alias_qid=people.VERIFIED_LEGACY_QIDS.get(identifier,'') or (world_db.unique_verified_identity(local.get('name',''),local.get('country','')) if local and local.get('kind') in ('players','coaches') else '')
+  profile_identifier=world_db.preferred_person_id(alias_qid or (identifier if QID.fullmatch(identifier) else '')) or identifier
   world_profile=world_db.profile(profile_identifier)
   profile=world_profile or None
   if profile:
@@ -483,6 +494,9 @@ def send_data(path,params):
   elif QID.fullmatch(identifier):
    try:profile=wd_profile(identifier)
    except Exception:profile=None
+   if profile is None and identifier in wiki.SEED:
+    snapshot=wiki.SEED[identifier]
+    profile={'id':identifier,'name':snapshot.get('name',identifier),'kind':snapshot.get('wikiKind','players'),'source':'Wikipedia · təsdiqlənmiş tarixi görüntü','wikidataId':identifier}
   if profile is None and local:profile=dict(local)
   if profile is None:return {'profile':None,'online':False,'message':'Bu profilə dair məlumat tapılmadı.'}
   qid=profile.get('wikidataId') or profile.get('qid') or (identifier if QID.fullmatch(identifier) else '')

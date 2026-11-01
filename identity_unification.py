@@ -12,8 +12,10 @@ _REGISTRY = re.compile(r'^r[pc][a-z0-9]{8,30}$|^reep_[a-z][a-f0-9]{8,30}$')
 VERIFIED_LEGACY_QIDS = {
     'p:mikel-arteta': 'Q185572',
     'c:mikel-arteta': 'Q185572',
+    'p:pep-guardiola': 'Q164038',
+    'c:pep-guardiola': 'Q164038',
 }
-VERIFIED_ROLES = {'Q185572': ('players', 'coaches')}
+VERIFIED_ROLES = {'Q185572': ('players', 'coaches'), 'Q164038': ('players', 'coaches')}
 KINDS = ('players', 'coaches')
 
 

@@ -172,6 +172,9 @@ def parse_football_infobox(source):
     if (birth:=wikipedia_date(f.get('birthdate',''))):out['birth']=birth
     if (death:=wikipedia_date(f.get('deathdate',''))):out['death']=death
     if (position:=clean_text(f.get('position',''))):out['position']=position
+    for field,key in (('fullName','fullname'),('birthPlace','birthplace'),('height','height')):
+        if (value:=clean_text(f.get(key,''))):out[field]=value
+    # These template values are biographical context, not verified career statistics.
     return out
 
 
@@ -482,16 +485,25 @@ def enrich(qid,get_json,refresh=False,kind='players'):
     if not VALID_QID.fullmatch(qid or ''):return None
     if not refresh:
         found=cached(qid)
-        if found is not None and found.get('wikiKind')==kind and (kind!='teams' or found.get('clubDataVersion')==2):return found or SEED.get(qid)
+        if found is not None and found.get('wikiKind')==kind and (kind!='teams' or found.get('clubDataVersion')==2):
+            if qid in SEED and isinstance(found,dict):
+                seeded=SEED[qid]
+                return {**seeded,**{k:v for k,v in found.items() if v not in ('',None) and v != []}}
+            return found or SEED.get(qid)
     try:
         info=remote_enrich(qid,get_json,kind=kind)
         if info:
             # Disk cache failure cannot discard valid, freshly fetched source data.
             try:store(qid,info,bool(info.get('wikiMatch'))) # Retry unverified pages after 1 day
             except (sqlite3.Error,OSError,ValueError):pass
-            # Historical editorial snapshots remain fallback if remote infobox lacks useful detail.
-            if not info.get('clubs') and not info.get('coached') and qid in SEED:
-                return {**SEED[qid],**{k:v for k,v in info.items() if v and k not in ('clubs','coached')}}
+            # Wikidata-verified article facts take precedence. Curated snapshots fill
+            # *missing sections*, not overwrite a verified live career table.
+            if qid in SEED:
+                seeded=SEED[qid]
+                merged={**seeded,**{k:v for k,v in info.items() if v not in ('',None) and v != []}}
+                for field in ('clubs','coached','nationalTeams','national','awards','fullName','birthPlace','height','position','birth','image','imagePage'):
+                    if not info.get(field) and seeded.get(field):merged[field]=seeded[field]
+                return merged
             return info
         try:store(qid,{},False)
         except (sqlite3.Error,OSError,ValueError):pass
@@ -504,7 +516,7 @@ def enrich(qid,get_json,refresh=False,kind='players'):
 def with_wikipedia(profile,info):
     if not info:return profile
     p=dict(profile)
-    for field in ('birth','death','image','position','country','foundedYear','stadium','stadiumCapacity',
+    for field in ('birth','death','image','position','fullName','birthPlace','height','country','foundedYear','stadium','stadiumCapacity',
                   'city','manager','league','nickname','nicknames','fullName','shortName','chairman','owner','website','colors','wikiSummary','wikiUrl','wikiLanguage',
                   'wikiPageLinks','wikiLicense','wikiLicenseUrl','wikiKind','imagePage'):
         if info.get(field):p[field]=info[field]
@@ -512,9 +524,9 @@ def with_wikipedia(profile,info):
         if info.get(field):p[field]=info[field]
     for field in ('squadSource','squadChecked','clubDataVersion','stadiumPhoto','stadiumPhotoPage','stadiumPhotoLicense','stadiumPhotoLicenseUrl','stadiumPhotoCredit','stadiumQid','stadiumImageName'):
         if info.get(field):p[field]=info[field]
-    for field in ('clubs','coached','nationalTeams'):
+    for field in ('clubs','coached','nationalTeams','awards'):
         if info.get(field):p[field]=info[field]
-    for field in ('careerSource','careerUrl','statsChecked','statsAsOf','statsScope','statNotice','wikiMatch','verifiedSnapshot','national'):
+    for field in ('careerSource','careerUrl','statsChecked','statsAsOf','statsScope','statNotice','wikiMatch','verifiedSnapshot','national','otherSources'):
         if field in info:p[field]=info[field]
     if p.get('death'):p['lifeStatus']='deceased'
     if p.get('clubs') and p.get('coached'):
