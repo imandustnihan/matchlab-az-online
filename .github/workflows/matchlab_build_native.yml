@@ -1,0 +1,87 @@
+name: MATCHLAB AZ - Windows EXE and Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - 'fix/**'
+    paths:
+      - 'native/**'
+      - '.github/workflows/matchlab_build_native.yml'
+      - 'app.js'
+      - 'styles.css'
+      - 'index.html'
+      - 'catalog.js'
+      - 'coach_tactics.js'
+      - 'featured_media.js'
+
+permissions:
+  contents: read
+
+jobs:
+  windows-exe:
+    name: Windows x64 EXE
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+      - name: Include local UI in portable binary
+        run: |
+          set -euo pipefail
+          mkdir -p native/windows/web/assets
+          cp index.html app.js styles.css catalog.js coach_tactics.js featured_media.js native/windows/web/
+          if [ -f assets/icon.svg ]; then cp assets/icon.svg native/windows/web/assets/icon.svg; else printf '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><rect width="40" height="40" rx="10" fill="#a7ee65"/></svg>' > native/windows/web/assets/icon.svg; fi
+          cp native/simple-ui.css native/windows/web/_matchlab_simple.css
+          cp native/simple-ui.js native/windows/web/_matchlab_simple.js
+          python3 - <<'PY'
+          from pathlib import Path
+          f = Path("native/windows/web/index.html")
+          s = f.read_text(encoding="utf-8")
+          extra = '<link rel="stylesheet" href="/_matchlab_simple.css"><script src="/_matchlab_simple.js" defer></script>'
+          s = s.replace("</head>",extra+"</head>")
+          f.write_text(s,encoding="utf-8")
+          PY
+      - name: Cross-compile Windows GUI binary
+        working-directory: native/windows
+        run: GO111MODULE=off GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags='-s -w -H=windowsgui' -o MATCHLAB_AZ_WINDOWS_v0928.exe .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MATCHLAB_AZ_Windows_EXE_v0928
+          path: native/windows/MATCHLAB_AZ_WINDOWS_v0928.exe
+          if-no-files-found: error
+          retention-days: 30
+
+  android-apk:
+    name: Android universal debug APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install Android SDK
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Prepare shared UI assets
+        run: |
+          mkdir -p native/android/app/src/main/assets
+          cp native/simple-ui.css native/android/app/src/main/assets/simple-ui.css
+          cp native/simple-ui.js native/android/app/src/main/assets/simple-ui.js
+      - name: Build debug APK
+        working-directory: native/android
+        run: gradle --no-daemon --stacktrace :app:assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MATCHLAB_AZ_Android_APK_v0928
+          path: native/android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 30

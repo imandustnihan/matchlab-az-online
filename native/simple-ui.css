@@ -1,0 +1,13 @@
+/* Compact desktop and mobile app presentation; retains real data and navigation. */
+body.matchlab-app .sidebar {max-width:245px}
+body.matchlab-app .page {min-width:0}
+body.matchlab-app .btn,body.matchlab-app button {font-weight:650}
+body.matchlab-app .player-chip,body.matchlab-app .pitch-player {font-size:13px;max-width:100%;overflow-wrap:anywhere}
+body.matchlab-app .pitch {overflow:hidden}
+body.matchlab-app .simple-welcome {background:linear-gradient(120deg,#172d30,#10232d);border:1px solid #41615b;border-radius:18px;padding:20px;margin-bottom:16px}
+body.matchlab-app .simple-welcome h1 {font-size:clamp(22px,3vw,30px);line-height:1.2;margin:6px 0 12px}
+body.matchlab-app .simple-welcome p {font-size:14px;opacity:.9;margin-bottom:14px}
+body.matchlab-app .simple-actions {display:flex;gap:9px;flex-wrap:wrap}
+body.matchlab-app .simple-action {border:1px solid #75a995;background:#193e3b;color:#edfdf6;padding:11px 13px;border-radius:12px;cursor:pointer;font-size:14px}
+body.matchlab-app .simple-action:hover {background:#245b50}
+@media(max-width:700px){body.matchlab-app .simple-welcome{padding:14px;border-radius:13px}body.matchlab-app .simple-welcome h1{font-size:23px}body.matchlab-app .simple-action{flex:1 1 42%}body.matchlab-app .sidebar{display:none}}
