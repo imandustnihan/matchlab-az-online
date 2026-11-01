@@ -44,7 +44,13 @@ public sealed class HtmlApp:Form
         ["/coach_tactics.js"]=("ML.coach_tactics.js","text/javascript"),
         ["/assets/icon.svg"]=("ML.assets.icon.svg","image/svg+xml"),
         ["/shell.css"]=("ML.shell.css","text/css"),
-        ["/shell.js"]=("ML.shell.js","text/javascript")
+        ["/shell.js"]=("ML.shell.js","text/javascript"),
+        ["/install.js"]=("ML.install.js","text/javascript"),
+        ["/service-worker.js"]=("ML.service-worker.js","text/javascript"),
+        ["/manifest.webmanifest"]=("ML.manifest.webmanifest","application/manifest+json"),
+        ["/assets/pwa-192.png"]=("ML.assets.pwa-192.png","image/png"),
+        ["/assets/pwa-512.png"]=("ML.assets.pwa-512.png","image/png"),
+        ["/assets/pwa-512-maskable.png"]=("ML.assets.pwa-512-maskable.png","image/png")
     };
     readonly WebView2 browser=new(){Dock=DockStyle.Fill,DefaultBackgroundColor=Color.FromArgb(8,14,25)};
     readonly Label error=new(){Dock=DockStyle.Fill,TextAlign=ContentAlignment.MiddleCenter,
@@ -55,7 +61,7 @@ public sealed class HtmlApp:Form
     public HtmlApp(bool smoke=false)
     {
         smokeTest=smoke;
-        Text="MATCHLAB AZ — v0.9.41 · HTML Desktop";
+        Text="MATCHLAB AZ — v0.9.42 · HTML Desktop";
         StartPosition=FormStartPosition.CenterScreen;
         MinimumSize=new Size(760,540);Size=new Size(1280,820);
         BackColor=Color.FromArgb(8,14,25);
@@ -185,9 +191,6 @@ public sealed class HtmlApp:Form
             using var buffer=new MemoryStream();
             stream.CopyTo(buffer);
             byte[] bytes2=buffer.ToArray();
-            if(uri.AbsolutePath is "/" or "/index.html")
-                bytes2=Encoding.UTF8.GetBytes(Encoding.UTF8.GetString(bytes2).Replace(
-                    "</head>","<link rel=\"stylesheet\" href=\"shell.css\"><script defer src=\"shell.js\"></script></head>",StringComparison.OrdinalIgnoreCase));
             Reply(e,200,asset.Mime,bytes2);
         }
         catch(Exception ex)

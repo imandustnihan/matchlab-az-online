@@ -2,7 +2,7 @@
 <PropertyGroup>
 <OutputType>WinExe</OutputType><TargetFramework>net8.0-windows</TargetFramework>
 <UseWindowsForms>true</UseWindowsForms><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings>
-<AssemblyName>MATCHLAB_AZ</AssemblyName><Version>0.9.41</Version>
+<AssemblyName>MATCHLAB_AZ</AssemblyName><Version>0.9.42</Version>
 <ApplicationIcon>../branding/matchlab_icon.ico</ApplicationIcon>
 <RuntimeIdentifier>win-x64</RuntimeIdentifier><PublishSingleFile>true</PublishSingleFile>
 <SelfContained>true</SelfContained><IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
@@ -18,5 +18,11 @@
 <EmbeddedResource Include="../../assets/icon.svg" LogicalName="ML.assets.icon.svg"/>
 <EmbeddedResource Include="../packed/shell.css" LogicalName="ML.shell.css"/>
 <EmbeddedResource Include="../packed/shell.js" LogicalName="ML.shell.js"/>
+<EmbeddedResource Include="../../install.js" LogicalName="ML.install.js"/>
+<EmbeddedResource Include="../../service-worker.js" LogicalName="ML.service-worker.js"/>
+<EmbeddedResource Include="../../manifest.webmanifest" LogicalName="ML.manifest.webmanifest"/>
+<EmbeddedResource Include="../../assets/pwa-192.png" LogicalName="ML.assets.pwa-192.png"/>
+<EmbeddedResource Include="../../assets/pwa-512.png" LogicalName="ML.assets.pwa-512.png"/>
+<EmbeddedResource Include="../../assets/pwa-512-maskable.png" LogicalName="ML.assets.pwa-512-maskable.png"/>
 </ItemGroup>
 </Project>

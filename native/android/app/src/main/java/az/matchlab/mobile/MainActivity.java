@@ -36,7 +36,7 @@ public final class MainActivity extends Activity {
         settings.setAllowContentAccess(false);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         settings.setMediaPlaybackRequiresUserGesture(false);
-        settings.setUserAgentString(settings.getUserAgentString()+" MATCHLABAZ/0.9.41");
+        settings.setUserAgentString(settings.getUserAgentString()+" MATCHLABAZ/0.9.42");
         web.setOverScrollMode(View.OVER_SCROLL_NEVER);
         web.setWebChromeClient(new WebChromeClient());
         web.setWebViewClient(new WebViewClient(){
@@ -93,6 +93,9 @@ public final class MainActivity extends Activity {
         MIME.put("/featured_media.js","text/javascript");
         MIME.put("/coach_tactics.js","text/javascript");
         MIME.put("/assets/icon.svg","image/svg+xml");MIME.put("/shell.css","text/css");MIME.put("/shell.js","text/javascript");
+        MIME.put("/install.js","text/javascript");MIME.put("/service-worker.js","text/javascript");
+        MIME.put("/manifest.webmanifest","application/manifest+json");
+        MIME.put("/assets/pwa-192.png","image/png");MIME.put("/assets/pwa-512.png","image/png");MIME.put("/assets/pwa-512-maskable.png","image/png");
     }
     static WebResourceResponse response(int code,String mime,byte[] bytes){
         Map<String,String> h=new HashMap<>();
@@ -111,10 +114,6 @@ public final class MainActivity extends Activity {
             byte[] b=new byte[8192];int n;
             while((n=in.read(b))!=-1)out.write(b,0,n);
             byte[] bytes=out.toByteArray();
-            if("/index.html".equals(path)){
-                String html=new String(bytes,StandardCharsets.UTF_8);
-                bytes=html.replace("</head>","<link rel=\"stylesheet\" href=\"shell.css\"><script defer src=\"shell.js\"></script></head>").getBytes(StandardCharsets.UTF_8);
-            }
             return response(200,mime,bytes);
         }catch(Exception ex){return response(500,"text/plain","HTML asset missing".getBytes(StandardCharsets.UTF_8));}
     }
@@ -127,7 +126,7 @@ public final class MainActivity extends Activity {
                 (uri.getEncodedQuery()==null?"":"?"+uri.getEncodedQuery())).openConnection();
             c.setConnectTimeout(17000);c.setReadTimeout(50000);
             c.setRequestProperty("Accept","application/json");
-            c.setRequestProperty("User-Agent","MATCHLABAZ-HTML/0.9.41");
+            c.setRequestProperty("User-Agent","MATCHLABAZ-HTML/0.9.42");
             int code=c.getResponseCode();
             InputStream stream=code>=400?c.getErrorStream():c.getInputStream();
             if(stream==null)return unavailable();

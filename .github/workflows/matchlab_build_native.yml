@@ -13,7 +13,12 @@ on:
       - 'catalog.js'
       - 'featured_media.js'
       - 'coach_tactics.js'
-      - 'assets/icon.svg'
+      - 'assets/**'
+      - 'manifest.webmanifest'
+      - 'service-worker.js'
+      - 'install.js'
+      - 'server.py'
+      - 'render.yaml'
       - '.github/workflows/matchlab_build_native.yml'
 
 permissions:
@@ -61,12 +66,12 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: MATCHLAB_AZ_v0941_Windows_UI_Screenshot
+          name: MATCHLAB_AZ_v0942_Windows_UI_Screenshot
           path: native/packed-windows/windows_ui_smoke.png
           if-no-files-found: warn
       - uses: actions/upload-artifact@v4
         with:
-          name: MATCHLAB_AZ_HTML_Windows_v0941
+          name: MATCHLAB_AZ_HTML_Windows_v0942
           path: native/packed-windows/out/MATCHLAB_AZ.exe
           if-no-files-found: error
           retention-days: 30
@@ -83,6 +88,10 @@ jobs:
       - name: Check JavaScript syntax
         run: |
           node --check native/packed/shell.js
+          node --check service-worker.js
+          node --check install.js
+          python -m json.tool manifest.webmanifest > /dev/null
+          python -m py_compile server.py hosting_server.py
           node --check app.js
           node --check catalog.js
           node --check coach_tactics.js
@@ -112,7 +121,7 @@ jobs:
           set -euo pipefail
           APK="native/android/app/build/outputs/apk/debug/app-debug.apk"
           test -s "$APK"
-          for f in index.html styles.css app.js catalog.js featured_media.js coach_tactics.js shell.css shell.js assets/icon.svg; do
+          for f in index.html styles.css app.js catalog.js featured_media.js coach_tactics.js shell.css shell.js install.js service-worker.js manifest.webmanifest assets/icon.svg assets/pwa-192.png assets/pwa-512.png assets/pwa-512-maskable.png; do
             unzip -Z1 "$APK" | grep -Fx "assets/web/$f"
             bytes="$(unzip -p "$APK" "assets/web/$f" | wc -c)"
             test "$bytes" -gt 40
@@ -148,7 +157,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: MATCHLAB_AZ_v0941_Android_Emulator_Screenshot
+          name: MATCHLAB_AZ_v0942_Android_Emulator_Screenshot
           path: |
             native/android/matchlab_emulator.png
             native/android/matchlab_more.png
@@ -157,7 +166,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: MATCHLAB_AZ_HTML_Android_v0941
+          name: MATCHLAB_AZ_HTML_Android_v0942
           path: native/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: warn
           retention-days: 30

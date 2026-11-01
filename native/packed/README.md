@@ -1,4 +1,4 @@
-# MATCHLAB AZ v0.9.41 — actual HTML app packaged for Windows and Android
+# MATCHLAB AZ v0.9.42 — actual HTML app packaged for Windows and Android
 
 These two applications contain **index.html, styles.css, app.js, catalog.js, featured_media.js, coach_tactics.js, icon.svg, shell.css and shell.js** from the repository. They do not open an external browser to show the main interface.
 
@@ -10,3 +10,5 @@ These two applications contain **index.html, styles.css, app.js, catalog.js, fea
 - The 506,207-identity database is on the server and is **not embedded** in these two binaries. App size does not indicate available offline data.
 - Windows resource test: `MATCHLAB_AZ.exe --self-test` (exit 0 if all bundled web resources are present).
 - See GitHub Actions workflow for build output, asset verification and emulator smoke tests.
+
+The full HTML website can also be installed as a standalone PWA using `manifest.webmanifest` and `service-worker.js`. Only the static application shell is cached; API content is never cached or presented as live when offline. On Android, the APK packs the same production HTML and PWA static resources; its WebView does not register another service worker. The Render service must be deployed from this branch or merged after review before PWA install is available at the public website.
