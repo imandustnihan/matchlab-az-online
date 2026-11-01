@@ -192,7 +192,7 @@ def article_details(lang,title,qid,get_json):
     """Get a short intro only if pageprops.wikibase_item matches the profile QID."""
     params={'action':'query','format':'json','formatversion':2,'prop':'pageprops|extracts|pageimages',
             'titles':title,'redirects':1,'exintro':1,'explaintext':1,'exchars':800,'piprop':'thumbnail',
-            'pithumbsize':360,'ppprop':'wikibase_item|disambiguation'}
+            'pithumbsize':360,'pilicense':'free','ppprop':'wikibase_item|disambiguation'}
     url='https://'+lang+'.wikipedia.org/w/api.php?'+urllib.parse.urlencode(params)
     pages=get_json(url,86400).get('query',{}).get('pages',[])
     if not pages or len(pages)!=1:return {}

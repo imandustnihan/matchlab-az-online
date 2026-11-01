@@ -2,6 +2,7 @@
 Only identity facts are indexed; never invents stats, photos, rosters or fixture results.
 """
 import json, re, sqlite3, unicodedata
+from functools import lru_cache
 from pathlib import Path
 
 BASE=Path(__file__).resolve().parent
@@ -32,6 +33,17 @@ def counts():
   items=dict(con.execute('SELECT kind, COUNT(*) FROM identities GROUP BY kind').fetchall())
   release=con.execute('SELECT value FROM metadata WHERE key=?',('release',)).fetchone()
   return {'counts':items,'total':sum(items.values()),'release':release[0] if release else 'unknown'}
+ finally:con.close()
+
+@lru_cache(maxsize=1)
+def qid_coverage():
+ """Exact counts of source-linked identities; never counts unnamed photo assets."""
+ con=connect()
+ if not con:return {}
+ try:
+  return {kind:{'total':total,'linked':linked} for kind,total,linked in con.execute(
+   "SELECT kind, COUNT(*), SUM(CASE WHEN qid IS NOT NULL AND qid!='' THEN 1 ELSE 0 END) FROM identities GROUP BY kind")}
+ except sqlite3.Error:return {}
  finally:con.close()
 
 def result(row):
