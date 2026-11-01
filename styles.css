@@ -134,3 +134,20 @@
 
 /* v0.9.26: expose standings and tactics on mobile without squeezing eight tiny buttons */
 @media(max-width:760px){.mobilebar{display:flex;overflow-x:auto;overflow-y:hidden;gap:0;scrollbar-width:none;padding-left:5px;padding-right:5px;overscroll-behavior-x:contain}.mobilebar::-webkit-scrollbar{display:none}.mobilebar button{flex:0 0 67px;min-width:67px;line-height:1.2;justify-content:center;white-space:normal}.mobilebar button i{font-size:20px}}
+
+/* MATCHLAB v0.9.27: per-event acoustic signature settings (no notification history). */
+.notify-sound-head{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:6px 15px;margin:18px 0 10px}
+.notify-sound-head strong{font-size:14px}.notify-sound-head small{font-size:11px;color:var(--muted);line-height:1.5}
+.notify-sound-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.notify-sound-row{display:flex;align-items:center;justify-content:space-between;gap:9px;min-width:0;padding:12px;border:1px solid var(--border);border-radius:13px;background:var(--surface)}
+.notify-sound-row .club-setting-toggle{display:flex;align-items:center;gap:9px;flex:1;min-width:0;cursor:pointer}
+.notify-sound-row .club-setting-toggle input{flex:0 0 auto}
+.notify-sound-label{display:flex;flex-direction:column;min-width:0;gap:4px}
+.notify-sound-label strong{font-size:12px;color:var(--text)}
+.notify-sound-label small{font-size:10px;color:var(--muted);line-height:1.45}
+.notify-preview{white-space:nowrap;flex:0 0 auto;padding:8px 10px!important}
+.notify-preview:focus-visible{outline:2px solid #67d8c5;outline-offset:3px}
+.notify-master{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:center;gap:12px;margin-top:14px;padding:14px;border-radius:12px;background:var(--surface);border:1px solid var(--border)}
+.notify-master .notify-volume{min-width:0}
+@media(max-width:780px){.notify-sound-list{grid-template-columns:1fr}.notify-master{grid-template-columns:1fr}}
+@media(max-width:450px){.notify-sound-row{padding:10px}.notify-preview{padding:8px!important}.notify-sound-label small{font-size:10px}}

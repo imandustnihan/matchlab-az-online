@@ -1,4 +1,4 @@
-"""MATCHLAB AZ 0.9.26 source-aware league, coach, assists and fixture tests."""
+"""MATCHLAB AZ 0.9.27 source-aware league, coach, assists and fixture tests."""
 import json
 import re
 import unittest
@@ -95,10 +95,10 @@ class CoachPresets26(unittest.TestCase):
 
     def test_old_wikipedia_sources_preserved_and_versions_incremented(self):
         html=(ROOT/'index.html').read_text(encoding='utf-8')
-        self.assertIn('coach_tactics.js?v=0926',html)
-        self.assertIn('app.js?v=0926',html)
-        self.assertIn('styles.css?v=0926',html)
-        self.assertIn('0.9.26',(ROOT/'hosting_server.py').read_text(encoding='utf-8'))
+        self.assertIn('coach_tactics.js?v=0927',html)
+        self.assertIn('app.js?v=0927',html)
+        self.assertIn('styles.css?v=0927',html)
+        self.assertIn('0.9.27',(ROOT/'hosting_server.py').read_text(encoding='utf-8'))
         js=(ROOT/'app.js').read_text(encoding='utf-8')
         self.assertIn('Wikipedia və mənbələr',js)
         self.assertIn('Asist',js)

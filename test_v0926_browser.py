@@ -11,7 +11,7 @@ JS_BOOT='''() => {
   window.__testLiveScore=0;
   window.fetch=async (input)=>{
     const p=String(input);let data={items:[]};
-    if(p.startsWith('/api/status'))data={ok:true,backend:true,publicHosting:true,world:{total:506207,counts:{players:437525,teams:43031,coaches:24120}},version:'0.9.26'};
+    if(p.startsWith('/api/status'))data={ok:true,backend:true,publicHosting:true,world:{total:506207,counts:{players:437525,teams:43031,coaches:24120}},version:'0.9.27'};
     else if(p.startsWith('/api/standings')){
       if(p.includes('jpn.1'))data={available:true,source:'ESPN (test fixture)',items:[{name:'Tokyo Test',rank:1,played:12,win:8,draw:2,loss:2,gf:28,ga:11,gd:17,points:26,form:'WWDLW',group:'East'}]};
       else data={available:false,source:'Sınaq məlumatı yoxdur',items:[]};
@@ -73,13 +73,15 @@ class Browser26(unittest.TestCase):
                     page.wait_for_function("document.querySelector('.page')?.textContent.includes('təsdiqlənmiş cədvəli mövcud deyil')")
                     page.locator(nav+'[data-page="settings"]').first.click()
                     self.assertEqual(page.locator('[data-notify-pref]').count(),9)
+                    self.assertEqual(page.locator('[data-sound-preview]').count(),7)
+                    self.assertEqual(page.locator('.notify-panel details').count(),0)
                     page.locator('#notify-scope').select_option('all')
                     page.locator('[data-notify-pref="sound"]').check()
                     self.assertFalse(page.locator('#notify-volume').is_disabled())
                     page.locator('#notify-volume').evaluate('(el)=>{el.value="70";el.dispatchEvent(new Event("change",{bubbles:true}))}')
                     self.assertEqual(page.locator('#notify-volume').input_value(),'70')
                     page.locator('[data-action="notify-test"]').click()
-                    self.assertIn('Sınaq bildirişi',page.locator('.notify-panel').inner_text())
+                    self.assertIn('Sınaq qol bildirişi',page.locator('.notify-panel').inner_text())
                     self.assertFalse(page.locator('[data-notify-pref="enabled"]').is_checked())
                     page.locator('[data-notify-pref="enabled"]').check()
                     # Actual score transitions generate exactly one alert and do not repeat.
@@ -91,9 +93,8 @@ class Browser26(unittest.TestCase):
                     page.locator('[data-action="refresh-live"]').first.click()
                     page.wait_for_timeout(350)
                     page.locator(nav+'[data-page="settings"]').first.click()
-                    page.locator('.notify-panel details summary').click()
-                    alert_text=page.locator('.notify-panel').inner_text()
-                    self.assertEqual(alert_text.count('⚽ QOL!'),1,alert_text[:1200])
+                    self.assertEqual(page.locator('.notify-panel details').count(),0)
+                    self.assertNotIn('Bildiriş tarixçəsi',page.locator('.notify-panel').inner_text())
                     self.assertEqual(errors,[],(device,errors))
                     page.screenshot(path=str(ROOT/f'preview_v0926_settings_{device}.png'),full_page=True)
                     page.close()

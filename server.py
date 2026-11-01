@@ -451,7 +451,7 @@ def send_data(path,params):
    return season_stats.lookup(profile,get_json)
   except Exception:
    return {'available':False,'items':[],'message':'Pulsuz mövsüm statistikası mənbəsinə qoşulmaq mümkün olmadı.','source':'TheSportsDB V1 Free'}
- if path=='/api/status':return {'ok':True,'backend':True,'version':'0.9.26-local','catalog':len(CATALOG),'world':world_db.counts(),'liveGuaranteed':False,'livePollingSeconds':25,'canInstall':True,'wikipedia':{'mode':'on_demand_verified_qid','verifiedSeedCount':len(wiki.SEED),'linkedQids':sum(x['linked'] for kind,x in world_db.qid_coverage().items() if kind in ('players','teams','coaches')),'teamProfiles':True,'shortExtracts':True}}
+ if path=='/api/status':return {'ok':True,'backend':True,'version':'0.9.27-local','catalog':len(CATALOG),'world':world_db.counts(),'liveGuaranteed':False,'livePollingSeconds':25,'canInstall':True,'wikipedia':{'mode':'on_demand_verified_qid','verifiedSeedCount':len(wiki.SEED),'linkedQids':sum(x['linked'] for kind,x in world_db.qid_coverage().items() if kind in ('players','teams','coaches')),'teamProfiles':True,'shortExtracts':True}}
  if path=='/api/media-status':return {'source':'Verified Wikidata P18/P154 + free Wikipedia pageimages','cached':extra_media.cache_stats(),'linked':world_db.qid_coverage(),'allProfilesGuaranteed':False,'licensing':'Per-file Wikimedia Commons license applies'}
  if path=='/api/leagues':return {'items':[{'id':k,'name':v,'automatic':k in league_catalog.CORE_LEAGUES} for k,v in league_catalog.ALL_LEAGUES.items()],'count':len(league_catalog.ALL_LEAGUES),'note':'Kataloqda olmaq bu turnirin cari cədvəlinin mütləq işləməsi demək deyil.'}
  if path=='/api/sources':return {'sources':SOURCE_STATUS,
