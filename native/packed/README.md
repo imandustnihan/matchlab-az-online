@@ -12,3 +12,6 @@ These two applications contain **index.html, styles.css, app.js, catalog.js, fea
 - See GitHub Actions workflow for build output, asset verification and emulator smoke tests.
 
 The full HTML website can also be installed as a standalone PWA using `manifest.webmanifest` and `service-worker.js`. Only the static application shell is cached; API content is never cached or presented as live when offline. On Android, the APK packs the same production HTML and PWA static resources; its WebView does not register another service worker. The Render service must be deployed from this branch or merged after review before PWA install is available at the public website.
+
+## Windows installer v0.9.43
+See `native/packed-windows/INSTALLER.md` for installed-app integration, shortcuts, uninstall and SmartScreen limitations.

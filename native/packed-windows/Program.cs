@@ -61,10 +61,13 @@ public sealed class HtmlApp:Form
     public HtmlApp(bool smoke=false)
     {
         smokeTest=smoke;
-        Text="MATCHLAB AZ — v0.9.42 · HTML Desktop";
+        Text="MATCHLAB AZ — v0.9.43 · HTML Desktop";
         StartPosition=FormStartPosition.CenterScreen;
         MinimumSize=new Size(760,540);Size=new Size(1280,820);
         BackColor=Color.FromArgb(8,14,25);
+        // Display the same branded icon in the taskbar and Alt+Tab.
+        try { Icon=System.Drawing.Icon.ExtractAssociatedIcon(Application.ExecutablePath) ?? Icon; }
+        catch { /* Keep the fallback icon if shell extraction fails. */ }
         Controls.Add(browser);Controls.Add(error);
         Shown+=async (_,_)=>{
             await Start();

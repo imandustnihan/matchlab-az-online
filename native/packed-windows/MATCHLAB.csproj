@@ -2,7 +2,7 @@
 <PropertyGroup>
 <OutputType>WinExe</OutputType><TargetFramework>net8.0-windows</TargetFramework>
 <UseWindowsForms>true</UseWindowsForms><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings>
-<AssemblyName>MATCHLAB_AZ</AssemblyName><Version>0.9.42</Version>
+<AssemblyName>MATCHLAB_AZ</AssemblyName><Version>0.9.43</Version>
 <ApplicationIcon>../branding/matchlab_icon.ico</ApplicationIcon>
 <RuntimeIdentifier>win-x64</RuntimeIdentifier><PublishSingleFile>true</PublishSingleFile>
 <SelfContained>true</SelfContained><IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
