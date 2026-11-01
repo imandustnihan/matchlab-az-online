@@ -757,5 +757,109 @@
     "statsScope": "domestic_league",
     "statNotice": "Burada yalnız daxili liqa matçları və qolları göstərilir; kubok/avrokubok və milli komanda matçları bu toplama daxil deyil. Asist məlumatı bu mənbədə mövcud deyil.",
     "verifiedSnapshot": true
+  },
+  "Q185572": {
+    "id": "Q185572",
+    "name": "Mikel Arteta Amatriain",
+    "birth": "1982-03-26",
+    "death": "",
+    "clubs": [
+      {
+        "name": "Barcelona B",
+        "from": 1999,
+        "to": 2002,
+        "apps": null,
+        "goals": null,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Paris Saint-Germain",
+        "from": 2001,
+        "to": 2002,
+        "apps": null,
+        "goals": null,
+        "assists": null,
+        "loan": true,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Rangers",
+        "from": 2002,
+        "to": 2004,
+        "apps": null,
+        "goals": null,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Real Sociedad",
+        "from": 2004,
+        "to": 2005,
+        "apps": null,
+        "goals": null,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Everton",
+        "from": 2005,
+        "to": 2005,
+        "apps": null,
+        "goals": null,
+        "assists": null,
+        "loan": true,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Everton",
+        "from": 2005,
+        "to": 2011,
+        "apps": null,
+        "goals": null,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Arsenal",
+        "from": 2011,
+        "to": 2016,
+        "apps": null,
+        "goals": null,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      }
+    ],
+    "coached": [
+      {
+        "name": "Manchester City (köməkçi məşqçi)",
+        "from": 2016,
+        "to": 2019
+      },
+      {
+        "name": "Arsenal (baş məşqçi)",
+        "from": 2019,
+        "to": null
+      }
+    ],
+    "careerSource": "Wikipedia (en) · təsdiqlənmiş tarixi karyera ardıcıllığı",
+    "careerUrl": "https://en.wikipedia.org/wiki/Mikel_Arteta",
+    "wikiUrl": "https://en.wikipedia.org/wiki/Mikel_Arteta",
+    "wikiLanguage": "en",
+    "wikiPageLinks": {
+      "en": "https://en.wikipedia.org/wiki/Mikel_Arteta"
+    },
+    "statNotice": "Tarixi klub və məşqçilik dövrləri. Matç, qol və asist rəqəmləri burada təsdiqlənməyib; buna görə boş saxlanılır.",
+    "statsScope": "domestic_league",
+    "wikiMatch": true,
+    "verifiedSnapshot": true,
+    "wikiLicense": "CC BY-SA 4.0 (məqalə mətni); media ayrıca lisenziyalıdır",
+    "wikiLicenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "position": "Mərkəz yarımmüdafiəçi"
   }
 }

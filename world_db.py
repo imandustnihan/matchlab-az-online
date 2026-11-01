@@ -91,6 +91,19 @@ def profile(identifier):
  finally:con.close()
 
 
+@lru_cache(maxsize=8192)
+def preferred_person_id(qid):
+ """Canonical verified registry ID for a legacy link, with no fuzzy name matching."""
+ if not re.fullmatch(r'Q[1-9][0-9]{0,11}',qid or ''):return None
+ con=connect()
+ if not con:return None
+ try:
+  row=con.execute("SELECT id FROM identities WHERE qid=? AND kind IN ('players','coaches') ORDER BY CASE WHEN kind='coaches' THEN 0 ELSE 1 END,id LIMIT 1",(qid,)).fetchone()
+  return row[0] if row else None
+ except sqlite3.Error:return None
+ finally:con.close()
+
+
 def countries(limit=240):
  con=connect()
  if not con:return []
