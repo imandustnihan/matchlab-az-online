@@ -49,6 +49,21 @@ jobs:
           $p = Start-Process -FilePath $exe -ArgumentList '--self-test' -Wait -PassThru
           if ($p.ExitCode -ne 0) { throw "HTML embedded resource smoke failed: $($p.ExitCode)" }
           Write-Host "PASS Windows packaged HTML resources"
+      - name: Launch Windows WebView2 and test actual HTML navigation
+        shell: pwsh
+        run: |
+          $exe = Join-Path (Get-Location) 'native/packed-windows/out/MATCHLAB_AZ.exe'
+          $env:MATCHLAB_SMOKE_SCREENSHOT = Join-Path (Get-Location) 'native/packed-windows/windows_ui_smoke.png'
+          $p = Start-Process -FilePath $exe -ArgumentList '--ui-smoke-test' -PassThru
+          if (!$p.WaitForExit(65000)) { $p.Kill(); throw "Windows UI smoke timeout" }
+          if ($p.ExitCode -ne 0) { throw "Windows UI navigation smoke failed: $($p.ExitCode)" }
+          Write-Host "PASS actual Windows HTML WebView2 navigation"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: MATCHLAB_AZ_v0941_Windows_UI_Screenshot
+          path: native/packed-windows/windows_ui_smoke.png
+          if-no-files-found: warn
       - uses: actions/upload-artifact@v4
         with:
           name: MATCHLAB_AZ_HTML_Windows_v0941
@@ -123,13 +138,20 @@ jobs:
             adb shell pidof az.matchlab.mobile
             adb shell screencap -p /sdcard/matchlab_screen.png
             adb pull /sdcard/matchlab_screen.png native/android/matchlab_emulator.png
-            echo "PASS Android app process alive and screenshot captured"
+            adb shell input tap 985 2200
+            sleep 2
+            adb shell screencap -p /sdcard/matchlab_more.png
+            adb pull /sdcard/matchlab_more.png native/android/matchlab_more.png
+            adb shell pidof az.matchlab.mobile
+            echo "PASS Android app process alive; startup and More menu screenshots captured"
       - name: Upload Android emulator screenshot
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: MATCHLAB_AZ_v0941_Android_Emulator_Screenshot
-          path: native/android/matchlab_emulator.png
+          path: |
+            native/android/matchlab_emulator.png
+            native/android/matchlab_more.png
           if-no-files-found: warn
           retention-days: 14
       - uses: actions/upload-artifact@v4

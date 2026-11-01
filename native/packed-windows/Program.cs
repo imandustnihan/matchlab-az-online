@@ -22,8 +22,10 @@ internal static class Program
         if(args.Contains("--self-test",StringComparer.OrdinalIgnoreCase))
             return HtmlApp.CheckAssets()?0:3;
         ApplicationConfiguration.Initialize();
-        Application.Run(new HtmlApp());
-        return 0;
+        bool uiSmoke=args.Contains("--ui-smoke-test",StringComparer.OrdinalIgnoreCase);
+        using var app=new HtmlApp(uiSmoke);
+        Application.Run(app);
+        return uiSmoke?app.SmokeResult:0;
     }
 }
 public sealed class HtmlApp:Form
@@ -48,14 +50,20 @@ public sealed class HtmlApp:Form
     readonly Label error=new(){Dock=DockStyle.Fill,TextAlign=ContentAlignment.MiddleCenter,
         ForeColor=Color.White,BackColor=Color.FromArgb(8,14,25),Visible=false,
         Font=new Font("Segoe UI",14),Padding=new Padding(24)};
-    public HtmlApp()
+    private readonly bool smokeTest;
+    public int SmokeResult {get;private set;}=11;
+    public HtmlApp(bool smoke=false)
     {
+        smokeTest=smoke;
         Text="MATCHLAB AZ — v0.9.41 · HTML Desktop";
         StartPosition=FormStartPosition.CenterScreen;
         MinimumSize=new Size(760,540);Size=new Size(1280,820);
         BackColor=Color.FromArgb(8,14,25);
         Controls.Add(browser);Controls.Add(error);
-        Shown+=async (_,_)=>await Start();
+        Shown+=async (_,_)=>{
+            await Start();
+            if(smokeTest){await CheckUiAsync();Close();}
+        };
     }
     public static bool CheckAssets()
     {
@@ -67,6 +75,47 @@ public sealed class HtmlApp:Form
         }
         return true;
     }
+
+    // Launches the real embedded HTML window (not only resource inspection),
+    // waits for DOM rendering and clicks real navigation buttons in WebView2.
+    private async Task CheckUiAsync()
+    {
+        if(browser.CoreWebView2==null){SmokeResult=12;return;}
+        var core=browser.CoreWebView2;
+        bool ready=false;
+        for(int i=0;i<60;i++)
+        {
+            try
+            {
+                string result=await core.ExecuteScriptAsync(
+                    "Boolean(document.querySelector('.mobilebar button[data-page=\"matches\"]') && document.querySelector('#app .page'))");
+                if(result=="true"){ready=true;break;}
+            }catch{}
+            await Task.Delay(300);
+        }
+        if(!ready){SmokeResult=13;return;}
+        foreach(var target in new[]{"search","tactics","matches"})
+        {
+            string script="(()=>{const n=document.querySelector('.mobilebar button[data-page=\\\""+target+"\\\"]');"+
+                "if(!n)return false;n.click();return Boolean(document.querySelector('.mobilebar button[data-page=\\\""+
+                target+"\\\"].active'));})()";
+            try
+            {
+                if(await core.ExecuteScriptAsync(script)!="true"){SmokeResult=14;return;}
+            }catch{SmokeResult=15;return;}
+        }
+        SmokeResult=0;
+        string? capture=Environment.GetEnvironmentVariable("MATCHLAB_SMOKE_SCREENSHOT");
+        if(!string.IsNullOrWhiteSpace(capture))
+        {
+            try
+            {
+                using var stream=File.Create(capture);
+                await core.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Png,stream);
+            }catch{} // Screenshot is diagnostic; DOM-navigation check is authoritative.
+        }
+    }
+
     async Task Start()
     {
         try
