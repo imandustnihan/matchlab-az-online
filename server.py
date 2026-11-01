@@ -1,4 +1,4 @@
-"""MATCHLAB AZ v0.9.17 HTML + local Python server (stdlib only, no user API key).
+"""MATCHLAB AZ v0.9.4 HTML + local Python server (stdlib only, no user API key).
 Respects upstream failures, returns explicit availability flags, never synthesizes match results.
 Sources: Wikidata CC0, Wikipedia pageimages (image rights vary), OpenLigaDB and unofficial ESPN.
 """
@@ -11,7 +11,6 @@ import free_match_details as details
 import datetime as _dt
 import wikipedia_enrichment as wiki
 import live_center
-import media_expansion as extra_media
 
 ROOT=Path(__file__).resolve().parent
 INSTALL={'state':'idle','message':'Hələ quraşdırılmayıb','bytes':0,'done':False,'error':''}
@@ -24,7 +23,7 @@ CACHE={}; CACHE_LOCK=threading.Lock(); HOST_COOLDOWN={}; UPSTREAM_TIMEOUT=8
 SOURCE_STATUS={}
 SCORE_CACHE=ROOT/'score_cache'
 SCORE_CACHE.mkdir(exist_ok=True)
-USER_AGENT=os.environ.get('MATCHLAB_WIKIMEDIA_UA','MatchlabAZ/0.9.17 (https://github.com/imandustnihan/matchlab-az-online; community football archive)')
+USER_AGENT=os.environ.get('MATCHLAB_WIKIMEDIA_UA','MatchlabAZ/0.9.14 (https://github.com/imandustnihan/matchlab-az-online; community football archive)')
 WIKI_REQUEST_LOCK=threading.Lock()
 WIKI_NEXT_REQUEST=0.0
 
@@ -206,16 +205,11 @@ def wd_profile(qid,known_kind=None):
  positions=[lookup.get(wd_val(c),wd_val(c)) for c in claims(e,'P413')]
  countries=[lookup.get(wd_val(c),wd_val(c)) for c in claims(e,'P27')]
  awards=[lookup.get(wd_val(c),wd_val(c)) for c in claims(e,'P166')]
- # Preserve Wikidata date precision; a year-only death must never become Jan 1.
- def date_claim(prop):
-  statement=(claims(e,prop) or [None])[0]
-  raw=statement.get('mainsnak',{}).get('datavalue',{}).get('value') if statement else None
-  return wiki.wikidata_date(raw)
- death=date_claim('P570');birthdate=date_claim('P569')
+ death=wd_val((claims(e,'P570') or [None])[0]);birthdate=wd_val((claims(e,'P569') or [None])[0])
  has_playing=bool(clubs or claims(e,'P54'))
  has_coaching=bool(coached or claims(e,'P6087'))
  roles=(["players"] if has_playing else [])+(["coaches"] if has_coaching else [])
- return {'id':qid,'name':wd_label(e),'kind':known_kind or wd_kind(e),'description':wd_desc(e),'image':photo_url(e,known_kind),'country':', '.join(countries),'position':', '.join(positions),'clubs':clubs,'coached':coached,'awards':awards,'birth':birthdate,'death':death,'lifeStatus':'deceased' if death else 'unknown','careerStatus':'unverified','roles':roles,'source':'Wikidata','url':'https://www.wikidata.org/wiki/'+qid,'verified':True}
+ return {'id':qid,'name':wd_label(e),'kind':known_kind or wd_kind(e),'description':wd_desc(e),'image':photo_url(e,known_kind),'country':', '.join(countries),'position':', '.join(positions),'clubs':clubs,'coached':coached,'awards':awards,'birth':str(birthdate or '').lstrip('+')[:10],'death':str(death or '').lstrip('+')[:10],'lifeStatus':'deceased' if death else 'unknown','careerStatus':'unverified','roles':roles,'source':'Wikidata','url':'https://www.wikidata.org/wiki/'+qid,'verified':True}
 
 def parse_espn(data,league):
  out=[]
@@ -343,85 +337,55 @@ def table_from_sources(league):
 
 
 def media_by_qid(qid,kind='players',retry=False):
- # Every image must be tied to a verified Wikidata QID. No name-only guessing.
- if kind not in ('players','coaches','teams') or not QID.fullmatch(qid or ''):
-  return {'url':'','source':'Təsdiqlənmiş kimlik yoxdur'}
- if not retry:
-  known=extra_media.cache_load(qid,kind)
-  if known and known.get('url'):return known
  if kind=='players' and not retry:
   try:
+   from urllib.parse import quote
    media=json.loads((ROOT/'featured_media.js').read_text(encoding='utf8').split('=',1)[1].rstrip(';'))
-   if qid in media:return {'url':media[qid],'source':'Wikimedia Commons · seçilmiş foto'}
+   if qid in media:return {'url':media[qid],'source':'Wikimedia Commons · şəkil kreditləri ayrıca'}
   except (OSError,ValueError):pass
+ # Always bind portraits to a verified Wikidata identity. Never guess by an ambiguous name.
  e=wd_entities([qid]).get(qid,{})
- if not e:return {'url':'','source':'Wikidata kimliyi əlçatan deyil'}
- if kind in ('players','coaches') and (wd_kind(e)=='teams' or (claims(e,'P154') and not claims(e,'P106') and not claims(e,'P54'))):
-  return {'url':'','source':'Profil növü Wikidata kimliyi ilə uyğun deyil'}
- if kind=='teams' and wd_kind(e) in ('players','coaches'):
-  return {'url':'','source':'Profil növü Wikidata kimliyi ilə uyğun deyil'}
+ if not e:return {'url':'','source':''}
  filename=entity_media_filename(e,kind)
- # A failed image must fall through to a different verified source when retried.
- if filename and (not retry or kind=='teams'):
+ if kind in ('players','coaches') and filename is None and (wd_kind(e)=='teams' or (claims(e,'P154') and not claims(e,'P106') and not claims(e,'P54'))):
+  return {'url':'','source':'Profil növü Wikidata kimliyi ilə uyğun deyil'}
+ if filename and len(filename)<230:
   return {'url':'https://commons.wikimedia.org/wiki/Special:FilePath/'+urllib.parse.quote(filename,safe='')+'?width=300',
-          'source':'Wikidata / Wikimedia Commons','imagePage':extra_media.commons_file_page(filename),
-          'verifiedQid':qid,'kind':kind}
- images,complete=extra_media.verified_page_images([qid],kind,get_json,refresh=retry)
- result=images.get(qid)
- if result:return result
- if filename and not retry:
-  return {'url':'https://commons.wikimedia.org/wiki/Special:FilePath/'+urllib.parse.quote(filename,safe='')+'?width=300',
-          'source':'Wikidata / Wikimedia Commons','imagePage':extra_media.commons_file_page(filename),
-          'verifiedQid':qid,'kind':kind}
- return {'url':'','source':'Sərbəst təsdiqlənmiş media tapılmadı' if complete else 'Media mənbələri əlçatan deyil',
-         'complete':complete}
+          'source':'Wikidata / Wikimedia Commons'}
+ if kind=='teams':return {'url':'','source':'Wikidata P154 emblemi tapılmadı'}
+ # Wikipedia thumbnails are accepted only when the article's Wikidata ID matches.
+ raw=wd_query('wbgetentities',ids=qid,props='sitelinks',sitefilter='enwiki')
+ title=(raw.get('entities',{}).get(qid,{}).get('sitelinks',{}).get('enwiki') or {}).get('title')
+ if not title:return {'url':'','source':''}
+ j=get_json('https://en.wikipedia.org/api/rest_v1/page/summary/'+urllib.parse.quote(title.replace(' ','_'),safe=''),ttl=86400)
+ if j.get('wikibase_item')!=qid or j.get('type')=='disambiguation':return {'url':'','source':''}
+ url=(j.get('thumbnail') or {}).get('source','')
+ if not url.startswith('https://upload.wikimedia.org/'):url=''
+ return {'url':url,'source':'Wikipedia — image license varies'}
 
 def send_data(path,params):
- if path=='/api/status':return {'ok':True,'backend':True,'version':'0.9.17-local','catalog':len(CATALOG),'world':world_db.counts(),'liveGuaranteed':False,'livePollingSeconds':25,'canInstall':True,'wikipedia':{'mode':'on_demand_verified_qid','verifiedSeedCount':len(wiki.SEED),'linkedQids':sum(x['linked'] for kind,x in world_db.qid_coverage().items() if kind in ('players','teams','coaches')),'teamProfiles':True,'shortExtracts':True}}
- if path=='/api/media-status':return {'source':'Verified Wikidata P18/P154 + free Wikipedia pageimages','cached':extra_media.cache_stats(),'linked':world_db.qid_coverage(),'allProfilesGuaranteed':False,'licensing':'Per-file Wikimedia Commons license applies'}
+ if path=='/api/status':return {'ok':True,'backend':True,'version':'0.9.14-local','catalog':len(CATALOG),'world':world_db.counts(),'liveGuaranteed':False,'livePollingSeconds':25,'canInstall':True,'wikipedia':{'mode':'on_demand_verified_qid','verifiedSeedCount':len(wiki.SEED),'linkedQids':158924,'teamProfiles':True,'shortExtracts':True}}
  if path=='/api/sources':return {'sources':SOURCE_STATUS,'providers':['ESPN (qeyri-rəsmi)','OpenLigaDB (icma)','TheSportsDB (pulsuz/limitli)','Wikipedia/Wikidata (mənbəli profil)'],'internetVerifiedHere':False}
  if path=='/api/photos':
   values=params.get('qids',[''])[0].split(',')[:20]
   kind=params.get('kind',['players'])[0]
-  if kind not in ('players','coaches','teams'):return {'items':{},'details':{},'found':0,'complete':False}
-  qids=list(dict.fromkeys(q for q in values if QID.fullmatch(q)))
-  urls={};details_map={};wd_healthy=True
-  curated={}
+  if kind not in ('players','coaches','teams'):kind='players'
+  output={}
+  qids=list(dict.fromkeys(v for v in values if QID.fullmatch(v)))
   if kind=='players':
-   try:curated=json.loads((ROOT/'featured_media.js').read_text(encoding='utf8').split('=',1)[1].rstrip(';'))
-   except (OSError,ValueError):pass
-  for qid in qids:
-   if qid in curated:
-    urls[qid]=curated[qid]
-    details_map[qid]={'url':curated[qid],'source':'Seçilmiş Wikimedia foto','verifiedQid':qid,'kind':kind}
-  remaining=[qid for qid in qids if qid not in urls]
-  blocked=set()
-  if remaining:
    try:
-    entities=wd_entities(remaining)
-    for qid in remaining:
-     e=entities.get(qid,{})
-     if kind=='teams' and wd_kind(e) in ('players','coaches'):
-      blocked.add(qid);continue
-     if kind in ('players','coaches') and (wd_kind(e)=='teams' or (claims(e,'P154') and not claims(e,'P106') and not claims(e,'P54'))):
-      blocked.add(qid);continue
-     filename=entity_media_filename(e,kind)
-     if filename:
-      url='https://commons.wikimedia.org/wiki/Special:FilePath/'+urllib.parse.quote(filename,safe='')+'?width=240'
-      urls[qid]=url
-      details_map[qid]={'url':url,'source':'Wikidata / Wikimedia Commons',
-                        'imagePage':extra_media.commons_file_page(filename),
-                        'verifiedQid':qid,'kind':kind}
-   except Exception:wd_healthy=False
-  missing=[qid for qid in remaining if qid not in urls and qid not in blocked]
-  fallback_complete=True
-  if missing:
-   added,fallback_complete=extra_media.verified_page_images(missing,kind,get_json)
-   for qid,data in added.items():
-    urls[qid]=data['url'];details_map[qid]=data
-  return {'items':urls,'details':details_map,'requested':len(qids),'found':len(urls),
-          'complete':wd_healthy and fallback_complete,
-          'source':'Wikidata + QID-təsdiqli Wikipedia (sərbəst pageimages)'}
+    curated=json.loads((ROOT/'featured_media.js').read_text(encoding='utf8').split('=',1)[1].rstrip(';'))
+    output.update({qid:curated[qid] for qid in qids if qid in curated})
+   except (OSError,ValueError):pass
+  remaining=[qid for qid in qids if qid not in output]
+  try:
+   entities=wd_entities(remaining)
+   for qid in remaining:
+    e=entities.get(qid,{})
+    img=entity_media_filename(e,kind)
+    if img and len(img)<230:output[qid]='https://commons.wikimedia.org/wiki/Special:FilePath/'+urllib.parse.quote(img,safe='')+'?width=240'
+  except Exception:pass
+  return {'items':output,'source':'Wikidata / Wikimedia Commons','requested':len(qids),'found':len(output)}
  if path=='/api/world/countries':return {'items':world_db.countries(),'installed':bool(world_db.counts())}
  if path=='/api/install-status':
   with INSTALL_LOCK: state=INSTALL.copy()
