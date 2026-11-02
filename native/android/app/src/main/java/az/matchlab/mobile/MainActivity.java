@@ -29,8 +29,8 @@ public final class MainActivity extends Activity {
     private static final String BASE="https://matchlab-az-online.onrender.com";
     private static final int BG=Color.rgb(8,16,27), CARD=Color.rgb(18,32,47), RAISED=Color.rgb(30,48,65),
         INK=Color.rgb(241,248,253), MUTED=Color.rgb(167,184,198), ACCENT=Color.rgb(155,236,118), RED=Color.rgb(248,133,130);
-    private static final String[] LEAGUES={"all","eng.1","esp.1","ger.1","ita.1","fra.1","uefa.champions","uefa.europa","tur.1","por.1","ned.1"};
-    private static final String[] NAMES={"Bütün liqalar","Premier League","La Liga","Bundesliga","Serie A","Ligue 1","Champions League","Europa League","Süper Lig","Primeira Liga","Eredivisie"};
+    private static final String[] LEAGUES={"all","aze.1","eng.1","esp.1","ger.1","ita.1","fra.1","uefa.champions","uefa.europa","uefa.europa.conf","tur.1","por.1","ned.1","sco.1","bel.1","usa.1","ksa.1","eng.2","arg.1","bra.1","jpn.1","mex.1"};
+    private static final String[] NAMES={"Bütün liqalar","Azərbaycan Premyer Liqası","Premier League","La Liga","Bundesliga","Serie A","Ligue 1","Çempionlar Liqası","Avropa Liqası","Konfrans Liqası","Süper Lig","Primeira Liga","Eredivisie","Scottish Premiership","Belgian Pro League","MLS","Saudi Pro League","Championship","Argentina Primera","Brasileirão","J1 League","Liga MX"};
     private final ExecutorService network=Executors.newFixedThreadPool(3);
     private final Handler ui=new Handler(Looper.getMainLooper());
     private LinearLayout body, nav, page;
@@ -40,6 +40,10 @@ public final class MainActivity extends Activity {
     private String screen="matches", league="all", kind="all", searchText="";
     private Calendar day=Calendar.getInstance(TimeZone.getTimeZone("Asia/Baku"));
     private int generation=0, formation=0;
+    private String matchMode="all";
+    private final Set<String> collapsedLeagues=new HashSet<>();
+    private int searchOffset=0;
+    private JSONArray searchRows=new JSONArray();
     private boolean standingsExpanded=false;
     private final String[] formations={"4-3-3","4-2-3-1","4-4-2","3-5-2"};
     private JSONArray matches=new JSONArray();
@@ -56,6 +60,10 @@ public final class MainActivity extends Activity {
         super.onCreate(saved);
         getWindow().setStatusBarColor(BG);getWindow().setNavigationBarColor(BG);
         prefs=getSharedPreferences("matchlab_native",MODE_PRIVATE);
+        league=prefs.getString("matchleague","all");
+        matchMode=prefs.getString("matchmode","all");
+        formation=prefs.getInt("tactic_formation",0);
+        if(formation<0||formation>=formations.length)formation=0;
         showShell();
         navigate("matches");
         ui.postDelayed(refresh,30000);
@@ -232,24 +240,104 @@ public final class MainActivity extends Activity {
         return s;
     }
     private void filters(boolean standings){
-        LinearLayout r=row();
         if(!standings){
-            Button prev=button("‹");prev.setOnClickListener(v->{day.add(Calendar.DATE,-1);navigate("matches");});r.addView(prev);
-            TextView date=text("  "+date()+"  ",14,INK,true);r.addView(date);
-            Button next=button("›");next.setOnClickListener(v->{day.add(Calendar.DATE,1);navigate("matches");});r.addView(next);
-            Button today=button("Bu gün");today.setOnClickListener(v->{day=Calendar.getInstance(TimeZone.getTimeZone("Asia/Baku"));navigate("matches");});
-            r.addView(today);
-            HorizontalScrollView dates=new HorizontalScrollView(this);dates.setHorizontalScrollBarEnabled(false);
-            dates.addView(r);card(dates);
+            LinearLayout dateBar=row();
+            Button previous=button("‹");previous.setContentDescription("Əvvəlki gün");
+            previous.setOnClickListener(v->{day.add(Calendar.DATE,-1);navigate("matches");});
+            dateBar.addView(previous,new LinearLayout.LayoutParams(dp(45),dp(42)));
+            TextView current=text(new SimpleDateFormat("EEE, d MMM",new Locale("az")).format(day.getTime()),13,INK,true);
+            current.setGravity(Gravity.CENTER);
+            dateBar.addView(current,new LinearLayout.LayoutParams(0,dp(42),1));
+            Button next=button("›");next.setContentDescription("Növbəti gün");
+            next.setOnClickListener(v->{day.add(Calendar.DATE,1);navigate("matches");});
+            dateBar.addView(next,new LinearLayout.LayoutParams(dp(45),dp(42)));
+            Button today=button("Bu gün");
+            today.setOnClickListener(v->{day=Calendar.getInstance(TimeZone.getTimeZone("Asia/Baku"));navigate("matches");});
+            dateBar.addView(today,new LinearLayout.LayoutParams(dp(76),dp(42)));
+            card(dateBar);
+            LinearLayout chips=row();
+            String[][] types={{"all","Hamısı"},{"live","● Canlı"},{"favorites","☆ Seçilmiş"}};
+            for(String[] type:types){
+                boolean selected=matchMode.equals(type[0]);
+                Button tab=button(type[1]);
+                tab.setTextColor(selected?BG:MUTED);
+                tab.setBackground(shape(selected?ACCENT:RAISED,13));
+                LinearLayout.LayoutParams w=new LinearLayout.LayoutParams(0,dp(42),1);
+                w.rightMargin=dp(5);
+                chips.addView(tab,w);
+                tab.setOnClickListener(v->{
+                    if(!matchMode.equals(type[0])){
+                        matchMode=type[0];prefs.edit().putString("matchmode",matchMode).apply();
+                        navigate("matches");
+                    }
+                });
+            }
+            card(chips);
+            LinearLayout controls=row();
+            TextView label=single(league.equals("all")?"Bütün liqalar":"Liqa: "+leagueLabel(league),12,MUTED,true);
+            controls.addView(label,new LinearLayout.LayoutParams(0,dp(42),1));
+            Button choose=button("Filtrlə  ⌄");
+            choose.setOnClickListener(v->showLeaguePicker(choose,false));
+            controls.addView(choose);
+            card(controls);
+            if(!league.equals("all")){
+                TextView note=text("Bu liqa seçimi yalnız bu ekranın filtridir. “Bütün liqalar” seçərək ümumi matçlara qayıt.",10,MUTED,false);
+                card(note);
+            }
+            return;
         }
-        int idx=Arrays.asList(LEAGUES).indexOf(league);
-        if(standings&&idx==0){league="eng.1";idx=1;}
-        final int offset=standings?1:0;
-        String[] options=standings?Arrays.copyOfRange(NAMES,1,NAMES.length):NAMES;
-        Spinner s=spinner(options,Math.max(0,idx-offset),p->{
-            String next=LEAGUES[p+offset];if(next.equals(league))return;league=next;navigate(standings?"standings":"matches");
+        LinearLayout controls=row();
+        TextView hint=single("Turnir seçin",12,MUTED,true);
+        controls.addView(hint,new LinearLayout.LayoutParams(0,dp(42),1));
+        Button choose=button("Liqa  ⌄");
+        choose.setOnClickListener(v->showLeaguePicker(choose,true));
+        controls.addView(choose);
+        card(controls);
+    }
+    private String leagueLabel(String id){
+        int at=Arrays.asList(LEAGUES).indexOf(id);
+        return at<0?id:NAMES[at];
+    }
+    private void showLeaguePicker(View anchor,boolean standings){
+        final String oldLeague=league;
+        final ArrayList<String> names=new ArrayList<>();
+        final ArrayList<String> ids=new ArrayList<>();
+        for(int i=standings?1:0;i<LEAGUES.length;i++){
+            ids.add(LEAGUES[i]);names.add(NAMES[i]);
+        }
+        names.add("Daha çox liqa…");
+        new AlertDialog.Builder(this)
+            .setTitle(standings?"Turnir cədvəli":"Matç filtri")
+            .setItems(names.toArray(new String[0]),(dialog,selected)->{
+                if(selected==ids.size()){showAllLeaguesPicker(standings);return;}
+                league=ids.get(selected);
+                if(standings&&league.equals("all"))league="eng.1";
+                prefs.edit().putString("matchleague",league).apply();
+                if(!oldLeague.equals(league))navigate(standings?"standings":"matches");
+            }).setNegativeButton("Bağla",null).show();
+    }
+    private void showAllLeaguesPicker(boolean standings){
+        fetch("/api/leagues",(data,error)->{
+            if(isFinishing()||isDestroyed())return;
+            if(error!=null||data==null){
+                Toast.makeText(this,"Liqa kataloqunu yükləmək mümkün olmadı",Toast.LENGTH_LONG).show();return;
+            }
+            JSONArray items=data.optJSONArray("items");
+            if(items==null||items.length()==0)return;
+            ArrayList<String> labels=new ArrayList<>(),ids=new ArrayList<>();
+            for(int i=0;i<items.length();i++){
+                JSONObject item=items.optJSONObject(i);if(item==null)continue;
+                String id=item.optString("id",""),name=item.optString("name","");
+                if(id.isEmpty()||name.isEmpty()||(standings&&id.equals("all")))continue;
+                ids.add(id);labels.add(name);
+            }
+            new AlertDialog.Builder(this).setTitle("Bütün yarışlar")
+                .setItems(labels.toArray(new String[0]),(d,index)->{
+                    league=ids.get(index);
+                    prefs.edit().putString("matchleague",league).apply();
+                    navigate(standings?"standings":"matches");
+                }).setNegativeButton("Bağla",null).show();
         });
-        card(s);
     }
     private interface JsonCallback{void done(JSONObject json,Exception error);}
     private void fetch(String path,JsonCallback callback){
@@ -273,29 +361,73 @@ public final class MainActivity extends Activity {
             ui.post(()->callback.done(data,failure));
         });
     }
+    private boolean matchVisible(JSONObject match){
+        String state=match.optString("state","");
+        if("live".equals(matchMode))return "live".equals(state)&&!match.optBoolean("stale");
+        if("favorites".equals(matchMode))return prefs.contains("fav_"+match.optString("id"));
+        return true;
+    }
+    private void renderLiveMatches(JSONObject data){
+        matches=data.optJSONArray("items");if(matches==null)matches=new JSONArray();
+        page.removeAllViews();filters(false);
+        if(data.optBoolean("partial")||data.optBoolean("stale"))
+            banner("Mənbənin bəzi liqaları əlçatan deyil. Köhnə məlumat canlı göstərilmir.",RED);
+        int count=0,live=0;
+        LinkedHashMap<String,ArrayList<JSONObject>> groups=new LinkedHashMap<>();
+        for(int i=0;i<matches.length();i++){
+            JSONObject m=matches.optJSONObject(i);if(m==null||!matchVisible(m))continue;
+            count++;
+            if("live".equals(m.optString("state"))&&!m.optBoolean("stale"))live++;
+            String group=m.optString("leagueName",leagueLabel(m.optString("league","")));
+            if(group.trim().isEmpty())group="Digər yarışlar";
+            groups.computeIfAbsent(group,k->new ArrayList<>()).add(m);
+        }
+        banner(count+" matç · "+live+" canlı  |  "+data.optString("source","Mənbə yoxlanır"),ACCENT);
+        String note=data.optString("message","");
+        if(!note.isEmpty()&&(count==0||data.optBoolean("stale")))
+            info(note,!data.optBoolean("available"));
+        if(count==0){
+            if("favorites".equals(matchMode))info("Bu tarixdə seçilmiş oyun yoxdur. Matç kartlarındakı ☆ işarəsinə toxun.",false);
+            else if("live".equals(matchMode))info("Hazırda təsdiqlənmiş canlı oyun yoxdur. “Hamısı” bölməsində bütün oyunlara bax.",false);
+            else info(data.optBoolean("available")?"Seçilmiş tarixdə mənbələr oyun qaytarmadı.":"Matçlar mənbədən alınmadı.",!data.optBoolean("available"));
+            return;
+        }
+        // Priority follows the actual fixture list, not a permanent hardcoded league panel.
+        for(Map.Entry<String,ArrayList<JSONObject>> group:groups.entrySet()){
+            String name=group.getKey();
+            boolean collapsed=collapsedLeagues.contains(name);
+            LinearLayout heading=row();
+            heading.setPadding(dp(12),dp(9),dp(10),dp(9));
+            TextView title=single(name,13,INK,true);
+            heading.addView(title,new LinearLayout.LayoutParams(0,dp(29),1));
+            TextView meta=single(group.getValue().size()+" oyun  "+(collapsed?"⌄":"⌃"),11,ACCENT,true);
+            heading.addView(meta);
+            heading.setBackground(shape(RAISED,12));
+            heading.setClickable(true);
+            heading.setContentDescription(name+" liqası, "+group.getValue().size()+" oyun");
+            heading.setOnClickListener(v->{
+                if(!collapsedLeagues.add(name))collapsedLeagues.remove(name);
+                renderLiveMatches(data);
+            });
+            LinearLayout.LayoutParams h=new LinearLayout.LayoutParams(-1,-2);
+            h.topMargin=dp(7);h.bottomMargin=dp(5);page.addView(heading,h);
+            if(!collapsed){
+                for(JSONObject m:group.getValue())matchRow(m,false);
+            }
+        }
+    }
     private void loadMatches(boolean reset){
         int token=generation;
-        if(reset){filters(false);banner("Real mənbələr yoxlanır · Yeni nəticələr yüklənir…",MUTED);}
+        if(reset){filters(false);banner("Real matçlar yüklənir…",MUTED);}
         fetch("/api/live?league="+encode(league)+"&date="+date(),(json,error)->{
             if(token!=generation||!screen.equals("matches"))return;
-            if(error!=null){status.setTextColor(RED);status.setText("●");if(reset){page.removeAllViews();filters(false);}info(networkMessage(error),true);retry("matches");return;}
-            status.setTextColor(json.optBoolean("available")?ACCENT:RED);
-            status.setText("●");
-            matches=json.optJSONArray("items");if(matches==null)matches=new JSONArray();
-            page.removeAllViews();filters(false);
-            if(json.has("checkedAt"))banner("Son yoxlama: "+json.optString("checkedAt").replace("T"," ").replace("+00:00"," UTC"),MUTED);
-            if(json.optBoolean("partial")||json.optBoolean("stale"))info("Bəzi mənbələr əlçatan deyil. Köhnə nəticələr canlı kimi göstərilmir.",true);
-            String message=json.optString("message");if(!message.isEmpty())info(message,!json.optBoolean("available"));
-            if(matches.length()==0){info(json.optBoolean("available")?"Bu tarix üçün matç yoxdur.":"Nəticələr mənbədən alınmadı.",!json.optBoolean("available"));return;}
-            int liveCount=json.optInt("liveCount",0);
-            banner(matches.length()+" real matç  ·  "+liveCount+" canlı  ·  "+json.optString("source","mənbə yoxdur"),ACCENT);
-            String previous="";
-            for(int i=0;i<Math.min(matches.length(),100);i++){
-                JSONObject m=matches.optJSONObject(i);if(m==null)continue;
-                String group=m.optString("leagueName",m.optString("league"));
-                if(!group.equals(previous)){section(group);previous=group;}
-                matchRow(m,false);
+            if(error!=null||json==null){
+                page.removeAllViews();filters(false);
+                status.setTextColor(RED);
+                info(networkMessage(error),true);retry("matches");return;
             }
+            status.setTextColor(json.optBoolean("available")?ACCENT:RED);
+            renderLiveMatches(json);
         });
     }
     private void matchRow(JSONObject m,boolean saved){
@@ -412,6 +544,7 @@ public final class MainActivity extends Activity {
         line(container);
     }
     private void showStandings(){
+        if("all".equals(league))league="eng.1";
         filters(true);
         info("Turnir cədvəli mənbədən alınır…",false);
         int token=generation;
