@@ -962,7 +962,15 @@ public final class MainActivity extends Activity {
             startActivity(Intent.createChooser(intent,"Taktikanı paylaş"));
         });
         actions.addView(share,space);page.addView(actions);
+        gap(page,8);
+        LinearLayout tools=row();
+        Button grid=button("▦ Tor");grid.setOnClickListener(v->pitch.toggleGrid());tools.addView(grid,new LinearLayout.LayoutParams(0,dp(44),1));
+        Button lines=button("⌁ Xətlər");lines.setOnClickListener(v->pitch.toggleLines());tools.addView(lines,new LinearLayout.LayoutParams(0,dp(44),1));
+        Button arrows=button("➜ Oxlar");arrows.setOnClickListener(v->pitch.toggleArrows());tools.addView(arrows,new LinearLayout.LayoutParams(0,dp(44),1));
+        Button clear=button("✕ Oxları sil");clear.setOnClickListener(v->pitch.clearArrows());tools.addView(clear,new LinearLayout.LayoutParams(0,dp(44),1));
+        page.addView(tools);
         gap(page,9);
+        info("Oxlar alətini aktivləşdirib meydançada başlanğıc və bitiş nöqtəsinə toxun. Oxlar saxlanılır.",false);
         info("Oyunçunu sürüşdürərək mövqeyini dəyiş. Ad və nömrəni dəyişmək üçün oyunçuya qısa toxun. Dəyişikliklər avtomatik saxlanılır.",false);
         info("Bu plan sənin öz taktiki layihəndir. Real matç heyəti və təsdiqlənmiş formasiya kimi təqdim edilmir.",false);
     }
