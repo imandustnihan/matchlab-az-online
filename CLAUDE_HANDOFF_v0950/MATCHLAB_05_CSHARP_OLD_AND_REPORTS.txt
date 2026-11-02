@@ -1,0 +1,1579 @@
+MATCHLAB AZ - Claude file transfer: MATCHLAB_05_CSHARP_OLD_AND_REPORTS.txt
+Source archive: MATCHLAB_AZ_CLAUDE_HANDOFF_v0950.zip
+These are source texts, not compiled executables; paths are preserved.
+Original archive contains images, icons, and executables; these are not in the TXT.
+See https://github.com/imandustnihan/matchlab-az-online for original repository context.
+
+
+========== BEGIN FILE: 06_WINDOWS_CSHARP_V0947_LEGACY/README_AZ.md ==========
+
+# MATCHLAB AZ Native Windows — v0.9.47
+
+Bu, əvvəlki 0.9.46 proqramının daha dolğun, saytdakı üsluba yaxınlaşdırılmış **.NET Windows Forms** versiyasıdır. **HTML, JavaScript və WebView istifadə olunmur.** Proqram öz lokal pəncərəsində açılır və başlanğıc animasiyası ilə çərçivəsiz tam ekran rejimini saxlayır.
+
+## Ən sadə quraşdırma
+
+1. ZIP faylına sağ bas → **Tümünü Ayıkla / Extract All**.
+2. Çıxarılan qovluqdakı **TEK_TIKLA_KUR.cmd** faylına iki dəfə bas.
+3. Build testi keçərsə, proqram masaüstünə və Başlat menyusuna əlavə ediləcək və özü açılacaq. Sonrakı açılışlar üçün yalnız **MATCHLAB AZ** ikonuna bas.
+
+Kompüterində .NET 8 SDK artıq quraşdırılıbsa, yenidən SDK yükləmək lazım deyil. Kodun build mərhələsi şəbəkə üzərindən NuGet və ya Windows SDK paketlərinə ehtiyac duya bilər. İstifadəçi bir dəfə proqramı kompilyasiya etməlidir: bu ZIP-in içində hazır Windows EXE yoxdur.
+
+**Inno Setup 6** varsa, skript normal Setup.exe yaradıb işə salır: həm masaüstü/Start qısayolları, həm də Windows Installed Apps və uninstall imkanı yaranır. Inno Setup yoxdursa, skript tətbiqi `%LOCALAPPDATA%\Programs\MATCHLAB AZ\` qovluğuna kopyalayır və masaüstü/Start qısayollarını yaradır. Bu sadə ehtiyat variantı Installed Apps siyahısına qeyd yazmır.
+
+## Görünüş və funksiyalar
+
+- Tünd göy, yaşıl və firuzəyi vizual dil: daha dolu ana səhifə, hero, statistik kartlar, futbol matçları önizləməsi, sürətli keçidlər
+- Sidebar başlığında daha oxunaqlı MATCHLAB AZ loqosu və tam menyu adları
+- Axtarış üçün başlıq sahəsi; server gec açılarkən 211 yerli kəşf qeydi göstərilə bilər (tam 506 207 rekord deyil)
+- Canlı matçlar, turnir cədvəli, profil axtarışı, seçilmiş matçlar və taktika lövhəsi
+- Açılış animasiyası, avtomatik tam ekran, F11 ilə rejim dəyişikliyi, Esc ilə adi pəncərəyə qayıtmaq
+- Şəbəkə yoxlaması indi açılışı bloklamır; serverin oyanması saniyələrlə statusda görünür; nəticə alınmayanda xəta və yenidən yoxlama təqdim olunur
+- Canlı nəticələr **uydurulmur**; server real mənbə cavabını təsdiqləmirsə, bu açıq göstərilir.
+
+## Serverin gec oyanması
+
+Render-in **pulsuz planı** 15 dəqiqə fəaliyyətsizlikdən sonra yuxu rejiminə keçə bilər. Bu, bəzən təxminən 1 dəqiqəlik açılış gecikməsi deməkdir. Masaüstü tətbiq bu məhdudiyyəti aradan qaldıra bilmir. Kod UI-ni aktiv saxlayır, server statusu üçün daha uzun müddət gözləyir, xətanı aydınlaşdırır. Daima sürətli bağlantı üçün yuxu rejimi olmayan hosting lazım ola bilər.
+
+## Test və hazırda məhdudiyyət
+
+- Python ilə mənbə paketinin əsas faylları, konfiqurasiya, JSON indeksinin düzgünlüyü, eyni adlı köməkçi metod/field toqquşmalarının olmaması statik yoxlanılır.
+- **Bu mühitdə .NET SDK və Windows olmadığı üçün yeni EXE kompilyasiyası və WinForms ekran testi burada icra edilməyib.** `TEK_TIKLA_KUR.cmd` build nəticəsini və proqramın `--ui-smoke-test` çıxış kodunu yoxlayır; uğursuz olarsa yeni quraşdırma etmir.
+- İmzasız EXE/installer Windows Defender SmartScreen tərəfindən xəbərdar edilə bilər. Təhlükəsizlik proqramını söndürmək tövsiyə olunmur. İmza/Store yayımı ayrıca məsələdir.
+
+## Fayl quruluşu
+
+- `native/windows-app/Program.cs`: Windows Forms tətbiqi
+- `native/windows-app/StartupSplash.cs`: yerli GDI+ açılış animasiyası
+- `native/windows-app/offline-catalog.json`: seçilmiş real adlar üçün yerli kəşf indeksi
+- `native/windows-app/MATCHLABAZ.csproj`: build layihəsi
+- `native/windows-app/native_icon.ico`: tətbiq ikonu
+- `native/windows-installer/installer.iss`: Inno Setup quraşdırıcısı
+- `TEK_TIKLA_KUR.cmd`: tək fayldan lokal build və quraşdırma
+
+========== END FILE: 06_WINDOWS_CSHARP_V0947_LEGACY/README_AZ.md ==========
+
+
+========== BEGIN FILE: 06_WINDOWS_CSHARP_V0947_LEGACY/TEK_TIKLA_KUR.cmd ==========
+
+@echo off
+setlocal EnableExtensions
+chcp 65001 >nul
+cd /d "%~dp0"
+title MATCHLAB AZ - TEK TIKLA KUR
+cls
+echo ======================================================
+echo           MATCHLAB AZ v0.9.47
+ echo          Windows masaustu qurasdirma
+ echo ======================================================
+echo.
+if not exist "native\windows-app\MATCHLABAZ.csproj" (
+  echo [XETA] ZIP faylini once tam cixart - Tumunu Ayikla.
+  echo       ZIP-in icinden birbasa bu fayli acma.
+  goto :failed
+)
+where dotnet >nul 2>&1
+if errorlevel 1 goto :sdk
+set "SDK_AVAILABLE="
+for /f "tokens=1" %%a in ('dotnet --list-sdks 2^>nul') do set "SDK_AVAILABLE=%%a"
+if not defined SDK_AVAILABLE goto :sdk
+set "BUILD_OUT=%CD%\native\windows-app\out"
+set "INSTALL_DIR=%LOCALAPPDATA%\Programs\MATCHLAB AZ"
+set "APP_EXE=%BUILD_OUT%\MATCHLAB_AZ.exe"
+echo [1/4] Windows proqrami kompilyasiya edilir...
+echo.
+dotnet publish "native\windows-app\MATCHLABAZ.csproj" -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o "%BUILD_OUT%" > "%CD%\BUILD_RESULT.log" 2>&1
+if errorlevel 1 goto :build_failed
+type "%CD%\BUILD_RESULT.log"
+if not exist "%APP_EXE%" goto :build_failed
+for %%F in ("%APP_EXE%") do if %%~zF LSS 500000 goto :build_failed
+echo.
+echo [2/4] Proqram test edilir...
+"%APP_EXE%" --ui-smoke-test
+if errorlevel 1 goto :smoke_failed
+echo.
+set "ISCC=%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe"
+if exist "%ISCC%" goto :use_inno
+if exist "%ProgramFiles%\Inno Setup 6\ISCC.exe" set "ISCC=%ProgramFiles%\Inno Setup 6\ISCC.exe"
+if exist "%ISCC%" goto :use_inno
+:shortcut_install
+echo [3/4] Proqram yerli qovluga yerlestirilir...
+if not exist "%INSTALL_DIR%" mkdir "%INSTALL_DIR%"
+if errorlevel 1 goto :failed
+copy /Y "%APP_EXE%" "%INSTALL_DIR%\MATCHLAB_AZ.exe" >nul
+if errorlevel 1 goto :failed
+echo [4/4] Masaustu ve Baslat menusuna ikonlar yaradilir...
+set "MATCHLAB_EXE=%INSTALL_DIR%\MATCHLAB_AZ.exe"
+powershell -NoProfile -Command "$ErrorActionPreference='Stop'; $exe=$env:MATCHLAB_EXE; $ws=New-Object -ComObject WScript.Shell; foreach($path in @([IO.Path]::Combine([Environment]::GetFolderPath('DesktopDirectory'),'MATCHLAB AZ.lnk'),[IO.Path]::Combine([Environment]::GetFolderPath('Programs'),'MATCHLAB AZ.lnk'))){ $sc=$ws.CreateShortcut($path);$sc.TargetPath=$exe;$sc.WorkingDirectory=[IO.Path]::GetDirectoryName($exe);$sc.IconLocation=$exe+',0';$sc.Description='MATCHLAB AZ - Futbol merkez';$sc.Save() }"
+if errorlevel 1 goto :failed
+goto :success
+:use_inno
+echo [3/4] Windows Setup hazirlanir...
+"%ISCC%" "native\windows-installer\installer.iss"
+if errorlevel 1 goto :shortcut_install
+set "INSTALLER=%CD%\native\windows-installer\out\MATCHLAB_AZ_Native_Setup_v0947.exe"
+if not exist "%INSTALLER%" goto :shortcut_install
+echo [4/4] Setup proqrami qurasdirir...
+start "" /wait "%INSTALLER%" /SILENT /NORESTART /TASKS=desktopicon
+if errorlevel 1 goto :shortcut_install
+:success
+echo.
+echo ======================================================
+echo  U G U R L U !
+echo  MATCHLAB AZ masaustunde hazirdir.
+echo ======================================================
+echo.
+if exist "%INSTALL_DIR%\MATCHLAB_AZ.exe" start "" "%INSTALL_DIR%\MATCHLAB_AZ.exe"
+if not exist "%INSTALL_DIR%\MATCHLAB_AZ.exe" start "" "%APP_EXE%"
+echo.
+echo Bundan sonra masaustundeki MATCHLAB AZ ikonunu ac.
+echo.
+pause
+exit /b 0
+:sdk
+echo [XETA] .NET 8 SDK tapilmadi.
+echo   winget install --id Microsoft.DotNet.SDK.8 --exact
+ goto :failed
+:build_failed
+echo [XETA] Proqramin EXE fayli yaradilmadi.
+echo  BUILD_RESULT.log faylini sohbete gonder, xetani tesbit edek.
+if exist "%CD%\BUILD_RESULT.log" type "%CD%\BUILD_RESULT.log"
+ goto :failed
+:smoke_failed
+echo [XETA] Avtomatik WinForms ekran testi kecmedi.
+echo  Yeni EXE qurasdirilmadi; evvelki versiya saxlanildi.
+ goto :failed
+:failed
+echo.
+echo Qurasdirma tamamlanmadi. Evvelki proqram silinmeyib.
+pause
+exit /b 1
+
+========== END FILE: 06_WINDOWS_CSHARP_V0947_LEGACY/TEK_TIKLA_KUR.cmd ==========
+
+
+========== BEGIN FILE: 06_WINDOWS_CSHARP_V0947_LEGACY/native/windows-app/Program.cs ==========
+
+using System;
+using System.Collections.Generic;
+using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.Globalization;
+using System.IO;
+using System.Linq;
+using System.Net.Http;
+using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+
+namespace MATCHLABAZ;
+
+internal static class Program
+{
+    [STAThread]
+    static int Main(string[] args)
+    {
+        ApplicationConfiguration.Initialize();
+        bool smoke = args.Contains("--ui-smoke-test", StringComparer.OrdinalIgnoreCase);
+        bool splashPreview = args.Contains("--splash-smoke-test", StringComparer.OrdinalIgnoreCase);
+        using var form = new NativeFootballForm(smoke, splashPreview);
+        Application.Run(form);
+        return (smoke || splashPreview) ? form.TestResult : 0;
+    }
+}
+
+public sealed class NativeFootballForm : Form
+{
+    private static readonly Color Background = Color.FromArgb(8, 14, 25);
+    private static readonly Color Side = Color.FromArgb(12, 23, 37);
+    private static readonly Color CardBackground = Color.FromArgb(20, 33, 53);
+    private static readonly Color Raised = Color.FromArgb(35, 57, 79);
+    private static readonly Color Foreground = Color.FromArgb(241, 247, 252);
+    private static readonly Color Muted = Color.FromArgb(160, 181, 202);
+    private static readonly Color Green = Color.FromArgb(181, 245, 104);
+    private static readonly Color Orange = Color.FromArgb(249, 190, 114);
+    private static readonly Color Error = Color.FromArgb(250, 142, 143);
+    private static readonly HttpClient Api = new()
+    {
+        BaseAddress = new Uri("https://matchlab-az-online.onrender.com"),
+        Timeout = TimeSpan.FromSeconds(118)
+    };
+    private static readonly (string Id, string Name)[] Leagues =
+    {
+        ("all", "Bütün liqalar"), ("eng.1", "Premier League"),
+        ("esp.1", "La Liga"), ("ger.1", "Bundesliga"),
+        ("ita.1", "Serie A"), ("fra.1", "Ligue 1"),
+        ("uefa.champions", "Champions League"), ("uefa.europa", "Europa League"),
+        ("tur.1", "Süper Lig"), ("por.1", "Primeira Liga"), ("ned.1", "Eredivisie")
+    };
+
+    private readonly FlowLayoutPanel canvas = new()
+    {
+        Dock=DockStyle.Fill, BackColor=Background,
+        FlowDirection=FlowDirection.TopDown, WrapContents=false,
+        AutoScroll=true, Padding=new Padding(23, 18, 23, 35)
+    };
+    private readonly Panel sidePanel = new() { Dock=DockStyle.Fill, BackColor=Side };
+    private readonly Label heading = new() { ForeColor=Foreground, Dock=DockStyle.Fill, Font=new Font("Segoe UI Semibold", 21), TextAlign=ContentAlignment.MiddleLeft };
+    private readonly Label serverLabel = new() { ForeColor=Orange, Dock=DockStyle.Fill, Font=new Font("Segoe UI", 9), TextAlign=ContentAlignment.MiddleRight, Text="● Yoxlanılır" };
+    private readonly TextBox quickSearch = new() { BackColor=Color.FromArgb(26,43,62), ForeColor=Color.FromArgb(237,247,253), BorderStyle=BorderStyle.FixedSingle, Font=new Font("Segoe UI",11) };
+    private readonly System.Windows.Forms.Timer probeClock = new() { Interval=1000 };
+    private DateTime probeStarted;
+    private string connectionDetail = "Serverin statusu yoxlanılır. Pulsuz hosting oyanırsa, bir qədər çəkə bilər.";
+    private Label? homeStatusLabel, homeArchiveLabel, homeLiveLabel, homeServerLabel;
+    private Panel? homePreview;
+    private int? serverTotal, lastLiveCount;
+    private readonly List<JsonElement> offlineCatalog = new();
+    private readonly Button reconnect = Button("↻  Yenidən qoşul", 146, Orange);
+    private readonly Dictionary<string, Button> sidebarButtons = new();
+    private readonly Dictionary<string, string> favorites = new();
+    private readonly string favoriteFile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MATCHLAB_AZ", "native-favorites.json");
+    private readonly System.Windows.Forms.Timer statusTimer = new() { Interval=35000 };
+    private readonly bool smokeTest;
+    private readonly bool splashPreview;
+    private readonly StartupSplash splash;
+    private bool immersive=true;
+    private FormWindowState previousWindowState=FormWindowState.Maximized;
+    private Rectangle previousBounds;
+    private int generation;
+    private string view = "home";
+    private string league = "all", term = "", category = "all";
+    private DateTime day = DateTime.UtcNow.AddHours(4).Date;
+    private bool connected, probing;
+    private JsonElement selectedMatch;
+    private string formation = "4-3-3";
+    public int TestResult { get; private set; } = 1;
+
+    public NativeFootballForm(bool smoke = false, bool preview = false)
+    {
+        smokeTest=smoke;
+        splashPreview=preview;
+        Text="MATCHLAB AZ · Windows Native v0.9.47";
+        StartPosition=FormStartPosition.CenterScreen;
+        MinimumSize=new Size(930, 610); Size=new Size(1250, 810);
+        // Fullscreen from the first frame: no title bar, borders, or taskbar gap.
+        // F11 or Esc can restore a normal maximized desktop window.
+        FormBorderStyle=FormBorderStyle.None;
+        WindowState=FormWindowState.Maximized;
+        KeyPreview=true;
+        KeyDown+=OnWindowKeyDown;
+        BackColor=Background; ForeColor=Foreground; Font=new Font("Segoe UI", 10);
+        try { Icon=Icon.ExtractAssociatedIcon(Application.ExecutablePath) ?? Icon; } catch { }
+        LoadOfflineCatalog();
+        try
+        {
+            if (File.Exists(favoriteFile))
+            {
+                var loaded=JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(favoriteFile));
+                if(loaded!=null) foreach(var kv in loaded) favorites[kv.Key]=kv.Value;
+            }
+        }
+        catch { /* Damaged local favorites must never prevent opening the application. */ }
+
+        var shell=new TableLayoutPanel {Dock=DockStyle.Fill, BackColor=Background, ColumnCount=2, RowCount=1, Margin=Padding.Empty};
+        shell.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 236));
+        shell.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        Controls.Add(shell);
+        shell.Controls.Add(sidePanel,0,0);
+        var main=new TableLayoutPanel {Dock=DockStyle.Fill, ColumnCount=1, RowCount=2, Margin=Padding.Empty};
+        main.RowStyles.Add(new RowStyle(SizeType.Absolute, 79));
+        main.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        shell.Controls.Add(main,1,0);
+        var header=new TableLayoutPanel {Dock=DockStyle.Fill, BackColor=Side, ColumnCount=4, Padding=new Padding(18,10,20,10)};
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 290));
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 182));
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 148));
+        heading.Font=new Font("Segoe UI Semibold",18);
+        header.Controls.Add(heading,0,0);
+        var quickBox=new Panel {Dock=DockStyle.Fill,BackColor=Side,Padding=new Padding(7,9,8,9)};
+        quickSearch.Dock=DockStyle.Fill;quickSearch.PlaceholderText="⌕  Futbolçu, klub və ya məşqçi...";
+        quickSearch.KeyDown+=(_,e)=>{if(e.KeyCode==Keys.Enter){e.SuppressKeyPress=true;StartQuickSearch();}};
+        quickBox.Controls.Add(quickSearch);
+        header.Controls.Add(quickBox,1,0);
+        header.Controls.Add(serverLabel,2,0);
+        reconnect.Dock=DockStyle.Fill;
+        reconnect.Margin=new Padding(8,7,0,7);
+        reconnect.Click+=async (_,_)=>await CheckServerAsync();
+        header.Controls.Add(reconnect,3,0);
+        main.Controls.Add(header,0,0);
+        main.Controls.Add(canvas,0,1);
+        BuildSidebar();
+        // Native GDI+ animated startup surface. It covers the form briefly,
+        // not the Windows taskbar, and never waits for a slow server.
+        splash=new StartupSplash(Icon) {Dock=DockStyle.Fill,Visible=!smokeTest};
+        Controls.Add(splash);
+        splash.BringToFront();
+        canvas.SizeChanged+=(_,_)=>ResizeCards();
+        statusTimer.Tick+=async (_,_)=>
+        {
+            if(!smokeTest && WindowState!=FormWindowState.Minimized && !connected)
+                await CheckServerAsync();
+        };
+        probeClock.Tick+=(_,_)=>
+        {
+            if(!probing)return;
+            int elapsed=(int)(DateTime.UtcNow-probeStarted).TotalSeconds;
+            serverLabel.Text=elapsed<8?"● Qoşulur":elapsed<25?"● Server oyadılır":$"● Gözlənilir {elapsed}s";
+            connectionDetail=elapsed<12?"Serverə təhlükəsiz HTTPS bağlantısı qurulur…":
+                $"Render serveri oyanır · {elapsed} saniyə. Ana səhifə və taktika işləməyə davam edir.";
+            HomeRefreshStatus();
+        };
+        Shown+=async (_,_)=>
+        {
+            Navigate("home");
+            if(smokeTest)
+            {
+                try
+                {
+                    if(!immersive || FormBorderStyle!=FormBorderStyle.None || WindowState!=FormWindowState.Maximized)
+                        throw new InvalidOperationException("Application did not launch in fullscreen");
+                    if(canvas.Controls.Count<6 || !canvas.Controls.OfType<NativeHero>().Any())
+                        throw new InvalidOperationException("Modern dashboard hero was not rendered");
+                    if(offlineCatalog.Count<100)
+                        throw new InvalidOperationException("Bundled local football discovery index not loaded");
+                    ToggleImmersive();
+                    if(immersive || FormBorderStyle!=FormBorderStyle.Sizable || WindowState!=FormWindowState.Maximized)
+                        throw new InvalidOperationException("F11 did not leave fullscreen");
+                    ToggleImmersive();
+                    if(!immersive || FormBorderStyle!=FormBorderStyle.None || WindowState!=FormWindowState.Maximized)
+                        throw new InvalidOperationException("F11 did not re-enter fullscreen");
+                    Navigate("tactics");
+                    if(!canvas.Controls.OfType<Panel>().Any())
+                        throw new InvalidOperationException("Tactics screen missing");
+                    Navigate("search");
+                    Navigate("favorites");
+                    TestResult=0;
+                }
+                catch {TestResult=3;}
+                Close();
+            }
+            else if(splashPreview)
+            {
+                splash.BeginAnimation();
+                await Task.Delay(450);
+                try
+                {
+                    string? path=Environment.GetEnvironmentVariable("MATCHLAB_SPLASH_SCREENSHOT");
+                    if(!string.IsNullOrWhiteSpace(path))
+                    {
+                        using var bmp=new Bitmap(Math.Max(1,splash.Width),Math.Max(1,splash.Height));
+                        splash.DrawToBitmap(bmp,new Rectangle(Point.Empty,bmp.Size));
+                        bmp.Save(path,System.Drawing.Imaging.ImageFormat.Png);
+                    }
+                    TestResult=0;
+                }
+                catch {TestResult=4;}
+                Close();
+            }
+            else
+            {
+                // Splash runs on the UI timer; HTTP checks run independently.
+                // Slow/free Render hosting must never freeze or prolong startup.
+                splash.BeginAnimation();
+                statusTimer.Start();
+                _=CheckServerAsync();
+            }
+        };
+    }
+
+    private void OnWindowKeyDown(object? sender, KeyEventArgs e)
+    {
+        if(e.KeyCode==Keys.F11 || (e.KeyCode==Keys.Escape && immersive))
+        {
+            ToggleImmersive();
+            e.Handled=true;
+            e.SuppressKeyPress=true;
+        }
+    }
+
+    // Starts in fullscreen. F11 toggles fullscreen; Esc exits to framed maximized.
+    // Keep the desktop taskbar and normal window controls accessible after exit.
+    private void ToggleImmersive()
+    {
+        if(!immersive)
+        {
+            previousWindowState=WindowState;
+            previousBounds=WindowState==FormWindowState.Normal?Bounds:RestoreBounds;
+            FormBorderStyle=FormBorderStyle.None;
+            WindowState=FormWindowState.Normal;
+            Bounds=Screen.FromControl(this).Bounds;
+            WindowState=FormWindowState.Maximized;
+            immersive=true;
+        }
+        else
+        {
+            WindowState=FormWindowState.Normal;
+            FormBorderStyle=FormBorderStyle.Sizable;
+            if(previousBounds.Width>0 && previousBounds.Height>0)
+                Bounds=previousBounds;
+            WindowState=previousWindowState;
+            immersive=false;
+        }
+    }
+
+    private static Button Button(string label, int width=130, Color? color=null)
+    {
+        var b=new Button
+        {
+            Text=label, Width=width, Height=44,
+            BackColor=Raised, ForeColor=color??Foreground,
+            FlatStyle=FlatStyle.Flat, Cursor=Cursors.Hand,
+            Font=new Font("Segoe UI Semibold", 10),
+            TextAlign=ContentAlignment.MiddleCenter,
+            Margin=new Padding(4)
+        };
+        b.FlatAppearance.BorderSize=0;
+        b.FlatAppearance.MouseOverBackColor=Color.FromArgb(46,72,90);
+        b.FlatAppearance.MouseDownBackColor=Color.FromArgb(56,83,100);
+        return b;
+    }
+    private static Label CreateLabel(string value, float size=11, bool bold=false, Color? color=null)
+        =>new() {Text=value, ForeColor=color??Foreground, AutoEllipsis=true,
+            Font=new Font(bold?"Segoe UI Semibold":"Segoe UI",size),
+            TextAlign=ContentAlignment.MiddleLeft};
+    private int CardWidth=>Math.Max(540,canvas.ClientSize.Width-61);
+    private Panel Card(int height=100)
+    {
+        var p=new NativeCard { Width=CardWidth, Height=height, BackColor=CardBackground,
+            Margin=new Padding(0,0,0,13),Padding=new Padding(14) };
+        canvas.Controls.Add(p);
+        return p;
+    }
+    private Panel Section(string name, int height=50)
+    {
+        var p=Card(height);p.BackColor=Background;
+        var label=CreateLabel(name,16,true,Green);
+        label.Dock=DockStyle.Fill;
+        p.Controls.Add(label);
+        return p;
+    }
+    private void Message(string message, bool isError=false)
+    {
+        var p=Card(82);
+        var label=CreateLabel(message,11,false,isError?Error:Muted);
+        label.Dock=DockStyle.Fill;
+        label.Padding=new Padding(8);
+        p.Controls.Add(label);
+    }
+    private void ResizeCards()
+    {
+        foreach(Control control in canvas.Controls)
+            if(control is Panel p) p.Width=CardWidth;
+    }
+    private void BuildSidebar()
+    {
+        var logoBox=new PictureBox {SizeMode=PictureBoxSizeMode.Zoom};
+        logoBox.Image=Icon.ToBitmap();logoBox.SetBounds(18,23,39,39);
+        sidePanel.Controls.Add(logoBox);
+        var brand=CreateLabel("MATCHLAB AZ",16,true,Foreground);brand.SetBounds(65,23,157,37);
+        sidePanel.Controls.Add(brand);
+        var subtitle=CreateLabel("FOOTBALL INTELLIGENCE",8,false,Muted);
+        subtitle.SetBounds(65,59,163,23);sidePanel.Controls.Add(subtitle);
+        var divider=new Panel {BackColor=Color.FromArgb(42,58,78)};
+        divider.SetBounds(15,102,207,1);sidePanel.Controls.Add(divider);
+        var caption=CreateLabel("NAVİQASİYA",8,true,Muted);
+        caption.SetBounds(21,115,195,29);sidePanel.Controls.Add(caption);
+        (string Id,string Label)[] buttons=
+        {
+            ("home","⌂   Ana səhifə"), ("matches","⚽  Canlı matçlar"), ("standings","▤   Turnir cədvəli"),
+            ("search","⌕   Axtarış"), ("tactics","▦   Taktika studiyası"),
+            ("favorites","☆   Seçilmişlər"), ("settings","⚙   Tənzimləmələr")
+        };
+        int y=151;
+        foreach(var item in buttons)
+        {
+            var b=Button(item.Label,205);
+            b.BackColor=Side;
+            b.TextAlign=ContentAlignment.MiddleLeft;
+            b.SetBounds(15,y,205,47);
+            b.Click+=(_,_)=>Navigate(item.Id);
+            sidePanel.Controls.Add(b);sidebarButtons[item.Id]=b;
+            y+=56;
+        }
+        var footer=new Panel {BackColor=Color.FromArgb(24,48,47),Anchor=AnchorStyles.Bottom|AnchorStyles.Left|AnchorStyles.Right};
+        footer.SetBounds(15,sidePanel.Height-136,205,112);
+        var footTitle=CreateLabel("●  Canlı məlumat statusu",10,true,Green);
+        footTitle.SetBounds(12,10,181,27);footer.Controls.Add(footTitle);
+        var note=CreateLabel("Rəsmi mənbə cavab vermirsə,
+saxta nəticə göstərilmir.",9,false,Muted);
+        note.SetBounds(12,38,183,62);footer.Controls.Add(note);
+        sidePanel.Controls.Add(footer);
+        sidePanel.SizeChanged+=(_,_)=>footer.Top=Math.Max(560,sidePanel.Height-136);
+    }
+    private void StartQuickSearch()
+    {
+        term=quickSearch.Text.Trim();
+        if(term.Length==0)return;
+        Navigate("search");
+        ShowLocalSearch(term,category);
+        _=LoadSearch(generation,term,category);
+    }
+    private void LoadOfflineCatalog()
+    {
+        try
+        {
+            using var stream=typeof(NativeFootballForm).Assembly.GetManifestResourceStream("matchlab.offline-catalog.json");
+            if(stream==null)return;
+            using var document=JsonDocument.Parse(stream);
+            foreach(var record in document.RootElement.EnumerateArray())offlineCatalog.Add(record.Clone());
+        }
+        catch { /* Optional local discovery index cannot block startup. */ }
+    }
+    private void Navigate(string target)
+    {
+        view=target;generation++;
+        homeStatusLabel=null;homeArchiveLabel=null;homeLiveLabel=null;homeServerLabel=null;homePreview=null;
+        canvas.Controls.Clear();
+        canvas.AutoScrollPosition=new Point(0,0);
+        foreach(var kv in sidebarButtons)
+        {
+            bool active=kv.Key==view;
+            kv.Value.BackColor=active?Raised:Side;
+            kv.Value.ForeColor=active?Green:Foreground;
+        }
+        heading.Text=target switch
+        {
+            "home"=>"MATCHLAB AZ", "matches"=>"Futbol matçları", "standings"=>"Turnir cədvəli",
+            "search"=>"Futbol arxivi", "tactics"=>"Taktika studiyası",
+            "favorites"=>"Seçilmişlər", "settings"=>"Tənzimləmələr",
+            "details"=>"Matç mərkəzi", "profile"=>"Futbol profili", _=>"MATCHLAB AZ"
+        };
+        switch(target)
+        {
+            case "home": Home();break;
+            case "matches": Matches();break;
+            case "standings": Standings();break;
+            case "search": Search();break;
+            case "tactics": Tactics();break;
+            case "favorites": Favorites();break;
+            case "settings": Settings();break;
+        }
+    }
+    private void Home()
+    {
+        // A native WinForms dashboard with the same visual language as the site:
+        // green accents, atmospheric hero, compact stats, rich live match preview.
+        var hero=new NativeHero {Width=CardWidth,Height=230,Margin=new Padding(0,0,0,15)};
+        canvas.Controls.Add(hero);
+        var eyebrow=CreateLabel("● MATCHLAB LIVE · AZƏRBAYCAN",9,true,Green);
+        eyebrow.SetBounds(28,17,520,29);hero.Controls.Add(eyebrow);
+        var h1=CreateLabel("Futbolun bütün dünyası",29,true,Foreground);
+        h1.SetBounds(27,53,760,57);hero.Controls.Add(h1);
+        var sub=CreateLabel("Canlı matçlar, dünya futbol arxivi, turnirlər və taktiki analiz — bir mərkəzdə.",12,false,Muted);
+        sub.SetBounds(28,117,900,35);hero.Controls.Add(sub);
+        var live=Button("⚽  Canlı matçları aç",204,Green);
+        live.BackColor=Green;live.ForeColor=Background;
+        live.SetBounds(28,169,206,46);live.Click+=(_,_)=>Navigate("matches");hero.Controls.Add(live);
+        var browse=Button("⌕  Dünya arxivini axtar",218,Foreground);
+        browse.SetBounds(249,169,220,46);browse.Click+=(_,_)=>Navigate("search");hero.Controls.Add(browse);
+        hero.SizeChanged+=(_,_)=>{h1.Width=Math.Max(420,hero.Width-120);sub.Width=Math.Max(480,hero.Width-85);};
+        Section("CANLI İCMAL",42);
+        var stats=Card(140);stats.Padding=Padding.Empty;
+        var metrics=new (string Head,string Detail, Func<string> Value,Action<Label> Save)[]
+        {
+            ("CANLI OYUN", "Serverdən təsdiqlənir", ()=>lastLiveCount?.ToString(CultureInfo.InvariantCulture)??"—", l=>homeLiveLabel=l),
+            ("DÜNYA ARXİVİ", "Kimlik qeydləri", ()=>serverTotal?.ToString("N0",CultureInfo.InvariantCulture)??"—",l=>homeArchiveLabel=l),
+            ("LİQALAR", "Seçilmiş filtrlər", ()=>(Leagues.Length-1).ToString(),l=>{}),
+            ("SERVER", "HTTPS API", ()=>connected?"Aktiv":"Gözlənilir",l=>homeServerLabel=l)
+        };
+        var tiles=new List<Panel>();
+        foreach(var item in metrics)
+        {
+            var tile=new NativeCard {BackColor=Color.FromArgb(22,41,56),Height=116};
+            var label=CreateLabel(item.Head,9,true,Muted);label.SetBounds(13,11,235,22);tile.Controls.Add(label);
+            var value=CreateLabel(item.Value(),22,true,Foreground);value.SetBounds(13,34,240,41);tile.Controls.Add(value);
+            var footer=CreateLabel(item.Detail,9,false,Muted);footer.SetBounds(13,82,250,22);tile.Controls.Add(footer);
+            item.Save(value);stats.Controls.Add(tile);tiles.Add(tile);
+        }
+        void ReflowTiles()
+        {
+            var gap=12;var margin=12;
+            int width=Math.Max(140,(stats.ClientSize.Width-2*margin-3*gap)/4);
+            for(int i=0;i<tiles.Count;i++)
+            {
+                tiles[i].SetBounds(margin+i*(width+gap),12,width,116);
+                foreach(var label in tiles[i].Controls.OfType<Label>())label.Width=Math.Max(130,width-23);
+            }
+        }
+        stats.SizeChanged+=(_,_)=>ReflowTiles();ReflowTiles();
+        Section("CANLI MATÇ MƏRKƏZİ",44);
+        var preview=Card(282);homePreview=preview;
+        var headingPreview=CreateLabel("Bugünkü futbol",19,true,Foreground);
+        headingPreview.SetBounds(15,9,490,45);preview.Controls.Add(headingPreview);
+        var viewMatches=Button("Bütün matçlar  ›",176,Green);
+        viewMatches.SetBounds(preview.Width-192,12,176,42);preview.Controls.Add(viewMatches);
+        viewMatches.Anchor=AnchorStyles.Top|AnchorStyles.Right;
+        viewMatches.Click+=(_,_)=>Navigate("matches");
+        var matchNote=CreateLabel("Matçlar mənbədən alınır. Yalnız təsdiqlənmiş nəticələr göstərilir.",11,false,Muted);
+        matchNote.SetBounds(16,70,760,38);preview.Controls.Add(matchNote);
+        var divider=new Panel {BackColor=Color.FromArgb(48,67,82)};
+        divider.SetBounds(16,120,preview.Width-32,1);divider.Anchor=AnchorStyles.Left|AnchorStyles.Right|AnchorStyles.Top;
+        preview.Controls.Add(divider);
+        var matchPlaceholder=CreateLabel("⌛  Canlı məlumatlar yoxlanılır. Taktika və arxiv menyuları artıq açıqdır.",12,false,Muted);
+        matchPlaceholder.SetBounds(20,150,preview.Width-45,65);matchPlaceholder.Name="homePreviewMessage";
+        matchPlaceholder.Anchor=AnchorStyles.Left|AnchorStyles.Right|AnchorStyles.Top;
+        preview.Controls.Add(matchPlaceholder);
+        Section("SÜRƏTLİ KEÇİD",43);
+        var shortcuts=Card(126);shortcuts.Padding=Padding.Empty;
+        var shortcutsData=new[]{("▤","Turnir cədvəli","Liqa mövqeləri","standings"),
+            ("⌕","Futbolçu axtarışı","Klublar və məşqçilər","search"),
+            ("▦","Taktika studiyası","Yerli lövhə","tactics")};
+        var shortcutCards=new List<Panel>();
+        foreach(var (glyph,caption,detail,target) in shortcutsData)
+        {
+            var tile=new NativeCard {BackColor=Color.FromArgb(26,45,61),Height=104,Cursor=Cursors.Hand};
+            var symbol=CreateLabel(glyph,23,true,Green);symbol.SetBounds(11,25,47,50);tile.Controls.Add(symbol);
+            var name=CreateLabel(caption,11,true,Foreground);name.SetBounds(56,18,260,40);tile.Controls.Add(name);
+            var text=CreateLabel(detail,9,false,Muted);text.SetBounds(56,56,260,28);tile.Controls.Add(text);
+            EventHandler click=(_,_)=>Navigate(target);
+            tile.Click+=click;symbol.Click+=click;name.Click+=click;text.Click+=click;
+            shortcuts.Controls.Add(tile);shortcutCards.Add(tile);
+        }
+        void ResizeShortcuts()
+        {
+            int gap=13,margin=12;
+            int width=Math.Max(160,(shortcuts.ClientSize.Width-2*margin-gap*2)/3);
+            for(int i=0;i<shortcutCards.Count;i++)
+            {
+                shortcutCards[i].SetBounds(margin+i*(width+gap),11,width,104);
+                foreach(var l in shortcutCards[i].Controls.OfType<Label>())if(l.Left>=50)l.Width=Math.Max(95,width-64);
+            }
+        }
+        shortcuts.SizeChanged+=(_,_)=>ResizeShortcuts();ResizeShortcuts();
+        Section("BAĞLANTI VƏ MƏNBƏ",43);
+        var status=Card(82);
+        homeStatusLabel=CreateLabel(connectionDetail,11,false,connected?Green:Muted);
+        homeStatusLabel.Dock=DockStyle.Fill;homeStatusLabel.Padding=new Padding(8);
+        status.Controls.Add(homeStatusLabel);
+        _=LoadHomePreview(generation);
+    }
+    private async Task LoadHomePreview(int token)
+    {
+        try
+        {
+            var data=await Get("/api/live?league=all&date="+day.ToString("yyyy-MM-dd",CultureInfo.InvariantCulture),95000);
+            if(view!="home"||token!=generation||homePreview==null)return;
+            var preview=homePreview;
+            var old=preview.Controls.Find("homePreviewMessage",false).FirstOrDefault();
+            if(old!=null)preview.Controls.Remove(old);
+            var rows=Items(data,"items").ToList();
+            if(!ReadBool(data,"available")||ReadBool(data,"stale"))
+            {
+                var message=CreateLabel("Mənbə hazırda yeni nəticəni təsdiqləmir. Köhnə hesablar canlı kimi göstərilmir.",11,false,Orange);
+                message.SetBounds(22,147,preview.Width-50,70);message.Anchor=AnchorStyles.Left|AnchorStyles.Right|AnchorStyles.Top;
+                message.Name="homePreviewMessage";preview.Controls.Add(message);return;
+            }
+            lastLiveCount=rows.Count(x=>Str(x,"state")=="live");
+            if(homeLiveLabel!=null)homeLiveLabel.Text=lastLiveCount.ToString(CultureInfo.InvariantCulture);
+            if(rows.Count==0)
+            {
+                var message=CreateLabel("Bu tarixdə mövcud mənbələr üzrə oyun tapılmadı.",11,false,Muted);
+                message.Name="homePreviewMessage";message.SetBounds(22,145,preview.Width-50,65);
+                preview.Controls.Add(message);return;
+            }
+            int y=135;
+            foreach(var match in rows.Take(3))
+            {
+                var row=CreateLabel(Str(Property(match,"home"),"name","—")+"   "+
+                    (Str(match,"state")=="scheduled"?"— : —":Str(match,"homeScore","—")+" : "+Str(match,"awayScore","—"))+"   "+
+                    Str(Property(match,"away"),"name","—")+"  ·  "+Str(match,"state"),11,true,Foreground);
+                row.SetBounds(22,y,preview.Width-52,36);row.Anchor=AnchorStyles.Left|AnchorStyles.Right|AnchorStyles.Top;
+                preview.Controls.Add(row);y+=44;
+            }
+        }
+        catch(Exception ex)
+        {
+            if(view!="home"||token!=generation||homePreview==null)return;
+            var old=homePreview.Controls.Find("homePreviewMessage",false).FirstOrDefault();
+            if(old is Label label)label.Text="Server hələ oyana bilər. Matçlar üçün Yenidən qoşul seçin. "+
+                (ex is OperationCanceledException?"Sorğu vaxtı bitdi.":"Mənbə cavab vermədi.");
+        }
+    }
+    private async Task CheckServerAsync()
+    {
+        if(probing)
+        {
+            connectionDetail="Serverə sorğu göndərilib və cavab gözlənilir. Cari proses davam edir.";
+            HomeRefreshStatus();return;
+        }
+        probing=true;probeStarted=DateTime.UtcNow;
+        reconnect.Text="↻ Qoşulur...";reconnect.Enabled=false;
+        serverLabel.ForeColor=Orange;serverLabel.Text="● Qoşulur";
+        connectionDetail="Serverə qoşulur… Pulsuz Render hosting yuxu rejimindən oyanırsa, bu təxminən 1 dəqiqə çəkə bilər.";
+        probeClock.Start();HomeRefreshStatus();
+        try
+        {
+            var data=await Get("/api/status",105000);
+            connected=ReadBool(data,"ok")||ReadBool(data,"backend");
+            var total=Property(Property(data,"world"),"total");
+            if(total.ValueKind==JsonValueKind.Number&&total.TryGetInt32(out var n)&&n>0)serverTotal=n;
+            serverLabel.ForeColor=connected?Green:Error;
+            serverLabel.Text=connected?"● Server aktiv":"● Cavab natamam";
+            connectionDetail=connected?"Serverə HTTPS bağlantısı quruldu. Arxiv və matç məlumatları mənbədən yoxlanır.":
+                "Server status cavabında təsdiq tapılmadı. Digər bölmələr lokal işləyir.";
+        }
+        catch(OperationCanceledException)
+        {
+            connected=false;serverLabel.ForeColor=Error;serverLabel.Text="● Vaxt bitdi";
+            connectionDetail="Server 105 saniyədə cavab vermədi. İnternetini və Render hosting statusunu yoxla.";
+        }
+        catch(HttpRequestException ex)
+        {
+            connected=false;serverLabel.ForeColor=Error;serverLabel.Text="● Bağlantı xətası";
+            connectionDetail="Server bağlantısı alınmadı: "+ex.Message;
+        }
+        catch(Exception ex)
+        {
+            connected=false;serverLabel.ForeColor=Error;serverLabel.Text="● Mənbə əlçatan deyil";
+            connectionDetail="Server sorğusu nəticəsiz qaldı: "+ex.Message;
+        }
+        finally
+        {
+            probeClock.Stop();probing=false;reconnect.Enabled=true;reconnect.Text="↻ Yenidən yoxla";
+            HomeRefreshStatus();
+        }
+    }
+    private void HomeRefreshStatus()
+    {
+        if(view!="home")return;
+        if(homeStatusLabel!=null&&!homeStatusLabel.IsDisposed)
+        {
+            homeStatusLabel.Text=connectionDetail;
+            homeStatusLabel.ForeColor=connected?Green:probing?Orange:Error;
+        }
+        if(homeArchiveLabel!=null&&!homeArchiveLabel.IsDisposed)
+            homeArchiveLabel.Text=serverTotal?.ToString("N0",CultureInfo.InvariantCulture)??"—";
+        if(homeServerLabel!=null&&!homeServerLabel.IsDisposed)
+            homeServerLabel.Text=connected?"Aktiv":probing?"Oyadılır":"Xəta";
+    }
+    private static JsonElement Property(JsonElement e,string key)
+        =>e.ValueKind==JsonValueKind.Object&&e.TryGetProperty(key,out var value)?value:default;
+    private static string Str(JsonElement e,string key,string fallback="")
+    {
+        var v=Property(e,key);
+        return v.ValueKind switch
+        {
+            JsonValueKind.String=>v.GetString()??fallback,
+            JsonValueKind.Number=>v.ToString(),
+            JsonValueKind.True=>"true",
+            JsonValueKind.False=>"false",
+            _=>fallback
+        };
+    }
+    private static bool ReadBool(JsonElement e,string key)=>Property(e,key).ValueKind==JsonValueKind.True;
+    private static IEnumerable<JsonElement> Items(JsonElement e,string key)
+    {
+        var v=Property(e,key);
+        return v.ValueKind==JsonValueKind.Array?v.EnumerateArray():Enumerable.Empty<JsonElement>();
+    }
+    private static async Task<JsonElement> Get(string path, int milliseconds=92000)
+    {
+        using var cancel=new CancellationTokenSource(milliseconds);
+        using var response=await Api.GetAsync(path,cancel.Token);
+        response.EnsureSuccessStatusCode();
+        await using var stream=await response.Content.ReadAsStreamAsync(cancel.Token);
+        using var doc=await JsonDocument.ParseAsync(stream,cancellationToken:cancel.Token);
+        return doc.RootElement.Clone();
+    }
+    private void FailPage(string message,Action retry)
+    {
+        Message(message,true);
+        var p=Card(70);
+        var b=Button("↻  Yenidən yoxla",176,Orange);b.SetBounds(15,13,176,42);
+        b.Click+=(_,_)=>retry();p.Controls.Add(b);
+    }
+    private ComboBox LeagueSelector(bool standings)
+    {
+        var c=new ComboBox{DropDownStyle=ComboBoxStyle.DropDownList,BackColor=Raised,ForeColor=Foreground,
+            Width=235,Font=new Font("Segoe UI",11),FlatStyle=FlatStyle.Flat};
+        var list=standings?Leagues.Skip(1).ToArray():Leagues;
+        foreach(var item in list)c.Items.Add(item.Name);
+        int ix=Array.FindIndex(list,item=>item.Id==league);
+        c.SelectedIndex=Math.Max(0,ix);
+        c.SelectedIndexChanged+=(_,_)=>
+        {
+            if(c.SelectedIndex<0)return;
+            var selected=list[c.SelectedIndex].Id;
+            if(selected==league)return;
+            league=selected;Navigate(view);
+        };
+        return c;
+    }
+    private void Matches()
+    {
+        int id=generation;
+        var controls=Card(78);
+        var previous=Button("‹",48);previous.SetBounds(13,16,45,44);
+        previous.Click+=(_,_)=>{day=day.AddDays(-1);Navigate("matches");};controls.Controls.Add(previous);
+        var date=CreateLabel(day.ToString("dd.MM.yyyy",CultureInfo.InvariantCulture),12,true);
+        date.SetBounds(70,16,115,42);controls.Controls.Add(date);
+        var next=Button("›",46);next.SetBounds(181,16,44,44);
+        next.Click+=(_,_)=>{day=day.AddDays(1);Navigate("matches");};controls.Controls.Add(next);
+        var today=Button("Bu gün",93);today.SetBounds(231,16,92,44);
+        today.Click+=(_,_)=>{day=DateTime.UtcNow.AddHours(4).Date;Navigate("matches");};controls.Controls.Add(today);
+        var chooser=LeagueSelector(false);chooser.SetBounds(351,18,235,42);controls.Controls.Add(chooser);
+        var dateRow=Card(100);
+        var stripLabel=CreateLabel("⚽  OYUN TƏQVİMİ   ·   BAKI VAXTI",9,true,Green);
+        stripLabel.SetBounds(14,3,450,24);dateRow.Controls.Add(stripLabel);
+        var days=new List<Button>();
+        for(int delta=-3;delta<=3;delta++)
+        {
+            var when=day.AddDays(delta);
+            var choice=Button(when.ToString("ddd dd",CultureInfo.GetCultureInfo("az-Latn-AZ")),90,delta==0?Green:Muted);
+            choice.BackColor=delta==0?Color.FromArgb(32,69,67):Raised;
+            choice.TextAlign=ContentAlignment.MiddleCenter;
+            choice.Click+=(_,_)=>{day=when;Navigate("matches");};
+            dateRow.Controls.Add(choice);days.Add(choice);
+        }
+        void LayoutCalendar()
+        {
+            int gap=7,margin=14;
+            int width=Math.Max(70,(dateRow.Width-margin*2-gap*6)/7);
+            for(int i=0;i<days.Count;i++)days[i].SetBounds(margin+i*(width+gap),33,width,50);
+        }
+        dateRow.SizeChanged+=(_,_)=>LayoutCalendar();LayoutCalendar();
+        Message("Serverdəki təsdiqlənmiş matçlar alınır. Yüklənərkən digər bölmələr işləyir.");
+        _=LoadMatches(id);
+    }
+    private async Task LoadMatches(int id)
+    {
+        try
+        {
+            var result=await Get("/api/live?league="+Uri.EscapeDataString(league)+"&date="+day.ToString("yyyy-MM-dd",CultureInfo.InvariantCulture));
+            if(id!=generation||view!="matches")return;
+            while(canvas.Controls.Count>2)canvas.Controls.RemoveAt(canvas.Controls.Count-1);
+            if(ReadBool(result,"stale")||ReadBool(result,"partial"))Message("Mənbə qismən əlçatandır. Köhnə nəticələr canlı sayılmır.",true);
+            var msg=Str(result,"message");if(msg.Length>0)Message(msg,!ReadBool(result,"available"));
+            var rows=Items(result,"items").ToList();
+            if(rows.Count==0){Message("Bu liqa və tarix üçün təsdiqlənmiş matç məlumatı yoxdur.");return;}
+            string current="";
+            foreach(var m in rows)
+            {
+                string group=Str(m,"leagueName",Str(m,"league","Digər"));
+                if(group!=current){Section(group);current=group;}
+                MatchCard(m);
+            }
+        }
+        catch(Exception ex)
+        {
+            if(id!=generation||view!="matches")return;
+            while(canvas.Controls.Count>2)canvas.Controls.RemoveAt(canvas.Controls.Count-1);
+            FailPage("Matçları almaq mümkün olmadı: "+ex.Message,()=>Navigate("matches"));
+        }
+    }
+    private void MatchCard(JsonElement data,bool saved=false)
+    {
+        var p=Card(124);
+        var home=Property(data,"home");var away=Property(data,"away");
+        string state=Str(data,"state");bool live=state=="live";
+        string homeScore=state=="scheduled"?"–":Str(data,"homeScore","–");
+        string awayScore=state=="scheduled"?"–":Str(data,"awayScore","–");
+        var leagueName=CreateLabel(Str(data,"leagueName","Matç"),9,true,Muted);
+        leagueName.SetBounds(17,5,465,24);p.Controls.Add(leagueName);
+        var homeName=CreateLabel(Str(home,"name","—"),12,true,Foreground);
+        homeName.SetBounds(17,30,480,34);p.Controls.Add(homeName);
+        var awayName=CreateLabel(Str(away,"name","—"),12,true,Foreground);
+        awayName.SetBounds(17,71,480,34);p.Controls.Add(awayName);
+        var h=CreateLabel(homeScore,17,true,Foreground);h.SetBounds(p.Width-215,31,56,34);h.TextAlign=ContentAlignment.MiddleCenter;
+        var a=CreateLabel(awayScore,17,true,Foreground);a.SetBounds(p.Width-215,72,56,34);a.TextAlign=ContentAlignment.MiddleCenter;
+        var status=CreateLabel(saved?"SAXLANMIŞ":live?"● CANLI":state=="final"?"BİTİB":"TƏQVİM",9,true,live?Green:Muted);
+        status.SetBounds(p.Width-150,43,93,38);
+        var key=Str(data,"id");var star=Button(favorites.ContainsKey(key)?"★":"☆",47,Green);
+        star.SetBounds(p.Width-59,40,45,43);
+        foreach(var x in new Control[]{h,a,status,star})p.Controls.Add(x);
+        p.SizeChanged+=(_,_)=>
+        {
+            h.Left=p.Width-215;a.Left=p.Width-215;
+            status.Left=p.Width-150;star.Left=p.Width-59;
+            homeName.Width=Math.Max(300,p.Width-250);awayName.Width=Math.Max(300,p.Width-250);
+        };
+        star.Click+=(_,_)=>
+        {
+            if(favorites.ContainsKey(key))favorites.Remove(key);
+            else favorites[key]=data.GetRawText();
+            SaveFavorites();star.Text=favorites.ContainsKey(key)?"★":"☆";
+        };
+        EventHandler open=(_,_)=>OpenMatch(data.Clone());
+        foreach(var x in new Control[]{p,homeName,awayName,h,a,leagueName,status})x.Click+=open;
+        p.Cursor=Cursors.Hand;
+    }
+    private void SaveFavorites()
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(favoriteFile)!);
+            File.WriteAllText(favoriteFile,JsonSerializer.Serialize(favorites));
+        }
+        catch{ }
+    }
+    private void Standings()
+    {
+        if(league=="all")league="eng.1";
+        int id=generation;
+        var p=Card(77);
+        var choose=LeagueSelector(true);choose.SetBounds(17,16,270,43);p.Controls.Add(choose);
+        Message("Turnir cədvəli serverdən alınır…");
+        _=LoadStandings(id);
+    }
+    private async Task LoadStandings(int id)
+    {
+        try
+        {
+            var result=await Get("/api/standings?league="+Uri.EscapeDataString(league));
+            if(id!=generation||view!="standings")return;
+            while(canvas.Controls.Count>1)canvas.Controls.RemoveAt(canvas.Controls.Count-1);
+            if(ReadBool(result,"stale"))Message("Bu cədvəl köhnə mənbəyə əsaslana bilər.",true);
+            var rows=Items(result,"items").ToList();
+            if(rows.Count==0){Message(Str(result,"message","Cədvəl məlumatı yoxdur"),true);return;}
+            Section("Sıra    Klub                                     O     Q     H     M      X");
+            foreach(var r in rows)
+            {
+                var p=Card(57);
+                var name=CreateLabel(Str(r,"rank")+".  "+Str(r,"name"),12,true);
+                name.SetBounds(15,9,375,36);p.Controls.Add(name);
+                var stats=CreateLabel(Str(r,"played","—")+"      "+Str(r,"win","—")+"      "+Str(r,"draw","—")+"      "+Str(r,"loss","—")+"      "+Str(r,"points","—"),11);
+                stats.SetBounds(390,10,340,35);p.Controls.Add(stats);
+            }
+        }
+        catch(Exception ex)
+        {
+            if(id!=generation||view!="standings")return;
+            while(canvas.Controls.Count>1)canvas.Controls.RemoveAt(canvas.Controls.Count-1);
+            FailPage("Turnir cədvəli alınmadı: "+ex.Message,()=>Navigate("standings"));
+        }
+    }
+    private void Search()
+    {
+        var p=Card(90);
+        var input=new TextBox{Text=term,BackColor=Raised,ForeColor=Foreground,
+            Font=new Font("Segoe UI",13),BorderStyle=BorderStyle.FixedSingle};
+        input.SetBounds(15,21,348,36);p.Controls.Add(input);
+        var filter=new ComboBox{DropDownStyle=ComboBoxStyle.DropDownList,BackColor=Raised,ForeColor=Foreground,
+            FlatStyle=FlatStyle.Flat};
+        filter.Items.AddRange(new object[]{"Hamısı","Futbolçular","Klublar","Məşqçilər"});
+        filter.SelectedIndex=category switch{"players"=>1,"teams"=>2,"coaches"=>3,_=>0};
+        filter.SetBounds(378,21,145,35);p.Controls.Add(filter);
+        var run=Button("Axtar",105,Green);run.SetBounds(541,17,108,44);p.Controls.Add(run);
+        void Submit()
+        {
+            term=input.Text.Trim();category=filter.SelectedIndex switch{1=>"players",2=>"teams",3=>"coaches",_=>"all"};
+            while(canvas.Controls.Count>1)canvas.Controls.RemoveAt(canvas.Controls.Count-1);
+            if(term.Length==0){Message("Futbolçu, klub və ya məşqçi adı yaz.");return;}
+            ShowLocalSearch(term,category);
+            Message("Serverdəki tam dünya arxivində axtarış davam edir…");
+            _ = LoadSearch(generation,term,category);
+        }
+        run.Click+=(_,_)=>Submit();
+        input.KeyDown+=(_,e)=>{if(e.KeyCode==Keys.Enter){e.SuppressKeyPress=true;Submit();}};
+        Message("Server gec oyanarsa, məhdud yerli kəşf indeksində real adlar axtarılır; tam dünya bazası onlayndır.");
+    }
+    private void ShowLocalSearch(string q,string kind)
+    {
+        if(string.IsNullOrWhiteSpace(q)||offlineCatalog.Count==0)return;
+        var hits=offlineCatalog.Where(x=>
+            (kind=="all"||Str(x,"kind")==kind)&&
+            (Str(x,"name").Contains(q,StringComparison.OrdinalIgnoreCase)||
+             Str(x,"country").Contains(q,StringComparison.OrdinalIgnoreCase)))
+            .Take(15).ToList();
+        if(hits.Count==0)return;
+        Section("Yerli kəşf indeksi · "+hits.Count+" nəticə (tam arxiv deyil)");
+        foreach(var person in hits)
+        {
+            var panel=Card(64);panel.Cursor=Cursors.Hand;
+            var name=CreateLabel(Str(person,"name"),12,true,Foreground);
+            name.SetBounds(16,6,640,30);panel.Controls.Add(name);
+            var country=CreateLabel(Str(person,"country")+" · "+Str(person,"kind")+" · Yerli indeks",9,false,Muted);
+            country.SetBounds(17,35,640,21);panel.Controls.Add(country);
+            var saved=person.Clone();EventHandler open=(_,_)=>OpenLocalProfile(saved);
+            panel.Click+=open;name.Click+=open;country.Click+=open;
+        }
+    }
+    private void OpenLocalProfile(JsonElement item)
+    {
+        view="profile";generation++;canvas.Controls.Clear();heading.Text="Yerli indeks profili";
+        var back=Card(65);var b=Button("‹ Axtarışa qayıt",190,Green);
+        b.SetBounds(12,11,190,42);b.Click+=(_,_)=>Navigate("search");back.Controls.Add(b);
+        Section(Str(item,"name","Adsız"));
+        Message(Str(item,"country")+" · "+Str(item,"kind")+" · "+Str(item,"position"));
+        Message("Bu qısa məlumat internet olmayanda açılan yerli kəşf indeksindəndir. Tam bioqrafiya və cari heyət məlumatı deyil.");
+        var clubs=Items(item,"clubs").ToList();
+        if(clubs.Count>0)
+        {
+            Section("Tarixi klub əlaqələri (tam karyera deyil)");
+            foreach(var club in clubs.Take(18))Message(club.ToString());
+        }
+        var retry=Card(76);var load=Button("Tam profili aç ↗",198,Green);
+        load.SetBounds(14,14,198,44);retry.Controls.Add(load);
+        string id=Str(item,"id");load.Click+=(_,_)=>OpenProfile(id);
+    }
+    private async Task LoadSearch(int id,string q,string kind)
+    {
+        try
+        {
+            var data=await Get("/api/search?q="+Uri.EscapeDataString(q)+"&kind="+kind);
+            if(id!=generation||view!="search")return;
+            while(canvas.Controls.Count>1)canvas.Controls.RemoveAt(canvas.Controls.Count-1);
+            var rows=Items(data,"items").ToList();
+            Section("Nəticələr · "+rows.Count);
+            if(rows.Count==0){Message("Bu sorğu üzrə qeyd tapılmadı.");return;}
+            foreach(var row in rows)
+            {
+                var p=Card(67);p.Cursor=Cursors.Hand;
+                var name=CreateLabel(Str(row,"name","—"),12,true);name.SetBounds(17,6,610,28);p.Controls.Add(name);
+                var detail=CreateLabel(Str(row,"country")+" · "+Str(row,"kind")+" · "+Str(row,"source"),9,false,Muted);
+                detail.SetBounds(18,34,610,20);p.Controls.Add(detail);
+                var entry=Str(row,"id");EventHandler open=(_,_)=>OpenProfile(entry);
+                p.Click+=open;name.Click+=open;detail.Click+=open;
+            }
+        }
+        catch(Exception ex)
+        {
+            if(id!=generation||view!="search")return;
+            Message("Tam server arxivi əlçatan deyil: "+ex.Message,true);
+            var retry=Button("↻ Yenidən axtar",180,Green);
+            var row=Card(70);retry.SetBounds(12,12,180,44);row.Controls.Add(retry);
+            retry.Click+=(_,_)=>_ = LoadSearch(generation,term,category);
+        }
+    }
+    private async void OpenProfile(string id)
+    {
+        view="profile";generation++;int token=generation;canvas.Controls.Clear();
+        heading.Text="Futbol profili";
+        var back=Card(72);var b=Button("‹  Axtarışa qayıt",178,Green);b.SetBounds(15,15,178,41);
+        b.Click+=(_,_)=>Navigate("search");back.Controls.Add(b);
+        Message("Profil serverdən alınır…");
+        try
+        {
+            var data=await Get("/api/profile?id="+Uri.EscapeDataString(id));
+            if(view!="profile"||token!=generation)return;
+            while(canvas.Controls.Count>1)canvas.Controls.RemoveAt(canvas.Controls.Count-1);
+            var profile=Property(data,"profile");
+            if(profile.ValueKind!=JsonValueKind.Object){Message("Profil üçün təsdiqlənmiş məlumat yoxdur.",true);return;}
+            Section(Str(profile,"name","Adsız profil"));
+            Message(Str(profile,"country")+" · "+Str(profile,"kind")+" · "+Str(profile,"position"));
+            Message("Doğum: "+Str(profile,"birth","Məlum deyil")+"       Vəfat: "+Str(profile,"death","—"));
+            foreach(var key in new[]{"description","careerStatus","lifeStatus","source"})
+            {
+                string value=Str(profile,key);
+                if(value.Length>0)Message(key+": "+value);
+            }
+            foreach(var key in new[]{"clubs","coached","awards"})
+            {
+                var items=Items(profile,key).Take(40).ToList();
+                if(items.Count==0)continue;
+                Section(key+" · "+items.Count);
+                foreach(var item in items)
+                    Message(item.ValueKind==JsonValueKind.Object?Str(item,"name","Məlumat yoxdur"):item.ToString());
+            }
+        }
+        catch(Exception ex)
+        {
+            if(view=="profile"&&token==generation)
+                FailPage("Profil açılmadı: "+ex.Message,()=>OpenProfile(id));
+        }
+    }
+    private async void OpenMatch(JsonElement match)
+    {
+        selectedMatch=match.Clone();
+        view="details";generation++;int token=generation;
+        canvas.Controls.Clear();heading.Text="Matç mərkəzi";
+        var back=Card(72);var b=Button("‹  Matçlara qayıt",178,Green);b.SetBounds(15,14,178,41);b.Click+=(_,_)=>Navigate("matches");back.Controls.Add(b);
+        var home=Property(match,"home");var away=Property(match,"away");
+        Section(Str(home,"name","—")+"   "+Str(match,"homeScore","—")+" : "+Str(match,"awayScore","—")+"   "+Str(away,"name","—"));
+        Message(Str(match,"leagueName")+"  ·  "+Str(match,"state")+"  ·  "+Str(match,"source"));
+        var parts=Str(match,"id").Split(':',3);
+        if(parts.Length!=3 || !new[]{"espn","sportsdb","open"}.Contains(parts[0])){Message("Detallı hadisə mənbəyi tapılmadı.");return;}
+        try
+        {
+            var data=await Get("/api/match-detail?provider="+parts[0]+"&league="+Uri.EscapeDataString(parts[1])+"&id="+Uri.EscapeDataString(parts[2]));
+            if(view!="details"||token!=generation)return;
+            if(!ReadBool(data,"available"))Message(Str(data,"message","Hadisələr mənbədə yoxdur"),true);
+            var events=Items(data,"events").Take(70).ToList();
+            if(events.Count>0)Section("Matç hadisələri");
+            foreach(var e in events)Message(Str(e,"minute",Str(e,"clock"))+"  "+Str(e,"text",Str(e,"type")));
+            var stats=Items(data,"statistics").Take(40).ToList();
+            if(stats.Count>0)Section("Statistika");
+            foreach(var s in stats)Message(Str(s,"name",Str(s,"label"))+"   "+Str(s,"home",Str(s,"homeValue","—"))+" : "+Str(s,"away",Str(s,"awayValue","—")));
+        }
+        catch(Exception ex)
+        {
+            if(view=="details"&&token==generation)Message("Matç detalları alınmadı: "+ex.Message,true);
+        }
+    }
+    private void Tactics()
+    {
+        var p=Card(80);
+        var label=CreateLabel("Düzülüş",12,true);label.SetBounds(16,16,120,40);p.Controls.Add(label);
+        var combo=new ComboBox{DropDownStyle=ComboBoxStyle.DropDownList,BackColor=Raised,ForeColor=Foreground,Width=230};
+        string[] formations={"4-3-3","4-2-3-1","4-4-2","3-5-2","3-4-3","5-3-2","4-1-4-1"};
+        combo.Items.AddRange(formations.Cast<object>().ToArray());
+        combo.SelectedIndex=Math.Max(0,Array.IndexOf(formations,formation));
+        combo.SetBounds(143,19,230,42);p.Controls.Add(combo);
+        var pitchCard=Card(575);
+        var pitch=new FormationPitch{Dock=DockStyle.Fill,Formation=formation};pitchCard.Controls.Add(pitch);
+        combo.SelectedIndexChanged+=(_,_)=>{formation=formations[combo.SelectedIndex];pitch.Formation=formation;pitch.ResetPositions();};
+        var reset=Button("↺ Mövqeləri sıfırla",194,Green);
+        reset.SetBounds(395,15,194,46);p.Controls.Add(reset);reset.Click+=(_,_)=>pitch.ResetPositions();
+        Message("Taktika lövhəsi internetsiz işləyir. Oyunçu nişanlarını siçanla sürükləyərək mövqeləri dəyişə bilərsən. Mövqelər yerli məşq şablonudur, rəsmi heyət deyil.");
+    }
+    private void Favorites()
+    {
+        Section("Seçilmiş matçlar");
+        Message("Yadda saxlanmış nəticələr canlı hesab deyil.");
+        if(favorites.Count==0){Message("☆ işarəsinə basaraq matçı seçilmişlərə əlavə edə bilərsən.");return;}
+        foreach(var snapshot in favorites.Values.ToArray())
+        {
+            try{using var json=JsonDocument.Parse(snapshot);MatchCard(json.RootElement.Clone(),true);}catch{}
+        }
+    }
+    private void Settings()
+    {
+        Section("MATCHLAB AZ Native v0.9.47");
+        Message("Həqiqi .NET Windows Forms proqramıdır. HTML, JavaScript, WebView və brauzer daxil deyil.");
+        Message("Canlı oyunlar və dünya arxivi HTTPS API-dən alınır. Render Free istifadəsiz qaldıqda təxminən bir dəqiqə oyana bilər. Bu məhdudiyyəti masaüstü proqram aradan qaldıra bilməz.");
+        Message("Server ünvanı: https://matchlab-az-online.onrender.com");
+        var p=Card(77);var retry=Button("↻ Serveri yoxla",170,Orange);retry.SetBounds(16,15,170,43);
+        retry.Click+=async (_,_)=>await CheckServerAsync();p.Controls.Add(retry);
+    }
+    protected override void OnFormClosed(FormClosedEventArgs e)
+    {
+        statusTimer.Stop();probeClock.Stop();
+        splash.StopAnimation();
+        base.OnFormClosed(e);
+    }
+}
+
+public sealed class FormationPitch : Panel
+{
+    private string formation="4-3-3";
+    private readonly List<PointF> positions=new();
+    private int dragged=-1;
+    public string Formation {get=>formation;set{if(value==formation)return;formation=value;ResetPositions();}}
+    public FormationPitch()
+    {
+        DoubleBuffered=true;ResizeRedraw=true;BackColor=Color.FromArgb(17,83,61);
+        Cursor=Cursors.Hand;ResetPositions();
+    }
+    public void ResetPositions()
+    {
+        positions.Clear();
+        var parts=Formation.Split('-');var layers=new List<int>{1};
+        layers.AddRange(parts.Select(n=>int.TryParse(n,out var v)?v:0));
+        for(int r=0;r<layers.Count;r++)
+        {
+            int amount=layers[r];if(amount<1)continue;
+            float vertical=.88f-r*(.76f/Math.Max(1,layers.Count-1));
+            for(int n=0;n<amount;n++)
+                positions.Add(new PointF((n+1f)/(amount+1f),vertical));
+        }
+        Invalidate();
+    }
+    private RectangleF FieldBounds => new(30,22,Math.Max(250,Width-60),Math.Max(400,Height-44));
+    protected override void OnMouseDown(MouseEventArgs e)
+    {
+        base.OnMouseDown(e);if(e.Button!=MouseButtons.Left)return;
+        var rect=FieldBounds;
+        for(int i=0;i<Math.Min(11,positions.Count);i++)
+        {
+            float x=rect.X+positions[i].X*rect.Width,y=rect.Y+positions[i].Y*rect.Height;
+            if((x-e.X)*(x-e.X)+(y-e.Y)*(y-e.Y)<29*29)
+            {dragged=i;Capture=true;break;}
+        }
+    }
+    protected override void OnMouseMove(MouseEventArgs e)
+    {
+        base.OnMouseMove(e);if(dragged<0||dragged>=positions.Count)return;
+        var rect=FieldBounds;
+        positions[dragged]=new PointF(
+            Math.Clamp((e.X-rect.X)/rect.Width,.055f,.945f),
+            Math.Clamp((e.Y-rect.Y)/rect.Height,.055f,.945f));
+        Invalidate();
+    }
+    protected override void OnMouseUp(MouseEventArgs e)
+    {
+        base.OnMouseUp(e);dragged=-1;Capture=false;
+    }
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        base.OnPaint(e);
+        var g=e.Graphics;g.SmoothingMode=SmoothingMode.AntiAlias;
+        var f=FieldBounds;
+        using var line=new Pen(Color.FromArgb(165,226,238,224),2);
+        using var a=new SolidBrush(Color.FromArgb(21,100,69));
+        using var b=new SolidBrush(Color.FromArgb(22,107,75));
+        int countStripes=8;
+        for(int t=0;t<countStripes;t++)g.FillRectangle(t%2==0?a:b,f.X,f.Y+t*f.Height/countStripes,f.Width,f.Height/countStripes+1);
+        g.DrawRectangle(line,f.X,f.Y,f.Width,f.Height);
+        g.DrawLine(line,f.X,f.Y+f.Height/2,f.X+f.Width,f.Y+f.Height/2);
+        g.DrawEllipse(line,f.X+f.Width/2-48,f.Y+f.Height/2-48,96,96);
+        g.DrawRectangle(line,f.X+f.Width*.22f,f.Y,f.Width*.56f,f.Height*.16f);
+        g.DrawRectangle(line,f.X+f.Width*.22f,f.Y+f.Height*(1-.16f),f.Width*.56f,f.Height*.16f);
+        using var numbers=new Font("Segoe UI Semibold",10);
+        for(int i=0;i<Math.Min(11,positions.Count);i++)
+        {
+            float x=f.X+positions[i].X*f.Width;
+            float y=f.Y+positions[i].Y*f.Height;
+            using var outline=new SolidBrush(Color.FromArgb(230,246,249,235));
+            using var circle=new SolidBrush(Color.FromArgb(181,245,104));
+            g.FillEllipse(outline,x-21,y-21,42,42);
+            g.FillEllipse(circle,x-18,y-18,36,36);
+            string number=(i+1).ToString(CultureInfo.InvariantCulture);
+            var measure=g.MeasureString(number,numbers);
+            g.DrawString(number,numbers,Brushes.Black,x-measure.Width/2,y-measure.Height/2);
+        }
+    }
+}
+
+// Consistent WinForms rendering inspired by the website's deep-blue and lime design.
+// Native GDI+ only. No embedded browser, HTML, CSS or WebView.
+internal sealed class NativeCard : Panel
+{
+    public NativeCard(){DoubleBuffered=true;ResizeRedraw=true;}
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        base.OnPaint(e);
+        e.Graphics.SmoothingMode=SmoothingMode.AntiAlias;
+        using var pen=new Pen(Color.FromArgb(43,63,82),1);
+        using var path=new GraphicsPath();
+        int radius=14,diameter=radius*2;
+        var bounds=new Rectangle(0,0,Math.Max(1,Width-2),Math.Max(1,Height-2));
+        if(bounds.Width>diameter&&bounds.Height>diameter)
+        {
+            path.AddArc(bounds.Left,bounds.Top,diameter,diameter,180,90);
+            path.AddArc(bounds.Right-diameter,bounds.Top,diameter,diameter,270,90);
+            path.AddArc(bounds.Right-diameter,bounds.Bottom-diameter,diameter,diameter,0,90);
+            path.AddArc(bounds.Left,bounds.Bottom-diameter,diameter,diameter,90,90);
+            path.CloseFigure();e.Graphics.DrawPath(pen,path);
+        }
+    }
+}
+internal sealed class NativeHero : Panel
+{
+    public NativeHero(){DoubleBuffered=true;ResizeRedraw=true;BackColor=Color.FromArgb(22,49,49);}
+    protected override void OnPaintBackground(PaintEventArgs e)
+    {
+        var b=ClientRectangle;
+        if(b.Width<=0||b.Height<=0)return;
+        using var brush=new LinearGradientBrush(b,Color.FromArgb(18,56,49),Color.FromArgb(25,42,65),0f);
+        e.Graphics.FillRectangle(brush,b);
+        e.Graphics.SmoothingMode=SmoothingMode.AntiAlias;
+        using var circles=new SolidBrush(Color.FromArgb(22,159,241,121));
+        e.Graphics.FillEllipse(circles,Width-300,-120,400,400);
+        using var pen=new Pen(Color.FromArgb(57,113,129,110),1);
+        e.Graphics.DrawRectangle(pen,0,0,Width-1,Height-1);
+    }
+}
+
+========== END FILE: 06_WINDOWS_CSHARP_V0947_LEGACY/native/windows-app/Program.cs ==========
+
+
+========== BEGIN FILE: 06_WINDOWS_CSHARP_V0947_LEGACY/native/windows-app/StartupSplash.cs ==========
+
+using System;
+using System.Diagnostics;
+using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.Drawing.Text;
+using System.Windows.Forms;
+
+namespace MATCHLABAZ;
+
+/// <summary>
+/// Local, nonblocking native splash animation. It does not request network data,
+/// play audio, or contain HTML/WebView elements. The progress line is an activity
+/// indicator rather than a fake download percentage.
+/// </summary>
+public sealed class StartupSplash : Panel
+{
+    private readonly System.Windows.Forms.Timer frames = new() {Interval=16};
+    private readonly Stopwatch clock = new();
+    private readonly Bitmap logo;
+    private bool running;
+    private const double HoldMs=1820;
+    private const double FinishMs=2150;
+
+    public StartupSplash(Icon icon)
+    {
+        DoubleBuffered=true;
+        ResizeRedraw=true;
+        BackColor=Color.FromArgb(9,18,29);
+        logo=icon.ToBitmap();
+        frames.Tick+=(_,_)=>
+        {
+            if(!running)return;
+            if(clock.Elapsed.TotalMilliseconds>=FinishMs)
+            {
+                StopAnimation();
+                Visible=false;
+                return;
+            }
+            Invalidate();
+        };
+    }
+
+    public void BeginAnimation()
+    {
+        if(running)return;
+        running=true;
+        Visible=true;
+        BringToFront();
+        clock.Restart();
+        frames.Start();
+    }
+    public void StopAnimation()
+    {
+        running=false;
+        frames.Stop();
+        clock.Stop();
+    }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        base.OnPaint(e);
+        var g=e.Graphics;
+        g.SmoothingMode=SmoothingMode.AntiAlias;
+        g.TextRenderingHint=TextRenderingHint.AntiAliasGridFit;
+        float w=Math.Max(1,ClientSize.Width),h=Math.Max(1,ClientSize.Height);
+        using(var background=new LinearGradientBrush(new PointF(0,0),new PointF(w,h),
+              Color.FromArgb(6,17,28),Color.FromArgb(14,37,45)))
+            g.FillRectangle(background,0,0,w,h);
+        float cx=w/2f,cy=h/2f;
+        float scale=Math.Clamp(Math.Min(w/1100f,h/720f),0.64f,1.17f);
+        double elapsed=clock.Elapsed.TotalMilliseconds;
+        double t=elapsed/1000.0;
+        float enter=(float)Math.Min(1.0,elapsed/550);
+        enter=1f-(1f-enter)*(1f-enter)*(1f-enter);
+        float breath=0.5f+0.5f*(float)Math.Sin(t*3.5);
+        float fade=(float)Math.Clamp((elapsed-HoldMs)/(FinishMs-HoldMs),0,1);
+        float iconSize=110*scale;
+        float iconY=cy-200*scale+(1-enter)*15f;
+        using(var haloPen=new Pen(Color.FromArgb(18+(int)(25*breath),128,240,104),5*scale))
+            g.DrawEllipse(haloPen,cx-94*scale,iconY-38*scale,188*scale,188*scale);
+        using(var ringPen=new Pen(Color.FromArgb(180,162,238,112),4*scale))
+            g.DrawArc(ringPen,cx-92*scale,iconY-36*scale,184*scale,184*scale,
+                (float)(t*135)%360f,76f);
+        var dest=new RectangleF(cx-iconSize/2,iconY,iconSize,iconSize);
+        g.DrawImage(logo,dest);
+        using var large=new Font("Segoe UI Semibold",37*scale,FontStyle.Bold,GraphicsUnit.Pixel);
+        using var small=new Font("Segoe UI",15*scale,FontStyle.Regular,GraphicsUnit.Pixel);
+        using var status=new Font("Segoe UI",13*scale,FontStyle.Regular,GraphicsUnit.Pixel);
+        using var titleBrush=new SolidBrush(Color.FromArgb(240,245,250));
+        using var taglineBrush=new SolidBrush(Color.FromArgb(154,186,198));
+        using var accentBrush=new SolidBrush(Color.FromArgb(164,239,117));
+        using var centered=new StringFormat {Alignment=StringAlignment.Center,LineAlignment=StringAlignment.Center};
+        g.DrawString("MATCHLAB AZ",large,titleBrush,new RectangleF(cx-390*scale,cy-32*scale,780*scale,57*scale),centered);
+        g.DrawString("FUTBOL ANALİTİKA MƏRKƏZİ",small,taglineBrush,
+            new RectangleF(cx-300*scale,cy+34*scale,600*scale,28*scale),centered);
+        float barWidth=258*scale,barY=cy+111*scale;
+        float barX=cx-barWidth/2;
+        using(var track=new SolidBrush(Color.FromArgb(41,65,75)))
+            g.FillRoundedRectangleSafe(track,new RectangleF(barX,barY,barWidth,5*scale),3*scale);
+        float wave=(float)(0.5+0.5*Math.Sin(elapsed/350));
+        float segment=76*scale;
+        float head=barX+(barWidth-segment)*wave;
+        using(var paint=new SolidBrush(Color.FromArgb(164,239,117)))
+            g.FillRoundedRectangleSafe(paint,new RectangleF(head,barY,segment,5*scale),3*scale);
+        g.DrawString("Tətbiq açılır…",status,taglineBrush,
+            new RectangleF(cx-180*scale,barY+23*scale,360*scale,26*scale),centered);
+        using(var footerBrush=new SolidBrush(Color.FromArgb(83,117,125)))
+            g.DrawString("WINDOWS · NATIVE APPLICATION",status,footerBrush,
+                new RectangleF(cx-250*scale,h-72*scale,500*scale,25*scale),centered);
+        // Fade the splash to its dark base before revealing the ready local UI.
+        if(fade>0)
+        {
+            using var veil=new SolidBrush(Color.FromArgb((int)(fade*255),9,18,29));
+            g.FillRectangle(veil,0,0,w,h);
+        }
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if(disposing)
+        {
+            StopAnimation();
+            frames.Dispose();
+            logo.Dispose();
+        }
+        base.Dispose(disposing);
+    }
+}
+
+internal static class SplashDrawing
+{
+    // Compatible with .NET 8 WinForms GDI+; no third-party drawing library.
+    public static void FillRoundedRectangleSafe(this Graphics g,SolidBrush brush,RectangleF rect,float radius)
+    {
+        using var path=new GraphicsPath();
+        float d=radius*2;
+        path.AddArc(rect.Left,rect.Top,d,d,180,90);
+        path.AddArc(rect.Right-d,rect.Top,d,d,270,90);
+        path.AddArc(rect.Right-d,rect.Bottom-d,d,d,0,90);
+        path.AddArc(rect.Left,rect.Bottom-d,d,d,90,90);
+        path.CloseFigure();
+        g.FillPath(brush,path);
+    }
+}
+
+========== END FILE: 06_WINDOWS_CSHARP_V0947_LEGACY/native/windows-app/StartupSplash.cs ==========
+
+
+========== BEGIN FILE: 06_WINDOWS_CSHARP_V0947_LEGACY/native/windows-app/offline-catalog.json ==========
+
+[{"id":"Q5705","name":"Lionel Messi","kind":"players","country":"Argentina","position":"Hücumçu","clubs":["Barcelona","Paris Saint-Germain","Inter Miami"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"Q11571","name":"Cristiano Ronaldo","kind":"players","country":"Portugal","position":"Hücumçu","clubs":["Sporting CP","Manchester United","Real Madrid","Juventus","Al Nassr"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"Q21621995","name":"Kylian Mbappé","kind":"players","country":"France","position":"Hücumçu","clubs":["Monaco","Paris Saint-Germain","Real Madrid"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"Q28967995","name":"Erling Haaland","kind":"players","country":"Norway","position":"Hücumçu","clubs":["Molde","Red Bull Salzburg","Borussia Dortmund","Manchester City"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:neymar","name":"Neymar","qid":"Q142794","kind":"players","country":"Brazil","position":"Hücumçu","clubs":["Santos","Barcelona","Paris Saint-Germain","Al Hilal"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:mohamed-salah","name":"Mohamed Salah","qid":"Q1354960","kind":"players","country":"Egypt","position":"Hücumçu","clubs":["Basel","Chelsea","Fiorentina","Roma","Liverpool"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:kevin-de-bruyne","name":"Kevin De Bruyne","kind":"players","country":"Belgium","position":"Yarımmüdafiəçi","clubs":["Genk","Chelsea","Wolfsburg","Manchester City"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:luka-modri","name":"Luka Modrić","kind":"players","country":"Croatia","position":"Yarımmüdafiəçi","clubs":["Dinamo Zagreb","Tottenham Hotspur","Real Madrid"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:toni-kroos","name":"Toni Kroos","kind":"players","country":"Germany","position":"Yarımmüdafiəçi","clubs":["Bayern Munich","Bayer Leverkusen","Real Madrid"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:karim-benzema","name":"Karim Benzema","kind":"players","country":"France","position":"Hücumçu","clubs":["Lyon","Real Madrid","Al Ittihad"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:robert-lewandowski","name":"Robert Lewandowski","kind":"players","country":"Poland","position":"Hücumçu","clubs":["Lech Poznań","Borussia Dortmund","Bayern Munich","Barcelona"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:harry-kane","name":"Harry Kane","kind":"players","country":"England","position":"Hücumçu","clubs":["Tottenham Hotspur","Bayern Munich"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:vin-cius-j-nior","name":"Vinícius Júnior","kind":"players","country":"Brazil","position":"Hücumçu","clubs":["Flamengo","Real Madrid"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:jude-bellingham","name":"Jude Bellingham","kind":"players","country":"England","position":"Yarımmüdafiəçi","clubs":["Birmingham City","Borussia Dortmund","Real Madrid"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:rodri","name":"Rodri","kind":"players","country":"Spain","position":"Yarımmüdafiəçi","clubs":["Villarreal","Atlético Madrid","Manchester City"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:pedri","name":"Pedri","kind":"players","country":"Spain","position":"Yarımmüdafiəçi","clubs":["Las Palmas","Barcelona"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:lamine-yamal","name":"Lamine Yamal","kind":"players","country":"Spain","position":"Hücumçu","clubs":["Barcelona"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:raphinha","name":"Raphinha","kind":"players","country":"Brazil","position":"Hücumçu","clubs":["Vitória SC","Sporting CP","Rennes","Leeds United","Barcelona"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:phil-foden","name":"Phil Foden","kind":"players","country":"England","position":"Yarımmüdafiəçi","clubs":["Manchester City"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:bukayo-saka","name":"Bukayo Saka","kind":"players","country":"England","position":"Hücumçu","clubs":["Arsenal"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:martin-degaard","name":"Martin Ødegaard","kind":"players","country":"Norway","position":"Yarımmüdafiəçi","clubs":["Strømsgodset","Real Madrid","Real Sociedad","Arsenal"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:declan-rice","name":"Declan Rice","kind":"players","country":"England","position":"Yarımmüdafiəçi","clubs":["West Ham United","Arsenal"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:bruno-fernandes","name":"Bruno Fernandes","kind":"players","country":"Portugal","position":"Yarımmüdafiəçi","clubs":["Udinese","Sampdoria","Sporting CP","Manchester United"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:virgil-van-dijk","name":"Virgil van Dijk","kind":"players","country":"Netherlands","position":"Müdafiəçi","clubs":["Groningen","Celtic","Southampton","Liverpool"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:trent-alexander-arnold","name":"Trent Alexander-Arnold","kind":"players","country":"England","position":"Müdafiəçi","clubs":["Liverpool","Real Madrid"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:alisson-becker","name":"Alisson Becker","kind":"players","country":"Brazil","position":"Qapıçı","clubs":["Internacional","Roma","Liverpool"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:thibaut-courtois","name":"Thibaut Courtois","kind":"players","country":"Belgium","position":"Qapıçı","clubs":["Genk","Atlético Madrid","Chelsea","Real Madrid"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:manuel-neuer","name":"Manuel Neuer","kind":"players","country":"Germany","position":"Qapıçı","clubs":["Schalke 04","Bayern Munich"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:gianluigi-donnarumma","name":"Gianluigi Donnarumma","kind":"players","country":"Italy","position":"Qapıçı","clubs":["AC Milan","Paris Saint-Germain"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:jan-oblak","name":"Jan Oblak","kind":"players","country":"Slovenia","position":"Qapıçı","clubs":["Benfica","Rio Ave","Atlético Madrid"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:antoine-griezmann","name":"Antoine Griezmann","kind":"players","country":"France","position":"Hücumçu","clubs":["Real Sociedad","Atlético Madrid","Barcelona"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:juli-n-lvarez","name":"Julián Álvarez","kind":"players","country":"Argentina","position":"Hücumçu","clubs":["River Plate","Manchester City","Atlético Madrid"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:federico-valverde","name":"Federico Valverde","kind":"players","country":"Uruguay","position":"Yarımmüdafiəçi","clubs":["Peñarol","Real Madrid","Deportivo La Coruña"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:eduardo-camavinga","name":"Eduardo Camavinga","kind":"players","country":"France","position":"Yarımmüdafiəçi","clubs":["Rennes","Real Madrid"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:aur-lien-tchouam-ni","name":"Aurélien Tchouaméni","kind":"players","country":"France","position":"Yarımmüdafiəçi","clubs":["Bordeaux","Monaco","Real Madrid"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:casemiro","name":"Casemiro","kind":"players","country":"Brazil","position":"Yarımmüdafiəçi","clubs":["São Paulo","Real Madrid","Porto","Manchester United"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:joshua-kimmich","name":"Joshua Kimmich","kind":"players","country":"Germany","position":"Yarımmüdafiəçi","clubs":["RB Leipzig","Bayern Munich"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:jamal-musiala","name":"Jamal Musiala","kind":"players","country":"Germany","position":"Yarımmüdafiəçi","clubs":["Bayern Munich"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:florian-wirtz","name":"Florian Wirtz","kind":"players","country":"Germany","position":"Yarımmüdafiəçi","clubs":["Bayer Leverkusen","Liverpool"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:victor-osimhen","name":"Victor Osimhen","kind":"players","country":"Nigeria","position":"Hücumçu","clubs":["Wolfsburg","Charleroi","Lille","Napoli","Galatasaray"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:khvicha-kvaratskhelia","name":"Khvicha Kvaratskhelia","kind":"players","country":"Georgia","position":"Hücumçu","clubs":["Rubin Kazan","Dinamo Batumi","Napoli","Paris Saint-Germain"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:son-heung-min","name":"Son Heung-min","kind":"players","country":"South Korea","position":"Hücumçu","clubs":["Hamburg","Bayer Leverkusen","Tottenham Hotspur","Los Angeles FC"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:sadio-man","name":"Sadio Mané","kind":"players","country":"Senegal","position":"Hücumçu","clubs":["Metz","Red Bull Salzburg","Southampton","Liverpool","Bayern Munich","Al Nassr"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:riyad-mahrez","name":"Riyad Mahrez","kind":"players","country":"Algeria","position":"Hücumçu","clubs":["Le Havre","Leicester City","Manchester City","Al Ahli"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:zlatan-ibrahimovi","name":"Zlatan Ibrahimović","kind":"players","country":"Sweden","position":"Hücumçu","clubs":["Malmö","Ajax","Juventus","Inter Milan","Barcelona","AC Milan","Paris Saint-Germain","Manchester United","LA Galaxy"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:sergio-ramos","name":"Sergio Ramos","kind":"players","country":"Spain","position":"Müdafiəçi","clubs":["Sevilla","Real Madrid","Paris Saint-Germain","Monterrey"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:gerard-piqu","name":"Gerard Piqué","kind":"players","country":"Spain","position":"Müdafiəçi","clubs":["Manchester United","Real Zaragoza","Barcelona"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:andr-s-iniesta","name":"Andrés Iniesta","kind":"players","country":"Spain","position":"Yarımmüdafiəçi","clubs":["Barcelona","Vissel Kobe","Emirates Club"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:xavi-hern-ndez","name":"Xavi Hernández","kind":"players","country":"Spain","position":"Yarımmüdafiəçi","clubs":["Barcelona","Al Sadd"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:sergio-busquets","name":"Sergio Busquets","kind":"players","country":"Spain","position":"Yarımmüdafiəçi","clubs":["Barcelona","Inter Miami"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:david-beckham","name":"David Beckham","kind":"players","country":"England","position":"Yarımmüdafiəçi","clubs":["Manchester United","Real Madrid","LA Galaxy","AC Milan","Paris Saint-Germain"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:wayne-rooney","name":"Wayne Rooney","kind":"players","country":"England","position":"Hücumçu","clubs":["Everton","Manchester United","D.C. United","Derby County"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:robin-van-persie","name":"Robin van Persie","kind":"players","country":"Netherlands","position":"Hücumçu","clubs":["Feyenoord","Arsenal","Manchester United","Fenerbahçe"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:arjen-robben","name":"Arjen Robben","kind":"players","country":"Netherlands","position":"Hücumçu","clubs":["Groningen","PSV","Chelsea","Real Madrid","Bayern Munich"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:franck-rib-ry","name":"Franck Ribéry","kind":"players","country":"France","position":"Hücumçu","clubs":["Marseille","Bayern Munich","Fiorentina","Salernitana"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:mesut-ozil","name":"Mesut Özil","kind":"players","country":"Germany","position":"Yarımmüdafiəçi","clubs":["Schalke 04","Werder Bremen","Real Madrid","Arsenal","Fenerbahçe","İstanbul Başakşehir"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:luis-su-rez","name":"Luis Suárez","kind":"players","country":"Uruguay","position":"Hücumçu","clubs":["Groningen","Ajax","Liverpool","Barcelona","Atlético Madrid","Grêmio","Inter Miami"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:gareth-bale","name":"Gareth Bale","kind":"players","country":"Wales","position":"Hücumçu","clubs":["Southampton","Tottenham Hotspur","Real Madrid","Los Angeles FC"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:eden-hazard","name":"Eden Hazard","kind":"players","country":"Belgium","position":"Hücumçu","clubs":["Lille","Chelsea","Real Madrid"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:didier-drogba","name":"Didier Drogba","kind":"players","country":"Ivory Coast","position":"Hücumçu","clubs":["Le Mans","Guingamp","Marseille","Chelsea","Shanghai Shenhua","Galatasaray","Montreal Impact"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:yaya-tour","name":"Yaya Touré","kind":"players","country":"Ivory Coast","position":"Yarımmüdafiəçi","clubs":["Olympiacos","Monaco","Barcelona","Manchester City","Qingdao Huanghai"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:andrea-pirlo","name":"Andrea Pirlo","kind":"players","country":"Italy","position":"Yarımmüdafiəçi","clubs":["Brescia","Inter Milan","AC Milan","Juventus","New York City FC"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"Q1835","name":"Zinedine Zidane","kind":"players","country":"France","position":"Yarımmüdafiəçi","clubs":["Cannes","Bordeaux","Juventus","Real Madrid"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:thierry-henry","name":"Thierry Henry","kind":"players","country":"France","position":"Hücumçu","clubs":["Monaco","Juventus","Arsenal","Barcelona","New York Red Bulls"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:pel","name":"Pelé","kind":"players","country":"Brazil","position":"Hücumçu","clubs":["Santos","New York Cosmos"],"image":"","source":"Local discovery index","isHistoricalAssociations":true,"lifeStatus":"deceased","death":"2022-12-29"},{"id":"p:diego-maradona","name":"Diego Maradona","kind":"players","country":"Argentina","position":"Yarımmüdafiəçi","clubs":["Argentinos Juniors","Boca Juniors","Barcelona","Napoli","Sevilla","Newell's Old Boys"],"image":"","source":"Local discovery index","isHistoricalAssociations":true,"lifeStatus":"deceased","death":"2020-11-25"},{"id":"p:ronaldinho","name":"Ronaldinho","kind":"players","country":"Brazil","position":"Yarımmüdafiəçi","clubs":["Grêmio","Paris Saint-Germain","Barcelona","AC Milan","Flamengo","Atlético Mineiro","Querétaro","Fluminense"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:ronaldo-naz-rio","name":"Ronaldo Nazário","kind":"players","country":"Brazil","position":"Hücumçu","clubs":["Cruzeiro","PSV","Barcelona","Inter Milan","Real Madrid","AC Milan","Corinthians"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:paolo-maldini","name":"Paolo Maldini","kind":"players","country":"Italy","position":"Müdafiəçi","clubs":["AC Milan"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:gianluigi-buffon","name":"Gianluigi Buffon","kind":"players","country":"Italy","position":"Qapıçı","clubs":["Parma","Juventus","Paris Saint-Germain"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:kak","name":"Kaká","kind":"players","country":"Brazil","position":"Yarımmüdafiəçi","clubs":["São Paulo","AC Milan","Real Madrid","Orlando City"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:samuel-eto-o","name":"Samuel Eto'o","kind":"players","country":"Cameroon","position":"Hücumçu","clubs":["Real Madrid","Leganés","Mallorca","Barcelona","Inter Milan","Chelsea","Everton","Antalyaspor","Konyaspor","Qatar SC"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:ruud-van-nistelrooy","name":"Ruud van Nistelrooy","kind":"players","country":"Netherlands","position":"Hücumçu","clubs":["Den Bosch","Heerenveen","PSV","Manchester United","Real Madrid","Hamburg","Málaga"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:petr-ech","name":"Petr Čech","kind":"players","country":"Czech Republic","position":"Qapıçı","clubs":["Chmel Blšany","Sparta Prague","Rennes","Chelsea","Arsenal"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:aitana-bonmat","name":"Aitana Bonmatí","kind":"players","country":"Spain","position":"Yarımmüdafiəçi","clubs":["Barcelona"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:alexia-putellas","name":"Alexia Putellas","kind":"players","country":"Spain","position":"Yarımmüdafiəçi","clubs":["Espanyol","Levante","Barcelona"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:sam-kerr","name":"Sam Kerr","kind":"players","country":"Australia","position":"Hücumçu","clubs":["Sydney FC","Western New York Flash","Perth Glory","Sky Blue FC","Chicago Red Stars","Chelsea"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"p:marta","name":"Marta","kind":"players","country":"Brazil","position":"Hücumçu","clubs":["Vasco da Gama","Umeå IK","Los Angeles Sol","FC Gold Pride","Western New York Flash","Tyresö FF","Orlando Pride"],"image":"","source":"Local discovery index","isHistoricalAssociations":true},{"id":"Q723476","name":"Qarabağ FK","kind":"teams","country":"Azerbaijan","image":"","source":"Local discovery index"},{"id":"t:neftci-pfk","name":"Neftçi PFK","kind":"teams","country":"Azerbaijan","image":"","source":"Local discovery index"},{"id":"t:sabah-fk","name":"Sabah FK","kind":"teams","country":"Azerbaijan","image":"","source":"Local discovery index"},{"id":"t:zire-fk","name":"Zirə FK","kind":"teams","country":"Azerbaijan","image":"","source":"Local discovery index"},{"id":"t:araz-naxcivan","name":"Araz-Naxçıvan","kind":"teams","country":"Azerbaijan","image":"","source":"Local discovery index"},{"id":"Q8682","name":"Real Madrid","kind":"teams","country":"Spain","image":"","source":"Local discovery index"},{"id":"Q7156","name":"Barcelona","kind":"teams","country":"Spain","image":"","source":"Local discovery index"},{"id":"t:atl-tico-madrid","name":"Atlético Madrid","kind":"teams","country":"Spain","image":"","source":"Local discovery index"},{"id":"t:sevilla","name":"Sevilla","kind":"teams","country":"Spain","image":"","source":"Local discovery index"},{"id":"t:real-sociedad","name":"Real Sociedad","kind":"teams","country":"Spain","image":"","source":"Local discovery index"},{"id":"t:villarreal","name":"Villarreal","kind":"teams","country":"Spain","image":"","source":"Local discovery index"},{"id":"t:athletic-club","name":"Athletic Club","kind":"teams","country":"Spain","image":"","source":"Local discovery index"},{"id":"t:real-betis","name":"Real Betis","kind":"teams","country":"Spain","image":"","source":"Local discovery index"},{"id":"t:valencia","name":"Valencia","kind":"teams","country":"Spain","image":"","source":"Local discovery index"},{"id":"Q31456834","name":"Manchester City","kind":"teams","country":"England","image":"","source":"Local discovery index"},{"id":"t:manchester-united","name":"Manchester United","kind":"teams","country":"England","image":"","source":"Local discovery index"},{"id":"Q9617","name":"Arsenal","kind":"teams","country":"England","image":"","source":"Local discovery index"},{"id":"Q1130849","name":"Liverpool","kind":"teams","country":"England","image":"","source":"Local discovery index"},{"id":"t:chelsea","name":"Chelsea","kind":"teams","country":"England","image":"","source":"Local discovery index"},{"id":"t:tottenham-hotspur","name":"Tottenham Hotspur","kind":"teams","country":"England","image":"","source":"Local discovery index"},{"id":"t:newcastle-united","name":"Newcastle United","kind":"teams","country":"England","image":"","source":"Local discovery index"},{"id":"t:aston-villa","name":"Aston Villa","kind":"teams","country":"England","image":"","source":"Local discovery index"},{"id":"t:west-ham-united","name":"West Ham United","kind":"teams","country":"England","image":"","source":"Local discovery index"},{"id":"t:everton","name":"Everton","kind":"teams","country":"England","image":"","source":"Local discovery index"},{"id":"t:leicester-city","name":"Leicester City","kind":"teams","country":"England","image":"","source":"Local discovery index"},{"id":"Q15789","name":"Bayern Munich","kind":"teams","country":"Germany","image":"","source":"Local discovery index"},{"id":"t:borussia-dortmund","name":"Borussia Dortmund","kind":"teams","country":"Germany","image":"","source":"Local discovery index"},{"id":"t:bayer-leverkusen","name":"Bayer Leverkusen","kind":"teams","country":"Germany","image":"","source":"Local discovery index"},{"id":"t:rb-leipzig","name":"RB Leipzig","kind":"teams","country":"Germany","image":"","source":"Local discovery index"},{"id":"t:schalke-04","name":"Schalke 04","kind":"teams","country":"Germany","image":"","source":"Local discovery index"},{"id":"t:eintracht-frankfurt","name":"Eintracht Frankfurt","kind":"teams","country":"Germany","image":"","source":"Local discovery index"},{"id":"t:vfb-stuttgart","name":"VfB Stuttgart","kind":"teams","country":"Germany","image":"","source":"Local discovery index"},{"id":"t:juventus","name":"Juventus","kind":"teams","country":"Italy","image":"","source":"Local discovery index"},{"id":"t:inter-milan","name":"Inter Milan","kind":"teams","country":"Italy","image":"","source":"Local discovery index"},{"id":"t:ac-milan","name":"AC Milan","kind":"teams","country":"Italy","image":"","source":"Local discovery index"},{"id":"t:napoli","name":"Napoli","kind":"teams","country":"Italy","image":"","source":"Local discovery index"},{"id":"t:roma","name":"Roma","kind":"teams","country":"Italy","image":"","source":"Local discovery index"},{"id":"t:lazio","name":"Lazio","kind":"teams","country":"Italy","image":"","source":"Local discovery index"},{"id":"t:atalanta","name":"Atalanta","kind":"teams","country":"Italy","image":"","source":"Local discovery index"},{"id":"t:fiorentina","name":"Fiorentina","kind":"teams","country":"Italy","image":"","source":"Local discovery index"},{"id":"Q483020","name":"Paris Saint-Germain","kind":"teams","country":"France","image":"","source":"Local discovery index"},{"id":"t:monaco","name":"Monaco","kind":"teams","country":"France","image":"","source":"Local discovery index"},{"id":"t:marseille","name":"Marseille","kind":"teams","country":"France","image":"","source":"Local discovery index"},{"id":"t:lyon","name":"Lyon","kind":"teams","country":"France","image":"","source":"Local discovery index"},{"id":"t:lille","name":"Lille","kind":"teams","country":"France","image":"","source":"Local discovery index"},{"id":"t:rennes","name":"Rennes","kind":"teams","country":"France","image":"","source":"Local discovery index"},{"id":"Q495299","name":"Galatasaray","kind":"teams","country":"Turkey","image":"","source":"Local discovery index"},{"id":"t:fenerbahce","name":"Fenerbahçe","kind":"teams","country":"Turkey","image":"","source":"Local discovery index"},{"id":"t:besiktas","name":"Beşiktaş","kind":"teams","country":"Turkey","image":"","source":"Local discovery index"},{"id":"t:trabzonspor","name":"Trabzonspor","kind":"teams","country":"Turkey","image":"","source":"Local discovery index"},{"id":"t:i-stanbul-basaksehir","name":"İstanbul Başakşehir","kind":"teams","country":"Turkey","image":"","source":"Local discovery index"},{"id":"t:ajax","name":"Ajax","kind":"teams","country":"Netherlands","image":"","source":"Local discovery index"},{"id":"t:psv","name":"PSV","kind":"teams","country":"Netherlands","image":"","source":"Local discovery index"},{"id":"t:feyenoord","name":"Feyenoord","kind":"teams","country":"Netherlands","image":"","source":"Local discovery index"},{"id":"t:benfica","name":"Benfica","kind":"teams","country":"Portugal","image":"","source":"Local discovery index"},{"id":"t:porto","name":"Porto","kind":"teams","country":"Portugal","image":"","source":"Local discovery index"},{"id":"t:sporting-cp","name":"Sporting CP","kind":"teams","country":"Portugal","image":"","source":"Local discovery index"},{"id":"t:braga","name":"Braga","kind":"teams","country":"Portugal","image":"","source":"Local discovery index"},{"id":"t:celtic","name":"Celtic","kind":"teams","country":"Scotland","image":"","source":"Local discovery index"},{"id":"t:rangers","name":"Rangers","kind":"teams","country":"Scotland","image":"","source":"Local discovery index"},{"id":"t:inter-miami","name":"Inter Miami","kind":"teams","country":"United States","image":"","source":"Local discovery index"},{"id":"t:la-galaxy","name":"LA Galaxy","kind":"teams","country":"United States","image":"","source":"Local discovery index"},{"id":"t:los-angeles-fc","name":"Los Angeles FC","kind":"teams","country":"United States","image":"","source":"Local discovery index"},{"id":"t:new-york-city-fc","name":"New York City FC","kind":"teams","country":"United States","image":"","source":"Local discovery index"},{"id":"t:boca-juniors","name":"Boca Juniors","kind":"teams","country":"Argentina","image":"","source":"Local discovery index"},{"id":"t:river-plate","name":"River Plate","kind":"teams","country":"Argentina","image":"","source":"Local discovery index"},{"id":"t:flamengo","name":"Flamengo","kind":"teams","country":"Brazil","image":"","source":"Local discovery index"},{"id":"t:santos","name":"Santos","kind":"teams","country":"Brazil","image":"","source":"Local discovery index"},{"id":"t:palmeiras","name":"Palmeiras","kind":"teams","country":"Brazil","image":"","source":"Local discovery index"},{"id":"t:corinthians","name":"Corinthians","kind":"teams","country":"Brazil","image":"","source":"Local discovery index"},{"id":"t:al-nassr","name":"Al Nassr","kind":"teams","country":"Saudi Arabia","image":"","source":"Local discovery index"},{"id":"t:al-hilal","name":"Al Hilal","kind":"teams","country":"Saudi Arabia","image":"","source":"Local discovery index"},{"id":"t:al-ittihad","name":"Al Ittihad","kind":"teams","country":"Saudi Arabia","image":"","source":"Local discovery index"},{"id":"t:al-ahli","name":"Al Ahli","kind":"teams","country":"Saudi Arabia","image":"","source":"Local discovery index"},{"id":"t:al-sadd","name":"Al Sadd","kind":"teams","country":"Qatar","image":"","source":"Local discovery index"},{"id":"t:urawa-red-diamonds","name":"Urawa Red Diamonds","kind":"teams","country":"Japan","image":"","source":"Local discovery index"},{"id":"t:vissel-kobe","name":"Vissel Kobe","kind":"teams","country":"Japan","image":"","source":"Local discovery index"},{"id":"t:al-ahly","name":"Al Ahly","kind":"teams","country":"Egypt","image":"","source":"Local discovery index"},{"id":"t:zamalek","name":"Zamalek","kind":"teams","country":"Egypt","image":"","source":"Local discovery index"},{"id":"t:club-am-rica","name":"Club América","kind":"teams","country":"Mexico","image":"","source":"Local discovery index"},{"id":"t:tigres-uanl","name":"Tigres UANL","kind":"teams","country":"Mexico","image":"","source":"Local discovery index"},{"id":"t:monterrey","name":"Monterrey","kind":"teams","country":"Mexico","image":"","source":"Local discovery index"},{"id":"c:pep-guardiola","name":"Pep Guardiola","kind":"coaches","country":"Spain","coached":["Barcelona","Bayern Munich","Manchester City"],"source":"Local discovery index","playerId":"","image":""},{"id":"c:jurgen-klopp","name":"Jürgen Klopp","kind":"coaches","country":"Germany","coached":["Mainz 05","Borussia Dortmund","Liverpool"],"source":"Local discovery index","playerId":"","image":""},{"id":"c:carlo-ancelotti","name":"Carlo Ancelotti","kind":"coaches","country":"Italy","coached":["Parma","Juventus","AC Milan","Chelsea","Paris Saint-Germain","Real Madrid","Bayern Munich","Napoli","Everton"],"source":"Local discovery index","playerId":"","image":""},{"id":"c:zinedine-zidane","name":"Zinedine Zidane","kind":"coaches","country":"France","coached":["Real Madrid"],"source":"Local discovery index","playerId":"Q1835","image":""},{"id":"c:jos-mourinho","name":"José Mourinho","kind":"coaches","country":"Portugal","coached":["Porto","Chelsea","Inter Milan","Real Madrid","Manchester United","Tottenham Hotspur","Roma","Fenerbahçe"],"source":"Local discovery index","playerId":"","image":""},{"id":"c:xabi-alonso","name":"Xabi Alonso","kind":"coaches","country":"Spain","coached":["Real Sociedad B","Bayer Leverkusen","Real Madrid"],"source":"Local discovery index","playerId":"","image":""},{"id":"c:mikel-arteta","name":"Mikel Arteta","kind":"coaches","country":"Spain","coached":["Arsenal"],"source":"Local discovery index","playerId":"","image":""},{"id":"c:unai-emery","name":"Unai Emery","kind":"coaches","country":"Spain","coached":["Valencia","Sevilla","Paris Saint-Germain","Arsenal","Villarreal","Aston Villa"],"source":"Local discovery index","playerId":"","image":""},{"id":"c:luis-enrique","name":"Luis Enrique","kind":"coaches","country":"Spain","coached":["Roma","Celta Vigo","Barcelona","Spain","Paris Saint-Germain"],"source":"Local discovery index","playerId":"","image":""},{"id":"c:hansi-flick","name":"Hansi Flick","kind":"coaches","country":"Germany","coached":["Hoffenheim","Bayern Munich","Germany","Barcelona"],"source":"Local discovery index","playerId":"","image":""},{"id":"c:antonio-conte","name":"Antonio Conte","kind":"coaches","country":"Italy","coached":["Juventus","Italy","Chelsea","Inter Milan","Tottenham Hotspur","Napoli"],"source":"Local discovery index","playerId":"","image":""},{"id":"c:diego-simeone","name":"Diego Simeone","kind":"coaches","country":"Argentina","coached":["Racing Club","Estudiantes","River Plate","San Lorenzo","Catania","Atlético Madrid"],"source":"Local discovery index","playerId":"","image":""},{"id":"c:roberto-de-zerbi","name":"Roberto De Zerbi","kind":"coaches","country":"Italy","coached":["Foggia","Palermo","Benevento","Sassuolo","Shakhtar Donetsk","Brighton","Marseille"],"source":"Local discovery index","playerId":"","image":""},{"id":"c:xavi-hern-ndez","name":"Xavi Hernández","kind":"coaches","country":"Spain","coached":["Al Sadd","Barcelona"],"source":"Local discovery index","playerId":"p:xavi-hern-ndez","image":""},{"id":"c:thierry-henry","name":"Thierry Henry","kind":"coaches","country":"France","coached":["Monaco","Montreal Impact","France U21"],"source":"Local discovery index","playerId":"p:thierry-henry","image":""},{"id":"c:andrea-pirlo","name":"Andrea Pirlo","kind":"coaches","country":"Italy","coached":["Juventus","Fatih Karagümrük","Sampdoria"],"source":"Local discovery index","playerId":"p:andrea-pirlo","image":""},{"id":"c:wayne-rooney","name":"Wayne Rooney","kind":"coaches","country":"England","coached":["Derby County","D.C. United","Birmingham City","Plymouth Argyle"],"source":"Local discovery index","playerId":"p:wayne-rooney","image":""},{"id":"c:frank-lampard","name":"Frank Lampard","kind":"coaches","country":"England","coached":["Derby County","Chelsea","Everton","Coventry City"],"source":"Local discovery index","playerId":"","image":""},{"id":"c:steven-gerrard","name":"Steven Gerrard","kind":"coaches","country":"England","coached":["Rangers","Aston Villa","Al Ettifaq"],"source":"Local discovery index","playerId":"","image":""},{"id":"c:robin-van-persie","name":"Robin van Persie","kind":"coaches","country":"Netherlands","coached":["Heerenveen","Feyenoord"],"source":"Local discovery index","playerId":"p:robin-van-persie","image":""},{"id":"p:johan-cruyff","name":"Johan Cruyff","kind":"players","country":"Netherlands","position":"Hücumçu","clubs":["Ajax","Barcelona","Feyenoord"],"image":"","source":"Local historical discovery index — selected teams, NOT a full career","isHistoricalAssociations":true,"lifeStatus":"deceased"},{"id":"p:franz-beckenbauer","name":"Franz Beckenbauer","kind":"players","country":"Germany","position":"Müdafiəçi","clubs":["Bayern Munich","New York Cosmos","Hamburg"],"image":"","source":"Local historical discovery index — selected teams, NOT a full career","isHistoricalAssociations":true,"lifeStatus":"deceased"},{"id":"p:alfredo-di-st-fano","name":"Alfredo Di Stéfano","kind":"players","country":"Argentina","position":"Hücumçu","clubs":["River Plate","Millonarios","Real Madrid","Espanyol"],"image":"","source":"Local historical discovery index — selected teams, NOT a full career","isHistoricalAssociations":true,"lifeStatus":"deceased"},{"id":"p:eus-bio","name":"Eusébio","kind":"players","country":"Portugal","position":"Hücumçu","clubs":["Benfica"],"image":"","source":"Local historical discovery index — selected teams, NOT a full career","isHistoricalAssociations":true,"lifeStatus":"deceased"},{"id":"p:lev-yashin","name":"Lev Yashin","kind":"players","country":"Soviet Union","position":"Qapıçı","clubs":["Dynamo Moscow"],"image":"","source":"Local historical discovery index — selected teams, NOT a full career","isHistoricalAssociations":true,"lifeStatus":"deceased"},{"id":"p:garrincha","name":"Garrincha","kind":"players","country":"Brazil","position":"Hücumçu","clubs":["Botafogo","Corinthians"],"image":"","source":"Local historical discovery index — selected teams, NOT a full career","isHistoricalAssociations":true,"lifeStatus":"deceased"},{"id":"p:ferenc-pusk-s","name":"Ferenc Puskás","kind":"players","country":"Hungary","position":"Hücumçu","clubs":["Budapest Honvéd","Real Madrid"],"image":"","source":"Local historical discovery index — selected teams, NOT a full career","isHistoricalAssociations":true,"lifeStatus":"deceased"},{"id":"p:george-best","name":"George Best","kind":"players","country":"Northern Ireland","position":"Hücumçu","clubs":["Manchester United","Fulham"],"image":"","source":"Local historical discovery index — selected teams, NOT a full career","isHistoricalAssociations":true,"lifeStatus":"deceased"},{"id":"p:bobby-charlton","name":"Bobby Charlton","kind":"players","country":"England","position":"Yarımmüdafiəçi","clubs":["Manchester United","Preston North End"],"image":"","source":"Local historical discovery index — selected teams, NOT a full career","isHistoricalAssociations":true,"lifeStatus":"deceased"},{"id":"p:gerd-muller","name":"Gerd Müller","kind":"players","country":"Germany","position":"Hücumçu","clubs":["Bayern Munich","Fort Lauderdale Strikers"],"image":"","source":"Local historical discovery index — selected teams, NOT a full career","isHistoricalAssociations":true,"lifeStatus":"deceased"},{"id":"p:paolo-rossi","name":"Paolo Rossi","kind":"players","country":"Italy","position":"Hücumçu","clubs":["Juventus","AC Milan","Hellas Verona"],"image":"","source":"Local historical discovery index — selected teams, NOT a full career","isHistoricalAssociations":true,"lifeStatus":"deceased"},{"id":"p:marco-van-basten","name":"Marco van Basten","kind":"players","country":"Netherlands","position":"Hücumçu","clubs":["Ajax","AC Milan"],"image":"","source":"Local historical discovery index — selected teams, NOT a full career","isHistoricalAssociations":true},{"id":"p:michel-platini","name":"Michel Platini","kind":"players","country":"France","position":"Yarımmüdafiəçi","clubs":["Nancy","Saint-Étienne","Juventus"],"image":"","source":"Local historical discovery index — selected teams, NOT a full career","isHistoricalAssociations":true},{"id":"p:roberto-baggio","name":"Roberto Baggio","kind":"players","country":"Italy","position":"Hücumçu","clubs":["Fiorentina","Juventus","AC Milan","Bologna","Inter Milan","Brescia"],"image":"","source":"Local historical discovery index — selected teams, NOT a full career","isHistoricalAssociations":true},{"id":"p:ruud-gullit","name":"Ruud Gullit","kind":"players","country":"Netherlands","position":"Yarımmüdafiəçi","clubs":["Feyenoord","PSV","AC Milan","Sampdoria","Chelsea"],"image":"","source":"Local historical discovery index — selected teams, NOT a full career","isHistoricalAssociations":true},{"id":"p:frank-rijkaard","name":"Frank Rijkaard","kind":"players","country":"Netherlands","position":"Yarımmüdafiəçi","clubs":["Ajax","Real Zaragoza","AC Milan"],"image":"","source":"Local historical discovery index — selected teams, NOT a full career","isHistoricalAssociations":true},{"id":"p:didier-deschamps","name":"Didier Deschamps","kind":"players","country":"France","position":"Yarımmüdafiəçi","clubs":["Nantes","Marseille","Juventus","Chelsea","Valencia"],"image":"","source":"Local historical discovery index — selected teams, NOT a full career","isHistoricalAssociations":true},{"id":"p:pep-guardiola","name":"Pep Guardiola","kind":"players","country":"Spain","position":"Yarımmüdafiəçi","clubs":["Barcelona","Brescia","Roma"],"image":"","source":"Local historical discovery index — selected teams, NOT a full career","isHistoricalAssociations":true},{"id":"p:carlo-ancelotti","name":"Carlo Ancelotti","kind":"players","country":"Italy","position":"Yarımmüdafiəçi","clubs":["Parma","Roma","AC Milan"],"image":"","source":"Local historical discovery index — selected teams, NOT a full career","isHistoricalAssociations":true},{"id":"p:xabi-alonso","name":"Xabi Alonso","kind":"players","country":"Spain","position":"Yarımmüdafiəçi","clubs":["Real Sociedad","Liverpool","Real Madrid","Bayern Munich"],"image":"","source":"Local historical discovery index — selected teams, NOT a full career","isHistoricalAssociations":true},{"id":"p:mikel-arteta","name":"Mikel Arteta","kind":"players","country":"Spain","position":"Yarımmüdafiəçi","clubs":["Paris Saint-Germain","Rangers","Real Sociedad","Everton","Arsenal"],"image":"","source":"Local historical discovery index — selected teams, NOT a full career","isHistoricalAssociations":true},{"id":"p:antonio-conte","name":"Antonio Conte","kind":"players","country":"Italy","position":"Yarımmüdafiəçi","clubs":["Lecce","Juventus"],"image":"","source":"Local historical discovery index — selected teams, NOT a full career","isHistoricalAssociations":true},{"id":"p:diego-simeone","name":"Diego Simeone","kind":"players","country":"Argentina","position":"Yarımmüdafiəçi","clubs":["Sevilla","Atlético Madrid","Inter Milan","Lazio","Racing Club"],"image":"","source":"Local historical discovery index — selected teams, NOT a full career","isHistoricalAssociations":true},{"id":"p:luis-enrique","name":"Luis Enrique","kind":"players","country":"Spain","position":"Yarımmüdafiəçi","clubs":["Sporting Gijón","Real Madrid","Barcelona"],"image":"","source":"Local historical discovery index — selected teams, NOT a full career","isHistoricalAssociations":true},{"id":"p:jurgen-klopp","name":"Jürgen Klopp","kind":"players","country":"Germany","position":"Müdafiəçi","clubs":["Mainz 05"],"image":"","source":"Local historical discovery index — selected teams, NOT a full career","isHistoricalAssociations":true},{"id":"p:frank-lampard","name":"Frank Lampard","kind":"players","country":"England","position":"Yarımmüdafiəçi","clubs":["West Ham United","Chelsea","Manchester City","New York City FC"],"image":"","source":"Local historical discovery index — selected teams, NOT a full career","isHistoricalAssociations":true},{"id":"p:steven-gerrard","name":"Steven Gerrard","kind":"players","country":"England","position":"Yarımmüdafiəçi","clubs":["Liverpool","LA Galaxy"],"image":"","source":"Local historical discovery index — selected teams, NOT a full career","isHistoricalAssociations":true},{"id":"p:mia-hamm","name":"Mia Hamm","kind":"players","country":"United States","position":"Hücumçu","clubs":["Washington Freedom"],"image":"","source":"Local historical discovery index — selected teams, NOT a full career","isHistoricalAssociations":true},{"id":"p:abby-wambach","name":"Abby Wambach","kind":"players","country":"United States","position":"Hücumçu","clubs":["Washington Freedom","Western New York Flash"],"image":"","source":"Local historical discovery index — selected teams, NOT a full career","isHistoricalAssociations":true},{"id":"p:carli-lloyd","name":"Carli Lloyd","kind":"players","country":"United States","position":"Yarımmüdafiəçi","clubs":["Chicago Red Stars","Manchester City","Houston Dash","Gotham FC"],"image":"","source":"Local historical discovery index — selected teams, NOT a full career","isHistoricalAssociations":true},{"id":"p:christine-sinclair","name":"Christine Sinclair","kind":"players","country":"Canada","position":"Hücumçu","clubs":["Portland Thorns"],"image":"","source":"Local historical discovery index — selected teams, NOT a full career","isHistoricalAssociations":true}]
+
+========== END FILE: 06_WINDOWS_CSHARP_V0947_LEGACY/native/windows-app/offline-catalog.json ==========
+
+
+========== BEGIN FILE: 06_WINDOWS_CSHARP_V0947_LEGACY/native/windows-installer/installer.iss ==========
+
+; MATCHLAB AZ Windows 11 native installer - NO HTML or WebView.
+; IMPORTANT: Unsigned installers can trigger Microsoft Defender SmartScreen.
+#define AppName "MATCHLAB AZ"
+#define AppVersion "0.9.47"
+#define AppExe "MATCHLAB_AZ.exe"
+
+[Setup]
+AppId={{2A86F671-A410-4B4A-858A-53B12C66D9AB}
+AppName={#AppName}
+AppVersion={#AppVersion}
+AppVerName=MATCHLAB AZ Native {#AppVersion}
+AppPublisher=MATCHLAB AZ
+AppPublisherURL=https://github.com/imandustnihan/matchlab-az-online
+AppSupportURL=https://github.com/imandustnihan/matchlab-az-online/issues
+DefaultDirName={localappdata}\Programs\MATCHLAB AZ
+DefaultGroupName=MATCHLAB AZ
+DisableProgramGroupPage=yes
+PrivilegesRequired=lowest
+OutputDir=out
+OutputBaseFilename=MATCHLAB_AZ_Native_Setup_v0947
+SetupIconFile=..\windows-app\native_icon.ico
+UninstallDisplayIcon={app}\{#AppExe}
+WizardStyle=modern
+Compression=lzma2
+SolidCompression=yes
+ArchitecturesAllowed=x64compatible
+ArchitecturesInstallIn64BitMode=x64compatible
+CloseApplications=yes
+RestartApplications=no
+UsePreviousAppDir=yes
+VersionInfoVersion=0.9.47.0
+VersionInfoDescription=MATCHLAB AZ Native Windows Setup
+VersionInfoProductName=MATCHLAB AZ
+VersionInfoCompany=MATCHLAB AZ
+
+[Languages]
+Name: "english"; MessagesFile: "compiler:Default.isl"
+
+[Tasks]
+Name: "desktopicon"; Description: "Create MATCHLAB AZ desktop shortcut"; GroupDescription: "Additional shortcuts:"; Flags: checkedonce
+
+[Files]
+Source: "..\windows-app\out\{#AppExe}"; DestDir: "{app}"; Flags: ignoreversion
+
+[Icons]
+Name: "{autoprograms}\MATCHLAB AZ"; Filename: "{app}\{#AppExe}"; WorkingDir: "{app}"
+Name: "{autodesktop}\MATCHLAB AZ"; Filename: "{app}\{#AppExe}"; WorkingDir: "{app}"; Tasks: desktopicon
+
+[Run]
+Filename: "{app}\{#AppExe}"; Description: "Launch MATCHLAB AZ"; Flags: nowait postinstall skipifsilent
+
+========== END FILE: 06_WINDOWS_CSHARP_V0947_LEGACY/native/windows-installer/installer.iss ==========
+
+
+========== BEGIN FILE: CLAUDE_TASK_PROMPT.md ==========
+
+# CLAUDE — MATCHLAB AZ: full context and work request
+
+I am transferring MATCHLAB AZ to you. Read `README_FIRST_AZ.md` and all relevant source files in this ZIP first. The official GitHub repository is `https://github.com/imandustnihan/matchlab-az-online`; do NOT assume that local v0.9.50 changes are already pushed there. Compare code before editing.
+
+## What I want delivered
+Build a professional native Windows and native Android football-analysis application that feels as polished and complete as the provided HTML/PWA source, but does **not** use an embedded browser/WebView on either platform. Improve functionality and design without copying SofaScore/Flashscore/LiveScore intellectual property.
+
+Windows starting point: `01_WINDOWS_NATIVE_GO_v0950_SOURCE/main.go` (Go direct Win32, standalone x64 EXE). Companion installer source `02_WINDOWS_SETUP_v0950_SOURCE/main.go`. Maintain splash + full-screen start and add reliable F11/Esc. Use user screenshots as evidence of problems. Fix connection state, hangs, freezes, standings lag, clipped text and blank areas. On Render Free, server cold starts cannot be entirely fixed client-side; implement non-blocking warmup, precise status, backoff and retries. Never fabricate match data.
+
+Android starting point: `05_ANDROID_NATIVE_JAVA_v0946/` native Java only, splash animation and immersive fullscreen, navigation/insets fixed, actual stable APK. Older HTML PWA `03_HTML_PWA_v0942/` is a DESIGN + FEATURE reference, not a target runtime.
+
+Server starting point: inspect actual GitHub current backend. This handoff contains a version 0.9.27 Python backend snapshot without large SQLite. Test `/healthz`, `/api/status`, `/api/live`, `/api/standings`, `/api/search` and explain upstream source coverage and licensing. Do not change production service or paid Render plan without my approval.
+
+Store distribution: Microsoft Store MSIX packaging with actual Partner Center identity, valid logos and app manifests. SmartScreen warning of unsigned standalone EXE must not be bypassed; provide signing / reputation process, don't claim it is removed. Use `07_STORE_MSIX_KIT_V0949_LEGACY/` only as a preliminary template, not production Store package.
+
+Installation: I want a directly downloadable Windows Setup.exe with Desktop/Start shortcuts, Installed Apps entry and uninstall; no CMD, SDK, ZIP extraction or manual compilation. Android: directly downloadable APK; validate on emulator and explain real-device test limitations.
+
+Deliver in stages with concrete changed files and proof of tests: (1) connectivity and responsiveness; (2) smooth standings and full GUI UX; (3) data/API; (4) tactics/lineups/profiles; (5) Windows setup, Android APK and Microsoft Store readiness. Preserve existing features, data and favorites. Work on a new GitHub branch, never merge to main without permission.
+
+The user has had repeated failed or unusable files and expects real tested deliverables, not assertions. Distinguish source build vs compiled EXE, format validation vs Windows execution, simulator smoke vs physical device QA, and MSIX packaging vs Microsoft Store certification. If a tool cannot do a task, report the block and offer real downloadable artifacts or reproducible build instructions.
+
+========== END FILE: CLAUDE_TASK_PROMPT.md ==========
+
+
+========== BEGIN FILE: README_FIRST_AZ.md ==========
+
+# MATCHLAB AZ — Claude üçün tam təhvil / full developer handoff
+
+**Handoff tarixi:** 2 noyabr 2026. **Ən yeni proqram:** Windows v0.9.50 (Go/Win32). **Ən yeni Android native mənbə:** v0.9.46 (Java). **Sayt/PWA mənbəsi:** v0.9.42, backend snapshot v0.9.27. Bu versiyalar **bir-birinə inteqrasiya edilmiş tək releas deyil**.
+
+## Əsas linklər
+- GitHub: https://github.com/imandustnihan/matchlab-az-online
+- Son ayrı inkişaf branch: https://github.com/imandustnihan/matchlab-az-online/tree/fix/windows-desktop-installer-v0943
+- HTML/PWA branch: https://github.com/imandustnihan/matchlab-az-online/tree/fix/pwa-installable-html-v0942
+- Əvvəlki Android/Windows branch: https://github.com/imandustnihan/matchlab-az-online/tree/fix/html-packed-exe-apk-20261102
+- İlk native əsas branch: fix/windows-fast-start-and-pitch-20261101 (PR #1 https://github.com/imandustnihan/matchlab-az-online/pull/1)
+- Backend: https://matchlab-az-online.onrender.com
+- User confirmed: GitHub main branch should NOT be merged without approval. Develop in a new branch.
+
+## Paketin içindəkilər / Which version to start from
+1. `01_WINDOWS_NATIVE_GO_v0950_SOURCE/` — **LATEST Windows desktop implementation**, Go + direct Win32/GDI. No WebView, no HTML, no .NET SDK; `main.go`, `go.mod`, `offline-catalog.json`, `icon.ico` and compiled EXE. Original latest build, not changed or recompiled in this handoff.
+2. `02_WINDOWS_SETUP_v0950_SOURCE/` — latest Go installer source (`main.go`, `go.mod`), compiled Setup.exe; installers create per-user application, Windows shortcut and uninstall registration. Installer MAY show SmartScreen: unsigned.
+3. `03_HTML_PWA_v0942/` — latest local HTML/CSS/JS design and PWA. Use it as a **visual and feature reference**, not as a WebView for the user's native desktop requirement.
+4. `04_ORIGINAL_BACKEND_AND_TESTS_v0927/` — server/API Python sources, utilities, docs/tests extracted from older 0.9.27 bundle. **Excludes** the 136 MB SQLite identity database; repository may have newer source. Always inspect GitHub HEAD first.
+5. `05_ANDROID_NATIVE_JAVA_v0946/` — **native Java Android**, opening splash / fullscreen / UI and tactical pitch, no HTML WebView. Source-only, not fully device-tested.
+6. `06_WINDOWS_CSHARP_V0947_LEGACY/` — Windows Forms prototype; **known v0.9.47 build failure** C# CS1010 etc. Do NOT assume it's valid or replace v0.9.50 with it. Use only design/history if helpful.
+7. `07_STORE_MSIX_KIT_V0949_LEGACY/` — MSIX packaging scripts and logos. This is **not** a certified/signed Store submission; manifest identity is not verified against Partner Center.
+8. `08_SCREENSHOTS/` — screenshots of failures and older HTML designs.
+9. `CLAUDE_TASK_PROMPT.md` — detailed plan to give Claude.
+10. `FILE_SHA256.txt` — SHA-256 per packaged file for checking transfer integrity.
+
+## User requirements (high priority)
+- Windows: true native standalone desktop application, WITHOUT opening HTML/WebView/browser; polished rich design like the HTML site, but original. Starts fullscreen automatically with logo splash. F11 toggles, Esc exits fullscreen.
+- Android: true native Android Java, no WebView. Startup animation and automatic immersive fullscreen; navigation/buttons must not overlap Android system bars. Deploy APK after verifying emulator AND actual phone compatibility.
+- UX: professional football home with live/results, leagues, standings, search, profiles, clubs, coach info, lineups, event timelines, realistic tactics. Loading/error/empty states must be distinguishable. NO mock scores/rosters/statistics.
+- Performance: standings scroll smooth with 100+ rows; don't block UI thread with network; avoid excessive GDI painting, leaks, unnecessary full refresh; user has observed “not responding” on Windows and severe standings lag.
+- Connectivity: Render backend on FREE plan has cold starts; don't claim to eliminate this using client-side timeouts. Show progress/retries without freezing, cache only appropriately timestamped nonlive/static data. Paid always-on hosting or explicitly authorized hosting changes needed for truly fast cold starts.
+- Installation: single Windows Setup.exe, user should not manually run .cmd, .NET SDK, Go or unzip source. Desktop and Start shortcuts, Installed Apps registration, clean uninstaller, branded icon. Show version and update behavior clearly.
+- Microsoft Store: plan MSIX with proper Partner Center identity, certificate and actual certification. Do not promise unsigned EXE avoids SmartScreen or advise disabling Windows Security. Microsoft Store developer registration may be free, but require verification and compliance.
+- Sources: Check license/terms of ESPN, TheSportsDB, Wikipedia, Wikimedia, football-data.org and any other football feed. Never copy proprietary third-party apps' assets or access unlicensed APIs.
+- Protect existing data, favorite settings, keys and source files; no deletion/merge to main without user's consent. Prove tests honestly.
+
+## Bugs reported by user
+- “Server yoxlanılır”, “Yenidən qoşulma gözlənilir” stays too long, reconnect unreliable; very slow to become active.
+- Windows “not responding” dialogue (see `08_SCREENSHOTS/Windows_not_responding.png`).
+- Standings stutters/freezes when mouse wheel or touchpad scroll moves up/down. v0.9.49 source attempted clipped visible-row rendering and double buffering; not confirmed on user's PC.
+- Early native Windows v0.9.46/v0.9.47 looked worse than HTML website; oversized empty spaces, clipped sidebar branding; owner rejected it.
+- Several C# versions failed to compile: duplicate `Card` definition (CS0102), line break in string literal `Program.cs` at lines 343-344 (CS1010/CS1003).
+- Earlier APK navbar overlapped system UI; previous attempts fixed inset measurement, but not all phones verified.
+- Multiple sandbox download links from ChatGPT showed Turkish “Bu işlem tamamlanamadı”. Provide download source in a reliable, verifiable place (GitHub Releases or Actions artifact) instead of renaming links repeatedly.
+- Unsigned EXE triggers Microsoft Defender SmartScreen. Legitimate fix is trusted publisher signing/reputation or appropriate Store package, NOT bypass.
+
+## Technical claims and validation
+- Latest Go v0.9.50 EXE and Setup files exist and have Windows x64 PE headers. Their real GUI behavior, shortcut installation, MSIX validation, malware screening, performance and Render connectivity have NOT been tested here on user's Windows PC.
+- Android v0.9.42 older HTML/WebView APK was built and emulator smoke-tested; this is NOT the requested true-native Android version.
+- Android v0.9.46 native source had static checks only, not complete signed Android APK/device acceptance testing.
+- Windows v0.9.43 HTML/WebView installer passed GitHub CI on Windows, but user explicitly rejects HTML wrapper architecture, so **do not take it as final architecture**.
+- v0.9.49/v0.9.50 Go use native Windows rendering. `01_WINDOWS_NATIVE_GO_v0950_SOURCE/main.go` is authoritative for latest functionality.
+- The original large SQLite identity data is NOT a live statistics dataset; the historical claim of 506,207 records is an identity count, not 506,207 full stats profiles.
+
+## Start here / immediate engineering approach
+1. Open `CLAUDE_TASK_PROMPT.md` and inspect v0.9.50 Go source, installer and backend separately. Check network timeout/retry handling, thread ownership, event loop, draw loop and `WM_MOUSEWHEEL` before changing anything.
+2. Verify backend health/status and Render deployment using official tools and logs; measure cold and warm latency. If Render free tier is asleep, advise the user of objective limitation rather than masking it.
+3. Reproduce freezes in Windows VM with instrumentation. Add repeatable benchmarks for 20, 100, 500 standing rows and repeated page changes (GDI leak test), improve painting and input responsiveness.
+4. Produce ONE verifiable code-signed/reputation strategy for Store. Build an unsigned MSIX for submission only after obtaining exact identity values from Partner Center; avoid fake signature or false assurances.
+5. Create a tested native Android APK from v0.9.46 source, adding useful app UX while ensuring system bars/accessibility compatibility.
+6. Publish tested Windows EXE/installer and APK to GitHub Releases or CI artifacts; link exact built output. Do not merge main without explicit approval.
+
+## Important version provenance
+- GitHub branches named v0.9.42/0.9.43 contain HTML embedded WebView variants, NOT the later Go Win32 native v0.9.50 from this package.
+- This ZIP preserves multiple attempts for comparison. Choose the current working base deliberately, not by filename alone.
+
+========== END FILE: README_FIRST_AZ.md ==========
