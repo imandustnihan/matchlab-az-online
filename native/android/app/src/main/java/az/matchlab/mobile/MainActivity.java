@@ -84,6 +84,21 @@ public final class MainActivity extends Activity {
         LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.bottomMargin=dp(7);
         page.addView(wrapper,lp);
     }
+    private String networkMessage(Exception error){
+        if(error instanceof java.net.UnknownHostException)
+            return "İnternet və ya server bağlantısı yoxdur. Wi-Fi/mobil interneti yoxla.";
+        if(error instanceof java.net.SocketTimeoutException)
+            return "Server gec cavab verir. Bir qədər sonra təkrar yoxla.";
+        String message=error==null?"":error.getMessage();
+        if(message!=null&&message.startsWith("HTTP "))return "Server cavab vermədi ("+message+").";
+        return "Real məlumatları yükləmək mümkün olmadı. Bağlantını yoxla.";
+    }
+    private void retry(String target){
+        Button b=button("↻  Yenidən yoxla");
+        b.setTextColor(ACCENT);
+        b.setOnClickListener(v->navigate(target));
+        card(b);
+    }
     private void info(String message,boolean error){
         TextView t=text(message,12,error?RED:MUTED,false);t.setPadding(dp(4),dp(6),dp(4),dp(6));card(t);
     }
@@ -263,7 +278,7 @@ public final class MainActivity extends Activity {
         if(reset){filters(false);banner("Real mənbələr yoxlanır · Yeni nəticələr yüklənir…",MUTED);}
         fetch("/api/live?league="+encode(league)+"&date="+date(),(json,error)->{
             if(token!=generation||!screen.equals("matches"))return;
-            if(error!=null){status.setTextColor(RED);status.setText("●");if(reset){page.removeAllViews();filters(false);}info("Bağlantı yoxdur: "+error.getMessage(),true);return;}
+            if(error!=null){status.setTextColor(RED);status.setText("●");if(reset){page.removeAllViews();filters(false);}info(networkMessage(error),true);retry("matches");return;}
             status.setTextColor(json.optBoolean("available")?ACCENT:RED);
             status.setText("●");
             matches=json.optJSONArray("items");if(matches==null)matches=new JSONArray();
@@ -405,7 +420,7 @@ public final class MainActivity extends Activity {
             if(token!=generation||!screen.equals("standings"))return;
             page.removeAllViews();
             filters(true);
-            if(error!=null){banner("Cədvəl alınmadı: "+error.getMessage(),RED);return;}
+            if(error!=null){banner(networkMessage(error),RED);retry("standings");return;}
             if(data.optBoolean("stale"))banner("Bu cədvəl cari olmaya bilər — mənbə köhnəlmiş məlumat qaytardı.",RED);
             if(data.optBoolean("partial"))banner("Bəzi cədvəl məlumatları mənbədən alınmadı.",RED);
             JSONArray rows=data.optJSONArray("items");
@@ -466,7 +481,7 @@ public final class MainActivity extends Activity {
         fetch("/api/search?q="+encode(q)+"&kind="+kind,(json,error)->{
             if(token!=generation||!screen.equals("search"))return;
             while(page.getChildCount()>4)page.removeViewAt(page.getChildCount()-1);
-            if(error!=null){info("Axtarış alınmadı: "+error.getMessage(),true);return;}
+            if(error!=null){info(networkMessage(error),true);return;}
             JSONArray arr=json.optJSONArray("items");
             if(arr==null||arr.length()==0){info("Nəticə tapılmadı.",false);return;}
             section("Nəticələr · "+arr.length());
@@ -486,7 +501,7 @@ public final class MainActivity extends Activity {
         fetch("/api/profile?id="+encode(id),(data,error)->{
             if(token!=generation||!screen.equals("profile"))return;
             page.removeAllViews();
-            if(error!=null){info("Profil yüklənmədi: "+error.getMessage(),true);return;}
+            if(error!=null){info(networkMessage(error),true);return;}
             JSONObject p=data.optJSONObject("profile");
             if(p==null){info("Təsdiqlənmiş profil tapılmadı.",true);return;}
             section(p.optString("name","—"));
@@ -541,7 +556,7 @@ public final class MainActivity extends Activity {
             if(token!=generation||!screen.equals("details"))return;
             // Remove only the last progress card; keep the score header.
             if(page.getChildCount()>3)page.removeViewAt(page.getChildCount()-1);
-            if(error!=null){banner("Məlumat alınmadı: "+error.getMessage(),RED);return;}
+            if(error!=null){banner(networkMessage(error),RED);return;}
             if(!data.optBoolean("available"))
                 banner(data.optString("message","Detallar mövcud deyil."),RED);
             if(data.optBoolean("partial"))banner("Mənbənin bəzi hissələri əlçatan deyil.",RED);
@@ -633,7 +648,7 @@ public final class MainActivity extends Activity {
         Button statusButton=button("Server vəziyyətini yoxla");
         statusButton.setOnClickListener(v->{
             fetch("/api/status",(json,error)->{
-                if(error!=null){info("Bağlantı: "+error.getMessage(),true);return;}
+                if(error!=null){info(networkMessage(error),true);return;}
                 info("Versiya: "+json.optString("version")+" · Arxiv: "+(json.optJSONObject("world")!=null?json.optJSONObject("world").optString("total","—"):"—"),false);
             });
         });card(statusButton);
