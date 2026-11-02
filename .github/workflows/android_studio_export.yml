@@ -1,0 +1,85 @@
+name: MATCHLAB AZ Android Studio source ZIP and APK
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - fix/android-studio-export-v0945
+    paths:
+      - tools/export_android_studio.py
+      - .github/workflows/android_studio_export.yml
+      - native/android/**
+      - native/branding/**
+      - native/packed/**
+      - app.js
+      - index.html
+      - styles.css
+      - catalog.js
+      - featured_media.js
+      - coach_tactics.js
+      - install.js
+      - service-worker.js
+      - manifest.webmanifest
+      - assets/**
+permissions:
+  contents: read
+
+jobs:
+  export:
+    name: Build independent Android Studio project
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Install SDK 35
+        run: |
+          set -euo pipefail
+          SDK_MANAGER="$(find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | head -n 1)"
+          "$SDK_MANAGER" --install 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Generate launcher images and export standalone project
+        run: |
+          python -m pip install pillow
+          python native/branding/generate_icons.py
+          python tools/export_android_studio.py export
+      - name: Generate Gradle wrapper
+        run: |
+          gradle -p dist/MATCHLAB_AZ_Android_Studio wrapper --gradle-version 8.9 --distribution-type bin
+          chmod +x dist/MATCHLAB_AZ_Android_Studio/gradlew
+      - name: Build APK with the included Android Studio Gradle wrapper
+        working-directory: dist/MATCHLAB_AZ_Android_Studio
+        run: ./gradlew --no-daemon :app:assembleDebug
+      - name: Validate APK and bundled HTML
+        run: |
+          set -euo pipefail
+          APK="dist/MATCHLAB_AZ_Android_Studio/app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$APK"
+          for f in index.html styles.css app.js catalog.js featured_media.js coach_tactics.js shell.css shell.js install.js service-worker.js manifest.webmanifest assets/icon.svg assets/pwa-192.png assets/pwa-512.png assets/pwa-512-maskable.png; do
+            unzip -Z1 "$APK" | grep -Fx "assets/web/$f"
+          done
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee dist/android_studio_apk_badging.txt
+          grep -q "application-label:'MATCHLAB AZ'" dist/android_studio_apk_badging.txt
+          grep -q "launchable-activity: name='az.matchlab.mobile.MainActivity'" dist/android_studio_apk_badging.txt
+          echo "PASS independent Android Studio APK build and launcher"
+      - name: ZIP the independent Android Studio project
+        run: python tools/export_android_studio.py pack
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MATCHLAB_AZ_Android_Studio_Source_v0945
+          path: dist/MATCHLAB_AZ_Android_Studio_v0945.zip
+          if-no-files-found: error
+          retention-days: 30
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MATCHLAB_AZ_Android_Studio_APK_v0945
+          path: dist/MATCHLAB_AZ_Android_Studio/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30
