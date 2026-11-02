@@ -47,6 +47,9 @@ public final class MainActivity extends Activity {
     private boolean standingsExpanded=false;
     private final String[] formations={"4-3-3","4-2-3-1","4-4-2","3-5-2"};
     private JSONArray matches=new JSONArray();
+    private LinearLayout searchResults;
+    private Runnable searchPending;
+    private String matchLeague="all",tableLeague="eng.1";
     private JSONObject currentMatch=null;
     private SharedPreferences prefs;
     private final Runnable refresh=new Runnable(){
@@ -60,7 +63,9 @@ public final class MainActivity extends Activity {
         super.onCreate(saved);
         getWindow().setStatusBarColor(BG);getWindow().setNavigationBarColor(BG);
         prefs=getSharedPreferences("matchlab_native",MODE_PRIVATE);
-        league=prefs.getString("matchleague","all");
+        matchLeague=prefs.getString("matchleague","all");
+        tableLeague=prefs.getString("tableleague","eng.1");
+        league=matchLeague;
         matchMode=prefs.getString("matchmode","all");
         formation=prefs.getInt("tactic_formation",0);
         if(formation<0||formation>=formations.length)formation=0;
@@ -197,6 +202,8 @@ public final class MainActivity extends Activity {
     }
     private void navigate(String name){
         screen=name;generation++;page.removeAllViews();
+        if(name.equals("matches"))league=matchLeague;
+        else if(name.equals("standings"))league=tableLeague;
         if(contentScroll!=null)contentScroll.scrollTo(0,0);
         header.setText(name.equals("matches")?"Canlı matçlar":name.equals("standings")?"Turnir cədvəli":name.equals("search")?"Axtarış":name.equals("tactics")?"Taktika":name.equals("favorites")?"Seçilmişlər":name.equals("details")?"Matç mərkəzi":name.equals("profile")?"Futbol profili":"Tənzimləmələr");
         nav.removeAllViews();
@@ -312,7 +319,8 @@ public final class MainActivity extends Activity {
                 if(selected==ids.size()){showAllLeaguesPicker(standings);return;}
                 league=ids.get(selected);
                 if(standings&&league.equals("all"))league="eng.1";
-                prefs.edit().putString("matchleague",league).apply();
+                if(standings)tableLeague=league;else matchLeague=league;
+                prefs.edit().putString(standings?"tableleague":"matchleague",league).apply();
                 if(!oldLeague.equals(league))navigate(standings?"standings":"matches");
             }).setNegativeButton("Bağla",null).show();
     }
@@ -334,7 +342,8 @@ public final class MainActivity extends Activity {
             new AlertDialog.Builder(this).setTitle("Bütün yarışlar")
                 .setItems(labels.toArray(new String[0]),(d,index)->{
                     league=ids.get(index);
-                    prefs.edit().putString("matchleague",league).apply();
+                    if(standings)tableLeague=league;else matchLeague=league;
+                    prefs.edit().putString(standings?"tableleague":"matchleague",league).apply();
                     navigate(standings?"standings":"matches");
                 }).setNegativeButton("Bağla",null).show();
         });
@@ -588,43 +597,138 @@ public final class MainActivity extends Activity {
         });
     }
     private void showSearch(){
-        EditText query=new EditText(this);query.setSingleLine(true);query.setHint("Futbolçu, klub, məşqçi…");
-        query.setText(searchText);query.setTextColor(INK);query.setHintTextColor(MUTED);
-        query.setTextSize(17);query.setMinHeight(dp(48));
+        section("DÜNYA FUTBOL ARXİVİ");
+        info("Futbolçu, klub və məşqçiləri real reyestrdə axtar. Sonuçlar yalnız mənbədən alınır.",false);
+        LinearLayout bar=row();
+        EditText query=new EditText(this);
+        query.setSingleLine(true);
+        query.setHint("Ad, klub, ölkə…");query.setHintTextColor(MUTED);
+        query.setTextColor(INK);query.setTextSize(15);query.setText(searchText);
         query.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH);
-        card(query);
-        String[] types={"Hamısı","Futbolçular","Klublar","Məşqçilər"};
-        Spinner typesSpinner=spinner(types,Arrays.asList(new String[]{"all","players","teams","coaches"}).indexOf(kind),i->kind=new String[]{"all","players","teams","coaches"}[i]);
-        card(typesSpinner);
-        Button go=button("⌕  Axtar");
-        go.setOnClickListener(v->{searchText=query.getText().toString().trim();loadSearch(searchText,kind);});
+        query.setBackground(shape(RAISED,13));query.setPadding(dp(12),dp(8),dp(10),dp(8));
+        bar.addView(query,new LinearLayout.LayoutParams(0,dp(48),1));
+        Button search=button("⌕  Axtar");search.setTextColor(BG);search.setBackground(shape(ACCENT,12));
+        LinearLayout.LayoutParams buttonParams=new LinearLayout.LayoutParams(dp(89),dp(48));buttonParams.leftMargin=dp(8);
+        bar.addView(search,buttonParams);page.addView(bar);
+        gap(page,9);
+        LinearLayout types=row();
+        String[][] names={{"all","Hamısı"},{"players","Oyunçular"},{"teams","Klublar"},{"coaches","Məşqçilər"}};
+        for(String[] entry:names){
+            boolean selected=entry[0].equals(kind);
+            Button filter=button(entry[1]);filter.setTextSize(10);
+            filter.setMinHeight(dp(38));filter.setMinimumHeight(dp(38));
+            filter.setTextColor(selected?BG:MUTED);
+            filter.setBackground(shape(selected?ACCENT:RAISED,11));
+            LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,dp(39),1);p.rightMargin=dp(4);
+            types.addView(filter,p);
+            filter.setOnClickListener(v->{
+                if(!kind.equals(entry[0])){
+                    kind=entry[0];
+                    searchText=query.getText().toString().trim();
+                    navigate("search");
+                }
+            });
+        }
+        page.addView(types);
+        gap(page,10);
+        searchResults=column();
+        page.addView(searchResults);
+        final Runnable searchNow=()->{
+            searchText=query.getText().toString().trim();
+            loadSearch(searchText,kind,0);
+        };
+        search.setOnClickListener(v->searchNow.run());
         query.setOnEditorActionListener((v,action,event)->{
-            if(action==android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH){go.performClick();return true;}
+            if(action==android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH){searchNow.run();return true;}
             return false;
         });
-        card(go);
-        info("Futbol arxivi serverin məlumat bazasında axtarılır.",false);
+        query.addTextChangedListener(new android.text.TextWatcher(){
+            @Override public void beforeTextChanged(CharSequence t,int start,int count,int after){}
+            @Override public void onTextChanged(CharSequence t,int start,int before,int count){
+                if(searchPending!=null)ui.removeCallbacks(searchPending);
+                String q=t.toString().trim();
+                if(q.length()>=3){
+                    searchPending=()->{searchText=q;loadSearch(q,kind,0);};
+                    ui.postDelayed(searchPending,550);
+                }else{
+                    searchResults.removeAllViews();
+                    renderQuickSearch(query,searchNow);
+                }
+            }
+            @Override public void afterTextChanged(android.text.Editable e){}
+        });
+        if(searchText.length()>=2)loadSearch(searchText,kind,0);
+        else renderQuickSearch(query,searchNow);
     }
-    private void loadSearch(String q,String kind){
-        if(q.isEmpty()){info("Ad yaz və axtar.",true);return;}
-        ((InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(page.getWindowToken(),0);
-        while(page.getChildCount()>4)page.removeViewAt(page.getChildCount()-1);
-        info("Axtarılır: "+q,false);
-        int token=generation;
-        fetch("/api/search?q="+encode(q)+"&kind="+kind,(json,error)->{
-            if(token!=generation||!screen.equals("search"))return;
-            while(page.getChildCount()>4)page.removeViewAt(page.getChildCount()-1);
-            if(error!=null){info(networkMessage(error),true);return;}
+    private void renderQuickSearch(EditText query,Runnable action){
+        if(searchResults==null)return;
+        searchResults.removeAllViews();
+        TextView title=text("SÜRƏTLİ AXTARIŞ",11,MUTED,true);searchResults.addView(title);
+        gap(searchResults,7);
+        // Examples are search terms, not claimed search results.
+        for(String hint:new String[]{"Qarabağ","Azərbaycan","Real Madrid","Mbappé","Barcelona","Neftçi"}){
+            TextView term=single("⌕   "+hint,13,INK,false);
+            term.setPadding(dp(13),dp(9),dp(13),dp(9));term.setBackground(shape(CARD,10));
+            LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.bottomMargin=dp(6);
+            searchResults.addView(term,p);
+            term.setOnClickListener(v->{query.setText(hint);query.setSelection(hint.length());action.run();});
+        }
+        gap(searchResults,7);
+        TextView note=text("Adın üzərinə toxunaraq arxivdə axtarış et. Yuxarıdakı nümunələr nəticə deyil.",11,MUTED,false);
+        searchResults.addView(note);
+    }
+    private void loadSearch(String q,String requestedKind,int offset){
+        if(searchResults==null||!screen.equals("search"))return;
+        if(q.trim().isEmpty()){
+            searchResults.removeAllViews();
+            info("Axtarış üçün ad yaz.",false);return;
+        }
+        ((InputMethodManager)getSystemService(INPUT_METHOD_SERVICE))
+            .hideSoftInputFromWindow(page.getWindowToken(),0);
+        final int token=generation;
+        final String query=q.trim();
+        if(offset==0){searchResults.removeAllViews();searchRows=new JSONArray();}
+        TextView waiting=text(offset==0?"Reyestr axtarılır…":"Daha çox nəticə alınır…",12,MUTED,false);
+        searchResults.addView(waiting);
+        fetch("/api/search?q="+encode(query)+"&kind="+requestedKind+"&offset="+offset,(json,error)->{
+            if(token!=generation||!screen.equals("search")||!query.equals(searchText)||!requestedKind.equals(kind))return;
+            searchResults.removeView(waiting);
+            if(error!=null||json==null){
+                searchResults.addView(text(networkMessage(error),12,RED,false));return;
+            }
             JSONArray arr=json.optJSONArray("items");
-            if(arr==null||arr.length()==0){info("Nəticə tapılmadı.",false);return;}
-            section("Nəticələr · "+arr.length());
+            if(arr==null||arr.length()==0){
+                if(offset==0)searchResults.addView(text("Bu sorğu üçün təsdiqlənmiş nəticə tapılmadı.",12,MUTED,false));
+                return;
+            }
+            if(offset==0){
+                TextView source=text("Mənbə: "+json.optString("source","bilinmir"),10,MUTED,false);
+                source.setPadding(dp(2),dp(5),0,dp(7));searchResults.addView(source);
+            }
             for(int i=0;i<Math.min(arr.length(),75);i++){
-                JSONObject p=arr.optJSONObject(i);if(p==null)continue;
-                LinearLayout c=column();
-                c.addView(text(p.optString("name"),16,INK,true));
-                c.addView(text(p.optString("country")+" · "+p.optString("kind"),12,MUTED,false));
-                c.setOnClickListener(v->openProfile(p.optString("id")));
-                card(c);
+                JSONObject item=arr.optJSONObject(i);if(item==null)continue;
+                LinearLayout row=row();row.setPadding(dp(11),dp(10),dp(11),dp(10));
+                row.setBackground(shape(CARD,12));
+                String label=item.optString("name","—");
+                TextView avatar=fixed(label.isEmpty()?"•":label.substring(0,1).toUpperCase(),16,ACCENT,true,39);
+                row.addView(avatar);
+                LinearLayout detail=column();
+                detail.addView(single(label,14,INK,true));
+                String category=item.optString("kind","").replace("players","Futbolçu").replace("teams","Klub").replace("coaches","Məşqçi");
+                detail.addView(single(category+" · "+item.optString("country","Məlum deyil"),11,MUTED,false));
+                row.addView(detail,new LinearLayout.LayoutParams(0,-2,1));
+                row.addView(text("›",22,MUTED,true));
+                row.setOnClickListener(v->openProfile(item.optString("id","")));
+                LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.bottomMargin=dp(6);
+                searchResults.addView(row,p);
+            }
+            if(!json.isNull("nextOffset")){
+                int next=json.optInt("nextOffset",-1);
+                if(next>offset){
+                    Button more=button("Daha "+(next-offset)+" nəticə göstər");
+                    more.setOnClickListener(v->{searchResults.removeView(more);loadSearch(query,requestedKind,next);});
+                    searchResults.addView(more);
+                }
             }
         });
     }
@@ -820,5 +924,5 @@ public final class MainActivity extends Activity {
         else if(!"matches".equals(screen))navigate("matches");
         else super.onBackPressed();
     }
-    @Override protected void onDestroy(){ui.removeCallbacks(refresh);network.shutdownNow();super.onDestroy();}
+    @Override protected void onDestroy(){ui.removeCallbacks(refresh);if(searchPending!=null)ui.removeCallbacks(searchPending);network.shutdownNow();super.onDestroy();}
 }
