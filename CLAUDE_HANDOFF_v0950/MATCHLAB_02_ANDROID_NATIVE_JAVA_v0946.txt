@@ -1,0 +1,828 @@
+MATCHLAB AZ - Claude file transfer: MATCHLAB_02_ANDROID_NATIVE_JAVA_v0946.txt
+Source archive: MATCHLAB_AZ_CLAUDE_HANDOFF_v0950.zip
+These are source texts, not compiled executables; paths are preserved.
+Original archive contains images, icons, and executables; these are not in the TXT.
+See https://github.com/imandustnihan/matchlab-az-online for original repository context.
+
+
+========== BEGIN FILE: 05_ANDROID_NATIVE_JAVA_v0946/.github/workflows/matchlab_native_android_v0946.yml ==========
+
+name: MATCHLAB AZ - Android Native Fullscreen & Splash v0.9.46
+on:
+  workflow_dispatch:
+  push:
+    branches: ['fix/**']
+    paths:
+      - 'native/android/**'
+      - '.github/workflows/matchlab_native_android_v0946.yml'
+permissions:
+  contents: read
+jobs:
+  android-native:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Android SDK and Build Tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | head -n 1)"
+          test -x "$SDKMANAGER"
+          "$SDKMANAGER" --install 'platforms;android-35' 'build-tools;35.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Verify Android native-only fullscreen and splash source
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -Eq 'android\.webkit|WebView|loadUrl\(' native/android/app/src/main/java/az/matchlab/mobile/MainActivity.java
+          grep -q 'IMMERSIVE_FULLSCREEN_REQUESTED' native/android/app/src/main/java/az/matchlab/mobile/MainActivity.java
+          grep -q 'WindowInsetsController' native/android/app/src/main/java/az/matchlab/mobile/MainActivity.java
+          grep -q 'NativeSplashView' native/android/app/src/main/java/az/matchlab/mobile/MainActivity.java
+          grep -q 'postInvalidateDelayed' native/android/app/src/main/java/az/matchlab/mobile/NativeSplashView.java
+          grep -q "versionCode 946" native/android/app/build.gradle
+      - name: Assemble native APK
+        working-directory: native/android
+        run: gradle --no-daemon :app:assembleDebug --stacktrace
+      - name: Check APK includes native code, icon and signature
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK='native/android/app/build/outputs/apk/debug/app-debug.apk'
+          test -s "$APK"
+          unzip -Z1 "$APK" | grep -Fx 'classes.dex'
+          unzip -Z1 "$APK" | grep -Ei 'res/drawable[^/]*/.*png' | head -n 3
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
+      - name: Boot Android emulator, launch native splash/fullscreen and test navigation
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          profile: pixel_5
+          disable-animations: true
+          emulator-boot-timeout: 600
+          script: |
+            set -eu
+            APK='native/android/app/build/outputs/apk/debug/app-debug.apk'
+            adb install -r "$APK"
+            adb logcat -c
+            adb shell am start -W -n az.matchlab.mobile/.MainActivity
+            sleep 1
+            adb shell screencap -p /sdcard/matchlab_splash.png
+            adb pull /sdcard/matchlab_splash.png native/android/splash.png
+            sleep 4
+            adb shell pidof az.matchlab.mobile
+            adb shell screencap -p /sdcard/matchlab_home.png
+            adb pull /sdcard/matchlab_home.png native/android/home.png
+            adb shell input tap 265 2230
+            sleep 2
+            adb shell pidof az.matchlab.mobile
+            adb shell screencap -p /sdcard/matchlab_matches.png
+            adb pull /sdcard/matchlab_matches.png native/android/matches.png
+            adb logcat -d -s MATCHLAB_AZ:I | grep 'IMMERSIVE_FULLSCREEN_REQUESTED'
+            adb logcat -d -s MATCHLAB_AZ:I | grep 'SPLASH_VIEW_CREATED'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: MATCHLAB_AZ_Android_Native_Smoke_Screens_v0946
+          path: |
+            native/android/splash.png
+            native/android/home.png
+            native/android/matches.png
+          if-no-files-found: warn
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MATCHLAB_AZ_Android_Native_APK_v0946
+          path: native/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30
+
+========== END FILE: 05_ANDROID_NATIVE_JAVA_v0946/.github/workflows/matchlab_native_android_v0946.yml ==========
+
+
+========== BEGIN FILE: 05_ANDROID_NATIVE_JAVA_v0946/README_AZ.md ==========
+
+# MATCHLAB AZ v0.9.46 — Windows EXE + Android APK mənbələri
+
+Bu ZIP **hazır EXE/APK deyil**. Windows (.NET 8 WinForms) və Android (Java) üçün işlək paket yaratmağa hesablanmış mənbə kodu, build workflow-ları və Windows quraşdırıcısıdır. Hazırkı söhbətdə Windows .NET SDK, Android SDK və GitHub-a push hüququ olmadığı üçün kompilyasiya və cihaz sınağı təsdiqlənməyib.
+
+## Windows (əvvəl)
+- `native/windows-app/Program.cs`: HTML və WebView2 olmadan Windows Forms interfeysi, lokal taktika, matçlar və axtarış, HTTPS API.
+- `native/windows-app/StartupSplash.cs`: təxminən 2 saniyəlik **doğma GDI+ açılış animasiyası**; yüklənmə faizi uydurulmur.
+- İlk çərçivədən etibarən **çərçivəsiz tam ekran**. `Esc` normal pəncərəyə, `F11` tam ekrana keçid edir.
+- `native/windows-installer/installer.iss`: quraşdırılan tətbiq, Başlat menyusu, masaüstü qısayolu və normal silmə.
+- `BUILD_WINDOWS.cmd`: Windows 11-də .NET 8 SDK quraşdırılıbsa EXE-ni lokal kompilyasiya edir. Inno Setup 6 quraşdırılıbsa Setup yaratmağa da çalışır.
+- GitHub Actions workflow: `.github/workflows/matchlab_build_native_windows_v0946.yml`.
+
+## Android (sonra)
+- `native/android/app/src/main/java/az/matchlab/mobile/MainActivity.java`: tam Java **native** interfeys, HTML və WebView yoxdur.
+- `NativeSplashView.java`: telefon tam ekranda açılan kimi loqo, hərəkətli yaşıl halqa, tətbiq adı və animasiya.
+- **Sistem status və naviqasiya çubuqları gizlənir**; kənardan sürüşdürməklə müvəqqəti görünə bilər. Gesture sahəsi üçün alt hissədə qoruyucu boşluq var.
+- 6 alt menyu, canlı matçlar, turnir cədvəli, axtarış, profil, matç detalları, favoritlər, taktika lövhəsi, server vəziyyəti.
+- Backend cavab verməsə, heç bir qondarma statistika göstərilmir. Lokal menyular və taktika açılır.
+- `.github/workflows/matchlab_native_android_v0946.yml` — Android emulator, splash, açılış, APK və Android loqo yoxlamaları.
+
+## GitHub-da real EXE və APK alınması
+1. Mövcud `imandustnihan/matchlab-az-online` repository-ni klonla və **ayrıca branch** aç: `fix/native-windows-android-v0946`.
+2. ZIP-in içindəki `native/windows-app/`, `native/windows-installer/`, `native/android/` və `.github/workflows/` qovluqlarını eyni yollara əlavə et. Köhnə başqa faylları silmə.
+3. Dəyişiklikləri commit və push et.
+4. GitHub **Actions** bölməsində `MATCHLAB AZ — Real Native Windows Build v0.9.46` və `MATCHLAB AZ - Android Native Fullscreen & Splash v0.9.46` workflow-larını işlə.
+5. Hər ikisi **Success** göstərdikdən sonra **Artifacts** bölməsindən `MATCHLAB_AZ_Real_Native_Setup_v0946` və `MATCHLAB_AZ_Android_Native_APK_v0946` ZIP paketlərini endir. Quraşdırıcı həqiqi `MATCHLAB_AZ_Native_Setup_v0946.exe`, Android `app-debug.apk` saxlayacaq.
+
+### İmza və təhlükəsizlik
+- Windows Setup **rəqəmsal imzalanmayıb**. SmartScreen xəbərdarlığı ola bilər. Təhlükəsizlik qorumasını söndürmə.
+- Android APK debug imzalıdır. Google Play üçün release signing, fərqli Play Store siyasətləri və istifadəçi cihazında test tələb olunur.
+- v0.9.46 Android-in eyni paket adı (`az.matchlab.mobile`) əvvəlki imzalı APK ilə imza uyğunluğu fərqli ola bilər; quraşdırmadan əvvəl saxlanmış məlumatları qoru. Uninstall məlumatları silə bilər.
+- Fullscreen cihazdan asılı olaraq status/navigation çubuqlarını müvəqqəti göstərə bilər; bu Android sistem davranışıdır.
+
+## İstifadə edilən xidmət
+- `https://matchlab-az-online.onrender.com` — matç, arxiv, cədvəl və profil API-ləri. Backend oyanma vaxtı və mənbələrin mövcudluğu ayrıca məhdudiyyətdir.
+- Mobil tətbiq daxili arxivi **oflayn saxlamır**.
+
+## Yoxlama
+Paketi yaradan sistemdə statik mənbə/manifest/iş axını yoxlamaları aparılır. Build, emulator və real cihaz nəticələri GitHub Actions-da ayrı təsdiqlənməlidir. 
+
+========== END FILE: 05_ANDROID_NATIVE_JAVA_v0946/README_AZ.md ==========
+
+
+========== BEGIN FILE: 05_ANDROID_NATIVE_JAVA_v0946/VERIFY_SOURCE.py ==========
+
+from pathlib import Path
+import re, zipfile, xml.etree.ElementTree as ET
+
+root=Path(__file__).resolve().parent
+w=(root/'native/windows-app/Program.cs').read_text(encoding='utf8')
+s=(root/'native/windows-app/StartupSplash.cs').read_text(encoding='utf8')
+a=(root/'native/android/app/src/main/java/az/matchlab/mobile/MainActivity.java').read_text(encoding='utf8')
+sp=(root/'native/android/app/src/main/java/az/matchlab/mobile/NativeSplashView.java').read_text(encoding='utf8')
+pitch=(root/'native/android/app/src/main/java/az/matchlab/mobile/PitchView.java').read_text(encoding='utf8')
+manifest=(root/'native/android/app/src/main/AndroidManifest.xml')
+xml=ET.parse(manifest).getroot()
+android='{http://schemas.android.com/apk/res/android}'
+app=xml.find('application')
+checks={
+ 'Windows truly native (no WebView)': not re.search(r'using\s+Microsoft\.Web|new\s+WebView|new\s+WebBrowser',w,re.I),
+ 'Windows starts borderless': 'FormBorderStyle=FormBorderStyle.None;' in w,
+ 'Windows starts maximized': 'WindowState=FormWindowState.Maximized;' in w,
+ 'Windows splash startup': 'splash.BeginAnimation()' in w and 'class StartupSplash' in s,
+ 'Windows splash native timer': 'System.Windows.Forms.Timer' in s and 'g.DrawArc(' in s,
+ 'Windows 0.9.46 project': '<Version>0.9.46</Version>' in (root/'native/windows-app/MATCHLABAZ.csproj').read_text(),
+ 'Android truly native (no WebView)': not re.search(r'import\s+android\.webkit|new\s+WebView|\.loadUrl\(',a),
+ 'Android fullscreen from onCreate': 'applyImmersive();' in a and 'WindowInsetsController' in a,
+ 'Android pre-30 immersive': 'SYSTEM_UI_FLAG_IMMERSIVE_STICKY' in a,
+ 'Android gesture-safe insets': 'mandatorySystemGestures' in a,
+ 'Android splash shown before UI': 'root.addView(splash' in a and 'setContentView(root)' in a,
+ 'Android 60fps animated splash': 'postInvalidateDelayed(16)' in sp and 'drawArc' in sp,
+ 'Android native tactics pitch': 'canvas.drawRoundRect' in pitch,
+ 'Android API no fake data': '/api/live' in a and '/api/standings' in a and '/api/search' in a,
+ 'Android project 0.9.46': 'versionCode 946' in (root/'native/android/app/build.gradle').read_text(),
+ 'Android HTTPS only': app is not None and app.get(android+'usesCleartextTraffic')=='false',
+ 'Android icon available': (root/'native/android/app/src/main/res/drawable/matchlab_icon.png').stat().st_size>1000,
+ 'Windows icon available': (root/'native/windows-app/native_icon.ico').stat().st_size>1000,
+ 'Windows build workflow': (root/'.github/workflows/matchlab_build_native_windows_v0946.yml').exists(),
+ 'Android build workflow': (root/'.github/workflows/matchlab_native_android_v0946.yml').exists(),
+}
+for k,v in checks.items():print(('PASS' if v else 'FAIL')+'  '+k)
+assert all(checks.values()), 'Some static checks failed'
+print('\nStatic source and manifest validation: PASSED')
+print('NOTE: This is NOT equivalent to compiling an EXE/APK or running a device emulator.')
+
+========== END FILE: 05_ANDROID_NATIVE_JAVA_v0946/VERIFY_SOURCE.py ==========
+
+
+========== BEGIN FILE: 05_ANDROID_NATIVE_JAVA_v0946/native/android/app/build.gradle ==========
+
+plugins { id 'com.android.application' }
+android {
+    namespace 'az.matchlab.mobile'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'az.matchlab.mobile'
+        minSdk 26
+        targetSdk 35
+        versionCode 946
+        versionName '0.9.46-native-fullscreen'
+    }
+    buildTypes {
+        release { minifyEnabled false }
+        debug { debuggable true }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+========== END FILE: 05_ANDROID_NATIVE_JAVA_v0946/native/android/app/build.gradle ==========
+
+
+========== BEGIN FILE: 05_ANDROID_NATIVE_JAVA_v0946/native/android/app/src/main/AndroidManifest.xml ==========
+
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <application android:label="MATCHLAB AZ" android:icon="@drawable/matchlab_icon" android:roundIcon="@drawable/matchlab_icon"
+        android:theme="@android:style/Theme.Material.NoActionBar" android:allowBackup="false"
+        android:usesCleartextTraffic="false" android:hardwareAccelerated="true">
+        <activity android:name=".MainActivity" android:exported="true" android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
+
+========== END FILE: 05_ANDROID_NATIVE_JAVA_v0946/native/android/app/src/main/AndroidManifest.xml ==========
+
+
+========== BEGIN FILE: 05_ANDROID_NATIVE_JAVA_v0946/native/android/app/src/main/java/az/matchlab/mobile/MainActivity.java ==========
+
+package az.matchlab.mobile;
+
+import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.SharedPreferences;
+import android.graphics.Color;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
+import android.os.Build;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.util.Log;
+import android.view.Gravity;
+import android.view.View;
+import android.view.WindowInsets;
+import android.view.WindowInsetsController;
+import android.view.WindowManager;
+import android.view.inputmethod.InputMethodManager;
+import android.content.Context;
+import android.widget.*;
+import android.widget.LinearLayout.LayoutParams;
+import org.json.*;
+import java.io.*;
+import java.net.*;
+import java.nio.charset.StandardCharsets;
+import java.text.SimpleDateFormat;
+import java.util.*;
+import java.util.concurrent.*;
+
+/** Actual Android native widgets/Canvas, not an HTML/WebView wrapper. */
+public final class MainActivity extends Activity {
+    static final String API="https://matchlab-az-online.onrender.com";
+    static final int BG=Color.rgb(9,18,29), SURFACE=Color.rgb(19,35,50), RAISED=Color.rgb(32,52,69),
+        GREEN=Color.rgb(164,239,117), TEXT=Color.rgb(239,247,252), DIM=Color.rgb(162,185,200),
+        ERROR=Color.rgb(248,142,145), AMBER=Color.rgb(255,194,118);
+    private static final String[] LEAGUE_IDS={"all","eng.1","esp.1","ger.1","ita.1","fra.1","uefa.champions","uefa.europa","tur.1","por.1","ned.1"};
+    private static final String[] LEAGUE_NAMES={"Bütün liqalar","Premier League","La Liga","Bundesliga","Serie A","Ligue 1","Champions League","Europa League","Süper Lig","Primeira Liga","Eredivisie"};
+    private static final String[] TYPES={"all","players","teams","coaches"};
+    private static final String[] TYPE_NAMES={"Hamısı","Futbolçular","Klublar","Məşqçilər"};
+    private static final String[] FORMATIONS={"4-3-3","4-2-3-1","4-4-2","3-5-2","3-4-3","5-3-2","4-1-4-1"};
+    private static final String[][] TABS={{"home","⌂","Ana"},{"matches","⚽","Matçlar"},{"standings","▤","Cədvəl"},{"search","⌕","Axtar"},{"tactics","▦","Taktika"},{"more","☰","Daha"}};
+    private final Handler ui=new Handler(Looper.getMainLooper());
+    private final ExecutorService requests=Executors.newFixedThreadPool(3);
+    private final Map<String,JSONObject> favorites=new LinkedHashMap<>();
+    private SharedPreferences prefs;
+    private FrameLayout root;
+    private LinearLayout app, content, bottom;
+    private ScrollView scroll;
+    private TextView title, connectivity;
+    private NativeSplashView splash;
+    private String screen="home",league="all",kind="all",query="";
+    private String selectedProfileId="";
+    private String formation="4-3-3";
+    private JSONObject selectedMatch;
+    private Calendar currentDate=Calendar.getInstance(TimeZone.getTimeZone("Asia/Baku"));
+    private int generation=0;
+    private boolean backendOnline=false,loadingStatus=false;
+    private boolean alive=true;
+    private final Runnable autoRefresh=new Runnable(){
+        @Override public void run(){
+            if(!alive)return;
+            if("matches".equals(screen))loadMatches(false);
+            ui.postDelayed(this,60000);
+        }
+    };
+    @Override public void onCreate(Bundle savedInstanceState){
+        super.onCreate(savedInstanceState);
+        prefs=getSharedPreferences("matchlab_native_946",MODE_PRIVATE);
+        formation=prefs.getString("formation","4-3-3");
+        if(!Arrays.asList(FORMATIONS).contains(formation))formation=FORMATIONS[0];
+        loadFavorites();
+        applyImmersive();
+        root=new FrameLayout(this);root.setBackgroundColor(BG);
+        app=column();app.setBackgroundColor(BG);root.addView(app,new FrameLayout.LayoutParams(-1,-1));
+        buildShell();
+        splash=new NativeSplashView(this);
+        root.addView(splash,new FrameLayout.LayoutParams(-1,-1));
+        setContentView(root);
+        applyGestureSafePadding();
+        navigate("home");
+        ui.postDelayed(()->{
+            if(splash==null||!alive)return;
+            splash.animate().alpha(0f).setDuration(310).withEndAction(()->{
+                if(splash!=null){splash.stop();root.removeView(splash);splash=null;}
+            }).start();
+        },1900);
+        ui.postDelayed(autoRefresh,60000);
+        checkServer();
+    }
+    private void applyImmersive(){
+        getWindow().setStatusBarColor(BG);
+        getWindow().setNavigationBarColor(BG);
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        if(Build.VERSION.SDK_INT>=30){
+            getWindow().setDecorFitsSystemWindows(false);
+            WindowInsetsController c=getWindow().getInsetsController();
+            if(c!=null){
+                c.hide(WindowInsets.Type.systemBars());
+                c.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+            }
+        }else{
+            getWindow().getDecorView().setSystemUiVisibility(
+                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY|View.SYSTEM_UI_FLAG_FULLSCREEN|
+                View.SYSTEM_UI_FLAG_HIDE_NAVIGATION|View.SYSTEM_UI_FLAG_LAYOUT_STABLE|
+                View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN|View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
+        }
+        Log.i("MATCHLAB_AZ","IMMERSIVE_FULLSCREEN_REQUESTED");
+    }
+    @Override public void onWindowFocusChanged(boolean focus){super.onWindowFocusChanged(focus);if(focus)applyImmersive();}
+    private void applyGestureSafePadding(){
+        if(Build.VERSION.SDK_INT>=30){
+            root.setOnApplyWindowInsetsListener((v,insets)->{
+                android.graphics.Insets cut=insets.getInsets(WindowInsets.Type.displayCutout());
+                android.graphics.Insets gesture=insets.getInsets(WindowInsets.Type.mandatorySystemGestures());
+                root.setPadding(cut.left,cut.top,cut.right,Math.max(cut.bottom,Math.max(gesture.bottom,dp(4))));
+                return insets;
+            });
+            root.requestApplyInsets();
+        }else root.setPadding(0,0,0,dp(8));
+    }
+    int dp(float v){return (int)(v*getResources().getDisplayMetrics().density+.5f);}
+    LinearLayout column(){LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.VERTICAL);return l;}
+    LinearLayout row(){LinearLayout l=new LinearLayout(this);l.setGravity(Gravity.CENTER_VERTICAL);return l;}
+    GradientDrawable rounded(int fill,int radius){GradientDrawable d=new GradientDrawable();d.setColor(fill);d.setCornerRadius(dp(radius));return d;}
+    TextView text(String value,int size,int color,boolean bold){
+        TextView t=new TextView(this);t.setText(value);t.setTextSize(size);t.setTextColor(color);t.setGravity(Gravity.CENTER_VERTICAL);
+        if(bold)t.setTypeface(Typeface.DEFAULT,Typeface.BOLD);return t;
+    }
+    Button action(String label,Runnable work){
+        Button b=new Button(this);b.setAllCaps(false);b.setText(label);b.setTextSize(14);b.setTextColor(TEXT);
+        b.setBackground(rounded(RAISED,12));b.setMinHeight(dp(48));b.setMinimumHeight(dp(48));
+        b.setPadding(dp(12),dp(8),dp(12),dp(8));b.setOnClickListener(v->work.run());return b;
+    }
+    void space(int height){View v=new View(this);content.addView(v,new LayoutParams(1,dp(height)));}
+    void card(View view){
+        LinearLayout outer=column();outer.setPadding(dp(15),dp(14),dp(15),dp(14));outer.setBackground(rounded(SURFACE,16));
+        outer.addView(view,new LayoutParams(-1,-2));
+        LayoutParams params=new LayoutParams(-1,-2);params.bottomMargin=dp(10);content.addView(outer,params);
+    }
+    void notice(String msg,boolean warn){TextView t=text(msg,14,warn?AMBER:DIM,false);t.setPadding(dp(3),dp(5),dp(3),dp(5));card(t);}
+    void heading(String s){TextView t=text(s,16,GREEN,true);t.setPadding(0,dp(15),0,dp(10));content.addView(t);}
+    void buildShell(){
+        LinearLayout top=row();top.setPadding(dp(17),dp(10),dp(17),dp(10));top.setBackgroundColor(BG);
+        title=text("MATCHLAB AZ",19,TEXT,true);top.addView(title,new LayoutParams(0,dp(55),1));
+        connectivity=text("●",14,AMBER,true);connectivity.setContentDescription("Server yoxlanılır");top.addView(connectivity);
+        app.addView(top,new LayoutParams(-1,dp(75)));
+        scroll=new ScrollView(this);scroll.setFillViewport(false);
+        content=column();content.setPadding(dp(15),dp(2),dp(15),dp(28));scroll.addView(content);
+        app.addView(scroll,new LayoutParams(-1,0,1));
+        bottom=row();bottom.setBackgroundColor(Color.rgb(12,29,43));bottom.setPadding(dp(4),dp(4),dp(4),dp(4));
+        app.addView(bottom,new LayoutParams(-1,dp(72)));
+    }
+    void navigate(String target){
+        screen=target;generation++;content.removeAllViews();scroll.scrollTo(0,0);
+        title.setText(target.equals("home")?"MATCHLAB AZ":target.equals("matches")?"Canlı matçlar":
+            target.equals("standings")?"Turnir cədvəli":target.equals("search")?"Futbol arxivi":
+            target.equals("tactics")?"Taktika studiyası":target.equals("favorites")?"Seçilmişlər":
+            target.equals("details")?"Matç mərkəzi":target.equals("profile")?"Futbol profili":"Tənzimləmələr");
+        bottom.removeAllViews();
+        for(String[] item:TABS){
+            String id=item[0];LinearLayout cell=column();cell.setGravity(Gravity.CENTER);
+            boolean active=id.equals(target)||(id.equals("more")&&(target.equals("favorites")||target.equals("settings")));
+            TextView icon=text(item[1],23,active?GREEN:DIM,true);icon.setGravity(Gravity.CENTER);
+            TextView label=text(item[2],11,active?GREEN:TEXT,active);label.setGravity(Gravity.CENTER);
+            cell.addView(icon);cell.addView(label);cell.setPadding(dp(2),dp(3),dp(2),dp(3));
+            cell.setContentDescription(item[2]);cell.setClickable(true);cell.setOnClickListener(v->{
+                if(id.equals("more"))showMore();else navigate(id);
+            });bottom.addView(cell,new LayoutParams(0,-1,1));
+        }
+        switch(target){
+            case "home":showHome();break;
+            case "matches":loadMatches(true);break;
+            case "standings":showStandings();break;
+            case "search":showSearch();break;
+            case "tactics":showTactics();break;
+            case "favorites":showFavorites();break;
+            case "settings":showSettings();break;
+            case "details":showDetails();break;
+            case "profile":loadProfile(selectedProfileId);break;
+            default:showHome();
+        }
+    }
+    void showMore(){
+        final String[] options={"☆ Seçilmişlər","⚙ Tənzimləmələr","⌂ Ana səhifə"};
+        new AlertDialog.Builder(this).setTitle("MATCHLAB AZ").setItems(options,(dialog,i)->
+            navigate(i==0?"favorites":i==1?"settings":"home")).show();
+    }
+    void showHome(){
+        heading("Futbol mərkəzinə xoş gəlmisən");
+        notice("Canlı nəticələr, real futbol arxivi, komanda müqayisələri və taktiki düzülüşlər üçün vahid mərkəz.",false);
+        LinearLayout box=column();
+        for(String[] x:new String[][]{{"⚽ Matçlar və nəticələr","matches"},{"▤ Turnir cədvəlləri","standings"},{"⌕ Futbolçu və klub axtarışı","search"},{"▦ Taktika lövhəsi","tactics"}}){
+            Button btn=action(x[0],()->navigate(x[1]));LayoutParams p=new LayoutParams(-1,dp(50));p.bottomMargin=dp(8);box.addView(btn,p);
+        }
+        card(box);
+        heading("Bağlantı vəziyyəti");
+        notice(backendOnline?"Server əlaqəsi qurulub. Məlumatlar canlı mənbələrin mövcudluğuna görə dəyişir.":
+            "Tətbiq açıqdır. Server bağlantısını yoxlayırıq; yerli taktika və menyular işləyir.",!backendOnline);
+        card(action("↻ Serveri yoxla",this::checkServer));
+    }
+    String date(){SimpleDateFormat f=new SimpleDateFormat("yyyy-MM-dd",Locale.US);f.setTimeZone(TimeZone.getTimeZone("Asia/Baku"));return f.format(currentDate.getTime());}
+    interface Callback{void done(JSONObject result,Exception failure);}
+    void get(String path,Callback cb){
+        requests.execute(()->{
+            JSONObject result=null;Exception problem=null;HttpURLConnection c=null;
+            try{
+                URL url=new URL(API+path);c=(HttpURLConnection)url.openConnection();
+                c.setConnectTimeout(16000);c.setReadTimeout(48000);c.setRequestProperty("Accept","application/json");
+                c.setRequestProperty("User-Agent","MATCHLABAZ-Android-Native/0.9.46");
+                int status=c.getResponseCode();if(status<200||status>=300)throw new IOException("HTTP "+status);
+                try(InputStream stream=c.getInputStream();ByteArrayOutputStream buf=new ByteArrayOutputStream()){
+                    byte[] block=new byte[8192];int count;
+                    while((count=stream.read(block))!=-1){buf.write(block,0,count);if(buf.size()>8_000_000)throw new IOException("Response too large");}
+                    result=new JSONObject(buf.toString("UTF-8"));
+                }
+            }catch(Exception ex){problem=ex;}finally{if(c!=null)c.disconnect();}
+            JSONObject ready=result;Exception error=problem;
+            ui.post(()->{if(alive)cb.done(ready,error);});
+        });
+    }
+    void checkServer(){
+        if(loadingStatus)return;loadingStatus=true;
+        connectivity.setTextColor(AMBER);connectivity.setContentDescription("Server yoxlanılır");
+        get("/api/status",(data,error)->{
+            loadingStatus=false;backendOnline=error==null&&data!=null&&data.optBoolean("ok",true)&&data.optBoolean("backend",true);
+            connectivity.setTextColor(backendOnline?GREEN:ERROR);
+            connectivity.setContentDescription(backendOnline?"Server aktivdir":"Server bağlantısı yoxdur");
+            if("home".equals(screen))navigate("home");
+            if("settings".equals(screen))navigate("settings");
+        });
+    }
+    String encode(String s){try{return java.net.URLEncoder.encode(s,"UTF-8");}catch(Exception e){return s;}}
+    Spinner selector(String[] labels,int index,java.util.function.IntConsumer chosen){
+        Spinner s=new Spinner(this);ArrayAdapter<String> adapter=new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,labels);
+        s.setAdapter(adapter);s.setSelection(Math.max(0,index));
+        s.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
+            boolean skip=true;
+            public void onItemSelected(android.widget.AdapterView<?> parent,View view,int pos,long id){if(skip){skip=false;return;}chosen.accept(pos);}
+            public void onNothingSelected(android.widget.AdapterView<?> parent){}
+        });return s;
+    }
+    void datePicker(){
+        LinearLayout controls=row();
+        controls.addView(action("‹",()->{currentDate.add(Calendar.DATE,-1);navigate("matches");}));
+        TextView day=text("  "+date()+"  ",14,TEXT,true);controls.addView(day);
+        controls.addView(action("›",()->{currentDate.add(Calendar.DATE,1);navigate("matches");}));
+        card(controls);
+    }
+    void leagueFilter(boolean table){
+        int index=Arrays.asList(LEAGUE_IDS).indexOf(league);
+        if(table&&index<=0){league="eng.1";index=1;}
+        int shift=table?1:0;
+        String[] names=table?Arrays.copyOfRange(LEAGUE_NAMES,1,LEAGUE_NAMES.length):LEAGUE_NAMES;
+        Spinner picker=selector(names,Math.max(0,index-shift),pos->{
+            league=LEAGUE_IDS[pos+shift];navigate(table?"standings":"matches");
+        });card(picker);
+    }
+    void loadMatches(boolean reset){
+        int token=generation;
+        if(reset){datePicker();leagueFilter(false);notice("Mənbədən matçlar alınır…",false);}
+        String path="/api/live?league="+encode(league)+"&date="+encode(date());
+        get(path,(json,error)->{
+            if(!screen.equals("matches")||token!=generation)return;
+            content.removeAllViews();datePicker();leagueFilter(false);
+            if(error!=null||json==null){notice("Matç məlumatlarına çıxış yoxdur. "+(error==null?"":error.getMessage()),true);return;}
+            boolean available=json.optBoolean("available",false);
+            if(json.optBoolean("stale")||json.optBoolean("partial"))notice("Məlumat qismən və ya köhnə ola bilər; canlı kimi göstərilmir.",true);
+            String message=json.optString("message","");if(!message.isEmpty())notice(message,!available);
+            JSONArray arr=json.optJSONArray("items");
+            if(arr==null||arr.length()==0){notice(available?"Bu tarix üçün matç yoxdur.":"Mənbələrdən təsdiqlənmiş nəticə alınmadı.",!available);return;}
+            String prev="";
+            for(int i=0;i<arr.length();i++){
+                JSONObject m=arr.optJSONObject(i);if(m==null)continue;
+                String group=m.optString("leagueName",m.optString("league","Digər"));
+                if(!group.equals(prev)){heading(group);prev=group;}matchRow(m,false);
+            }
+        });
+    }
+    String team(JSONObject m,String key){JSONObject t=m.optJSONObject(key);return t==null?"—":t.optString("name","—");}
+    String result(JSONObject m){
+        if(m.optString("state").equals("scheduled"))return "— : —";
+        Object home=m.opt("homeScore"),away=m.opt("awayScore");
+        if(home==null||away==null||home==JSONObject.NULL||away==JSONObject.NULL)return "— : —";
+        return home+" : "+away;
+    }
+    void matchRow(JSONObject m,boolean saved){
+        LinearLayout line=row();
+        TextView names=text(team(m,"home")+"\n"+team(m,"away"),14,TEXT,true);names.setMaxLines(3);
+        line.addView(names,new LayoutParams(0,dp(65),1));
+        TextView score=text(result(m),17,GREEN,true);score.setGravity(Gravity.CENTER);
+        line.addView(score,new LayoutParams(dp(87),dp(65)));
+        Button star=action(favorites.containsKey(m.optString("id"))?"★":"☆",()->{
+            String id=m.optString("id");if(id.isEmpty())return;
+            if(favorites.containsKey(id))favorites.remove(id);else favorites.put(id,m);
+            saveFavorites();navigate(screen.equals("favorites")?"favorites":"matches");
+        });line.addView(star,new LayoutParams(dp(48),dp(53)));
+        line.setOnClickListener(v->{if(saved){Toast.makeText(this,"Bu saxlanmış məlumatdır, canlı deyil.",Toast.LENGTH_SHORT).show();}
+            selectedMatch=m;navigate("details");});
+        LinearLayout layout=column();layout.addView(line);
+        TextView state=text(saved?"Saxlanmış nəticə · canlı deyil":m.optString("state","Mənbə məlumatı"),12,DIM,false);
+        layout.addView(state);card(layout);
+    }
+    void showStandings(){
+        leagueFilter(true);notice("Liqa cədvəli alınır…",false);
+        int token=generation;
+        get("/api/standings?league="+encode(league),(data,error)->{
+            if(!screen.equals("standings")||token!=generation)return;
+            content.removeAllViews();leagueFilter(true);
+            if(error!=null||data==null){notice("Turnir cədvəlinə bağlantı alınmadı.",true);return;}
+            if(data.optBoolean("stale"))notice("Saxlanmış və ya köhnə cədvəldir.",true);
+            JSONArray arr=data.optJSONArray("items");
+            if(arr==null||arr.length()==0){notice(data.optString("message","Cədvəl mənbədə yoxdur."),true);return;}
+            for(int i=0;i<arr.length();i++){
+                JSONObject r=arr.optJSONObject(i);if(r==null)continue;
+                LinearLayout row=row();
+                TextView name=text(r.optString("rank","—")+".  "+r.optString("name",r.optString("team","—")),14,TEXT,true);
+                row.addView(name,new LayoutParams(0,dp(45),1));
+                row.addView(text(r.optString("points","—")+" xal",14,GREEN,true));card(row);
+            }
+        });
+    }
+    void showSearch(){
+        EditText field=new EditText(this);field.setSingleLine(true);field.setText(query);field.setHint("Futbolçu, klub, məşqçi…");
+        field.setHintTextColor(DIM);field.setTextColor(TEXT);field.setTextSize(16);
+        field.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH);card(field);
+        Spinner kinds=selector(TYPE_NAMES,Arrays.asList(TYPES).indexOf(kind),n->kind=TYPES[n]);card(kinds);
+        Button search=action("⌕ Axtar",()->{
+            query=field.getText().toString().trim();kind=TYPES[kinds.getSelectedItemPosition()];
+            ((InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(field.getWindowToken(),0);
+            loadSearch();
+        });card(search);
+        field.setOnEditorActionListener((v,id,event)->{search.performClick();return true;});
+        notice("Arxiv serverdən yüklənir. Qeydiyyat sayı hər profilin tam statistikasına zəmanət vermir.",false);
+        if(!query.isEmpty())loadSearch();
+    }
+    void loadSearch(){
+        if(query.isEmpty()){notice("Axtarış üçün ad yaz.",true);return;}
+        int token=generation;
+        get("/api/search?q="+encode(query)+"&kind="+encode(kind),(data,error)->{
+            if(!screen.equals("search")||token!=generation)return;
+            if(error!=null||data==null){notice("Axtarış mənbəsinə bağlantı yoxdur.",true);return;}
+            JSONArray items=data.optJSONArray("items");
+            heading("Axtarış nəticələri");
+            if(items==null||items.length()==0){notice("Təsdiqlənmiş nəticə tapılmadı.",true);return;}
+            for(int i=0;i<Math.min(items.length(),80);i++){
+                JSONObject p=items.optJSONObject(i);if(p==null)continue;
+                String name=p.optString("name","—");String id=p.optString("id","");
+                Button btn=action(name+" · "+p.optString("country",""),()->{selectedProfileId=id;navigate("profile");});
+                card(btn);
+            }
+        });
+    }
+    void loadProfile(String id){
+        if(id.isEmpty()){notice("Profil seçilməyib.",true);return;}
+        notice("Futbol profili yüklənir…",false);int token=generation;
+        get("/api/profile?id="+encode(id),(data,error)->{
+            if(!screen.equals("profile")||token!=generation)return;
+            content.removeAllViews();
+            if(error!=null||data==null){notice("Profilə bağlantı alınmadı.",true);return;}
+            JSONObject p=data.optJSONObject("profile");
+            if(p==null){notice("Bu profil üçün təsdiqlənmiş məlumat yoxdur.",true);return;}
+            heading(p.optString("name","—"));
+            for(String k:new String[]{"kind","country","birth","death","position","description","source","lifeStatus"}){
+                String v=p.optString(k,"");if(!v.isEmpty())notice(k+": "+v,false);
+            }
+            for(String k:new String[]{"clubs","coached","awards"}){
+                JSONArray arr=p.optJSONArray(k);if(arr==null||arr.length()==0)continue;
+                heading(k+" ("+arr.length()+")");
+                for(int i=0;i<Math.min(arr.length(),30);i++){
+                    Object v=arr.opt(i);if(v instanceof JSONObject){v=((JSONObject)v).optString("name",v.toString());}
+                    notice(String.valueOf(v),false);
+                }
+            }
+        });
+    }
+    void showDetails(){
+        if(selectedMatch==null){notice("Matç seçilməyib.",true);return;}
+        heading(team(selectedMatch,"home")+"  "+result(selectedMatch)+"  "+team(selectedMatch,"away"));
+        notice(selectedMatch.optString("leagueName","")+" · "+selectedMatch.optString("state",""),false);
+        String[] parts=selectedMatch.optString("id","").split(":",3);
+        if(parts.length!=3||!Arrays.asList("espn","open","sportsdb").contains(parts[0])){
+            notice("Bu matç üçün təsdiqlənmiş hadisələr mövcud deyil.",true);return;
+        }
+        int token=generation;
+        get("/api/match-detail?provider="+encode(parts[0])+"&league="+encode(parts[1])+"&id="+encode(parts[2]),(data,error)->{
+            if(!screen.equals("details")||token!=generation)return;
+            if(error!=null||data==null){notice("Matç detalına bağlantı alınmadı.",true);return;}
+            if(!data.optBoolean("available"))notice(data.optString("message","Detallar mövcud deyil."),true);
+            for(String key:new String[]{"events","statistics"}){
+                JSONArray a=data.optJSONArray(key);if(a==null||a.length()==0)continue;
+                heading(key.equals("events")?"Hadisələr":"Statistika");
+                for(int i=0;i<Math.min(a.length(),70);i++){
+                    JSONObject ev=a.optJSONObject(i);if(ev==null)continue;
+                    notice(ev.optString("minute",ev.optString("clock",""))+"  "+
+                        ev.optString("text",ev.optString("name",ev.optString("type","")))+" "+
+                        ev.optString("home","")+"  "+ev.optString("away",""),false);
+                }
+            }
+        });
+    }
+    void showTactics(){
+        heading("Yerli taktika lövhəsi");
+        notice("Düzülüş nişanları taktiki mövqelərdir; real matç heyəti kimi təqdim edilmir.",false);
+        Spinner pick=selector(FORMATIONS,Arrays.asList(FORMATIONS).indexOf(formation),pos->{
+            formation=FORMATIONS[pos];prefs.edit().putString("formation",formation).apply();navigate("tactics");
+        });card(pick);
+        PitchView pitch=new PitchView(this,formation);
+        LinearLayout holder=column();holder.addView(pitch,new LayoutParams(-1,dp(460)));card(holder);
+    }
+    void loadFavorites(){
+        String src=prefs.getString("favorites","{}");
+        try{JSONObject obj=new JSONObject(src);Iterator<String> it=obj.keys();while(it.hasNext()){
+            String id=it.next();JSONObject m=obj.optJSONObject(id);if(m!=null)favorites.put(id,m);
+        }}catch(Exception ignored){}
+    }
+    void saveFavorites(){
+        JSONObject obj=new JSONObject();for(Map.Entry<String,JSONObject> e:favorites.entrySet()){
+            try{obj.put(e.getKey(),e.getValue());}catch(Exception ignored){}
+        }prefs.edit().putString("favorites",obj.toString()).apply();
+    }
+    void showFavorites(){
+        heading("Seçilmiş matçlar");notice("Saxlanmış nəticələr canlı hesab deyil.",false);
+        if(favorites.isEmpty()){notice("★ simvolu ilə matçları seç.",false);return;}
+        for(JSONObject m:new ArrayList<>(favorites.values()))matchRow(m,true);
+    }
+    void showSettings(){
+        heading("MATCHLAB AZ v0.9.46 · Android Native");
+        notice("Bu proqram HTML və WebView işlətmir; Android komponentləri və Canvas istifadə edir.",false);
+        notice(backendOnline?"Server aktivdir.":"Serverə bağlantı yoxdur. Yerli taktika və menyular əlçatandır.",!backendOnline);
+        card(action("↻ Yenidən qoşul",this::checkServer));
+        notice("Tam ekran aktivdir. Sistem düymələrini göstərmək üçün ekranın kənarından sürüşdür.",false);
+    }
+    @Override public void onBackPressed(){
+        if("details".equals(screen))navigate("matches");
+        else if("profile".equals(screen))navigate("search");
+        else if(!"home".equals(screen))navigate("home");
+        else super.onBackPressed();
+    }
+    @Override protected void onDestroy(){
+        alive=false;ui.removeCallbacks(autoRefresh);requests.shutdownNow();
+        if(splash!=null)splash.stop();super.onDestroy();
+    }
+}
+
+========== END FILE: 05_ANDROID_NATIVE_JAVA_v0946/native/android/app/src/main/java/az/matchlab/mobile/MainActivity.java ==========
+
+
+========== BEGIN FILE: 05_ANDROID_NATIVE_JAVA_v0946/native/android/app/src/main/java/az/matchlab/mobile/NativeSplashView.java ==========
+
+package az.matchlab.mobile;
+
+import android.content.Context;
+import android.graphics.*;
+import android.os.SystemClock;
+import android.util.Log;
+import android.view.View;
+
+/** Fullscreen 60fps intro animation drawn natively in Android Canvas. */
+public final class NativeSplashView extends View {
+    private final Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Bitmap icon;
+    private final long started=SystemClock.uptimeMillis();
+    private boolean active=true;
+    NativeSplashView(Context context){
+        super(context);setLayerType(View.LAYER_TYPE_HARDWARE,null);
+        Log.i("MATCHLAB_AZ","SPLASH_VIEW_CREATED");
+        icon=BitmapFactory.decodeResource(getResources(),R.drawable.matchlab_icon);
+        setContentDescription("MATCHLAB AZ açılır");
+    }
+    void stop(){active=false;}
+    @Override protected void onDraw(Canvas canvas){
+        super.onDraw(canvas);
+        float w=getWidth(),h=getHeight(),cx=w/2f,cy=h/2f;
+        paint.setShader(new LinearGradient(0,0,w,h,Color.rgb(7,15,26),Color.rgb(18,45,47),Shader.TileMode.CLAMP));
+        canvas.drawRect(0,0,w,h,paint);paint.setShader(null);
+        float scale=Math.min(w/400f,h/720f);
+        scale=Math.max(.72f,Math.min(scale,1.4f));
+        float iconSize=110*scale;
+        float iconTop=cy-155*scale;
+        float now=(SystemClock.uptimeMillis()-started)/1000f;
+        float sweep=(now*180f)%360f;
+        paint.setStyle(Paint.Style.STROKE);paint.setStrokeWidth(4*scale);
+        paint.setColor(Color.argb(105,164,239,117));
+        RectF arc=new RectF(cx-82*scale,iconTop-27*scale,cx+82*scale,iconTop+137*scale);
+        canvas.drawArc(arc,0,360,false,paint);
+        paint.setColor(Color.rgb(164,239,117));canvas.drawArc(arc,sweep,84,false,paint);
+        paint.setStyle(Paint.Style.FILL);
+        if(icon!=null){
+            Rect src=new Rect(0,0,icon.getWidth(),icon.getHeight());
+            RectF dst=new RectF(cx-iconSize/2,iconTop,cx+iconSize/2,iconTop+iconSize);
+            canvas.drawBitmap(icon,src,dst,paint);
+        }
+        paint.setTypeface(Typeface.create("sans-serif-condensed",Typeface.BOLD));
+        paint.setTextSize(34*scale);paint.setTextAlign(Paint.Align.CENTER);
+        paint.setColor(Color.rgb(239,247,252));canvas.drawText("MATCHLAB AZ",cx,cy+24*scale,paint);
+        paint.setTypeface(Typeface.create("sans-serif",Typeface.NORMAL));
+        paint.setTextSize(12*scale);paint.setColor(Color.rgb(168,196,202));
+        canvas.drawText("FUTBOL ANALİTİKA MƏRKƏZİ",cx,cy+51*scale,paint);
+        float x=cx-103*scale,y=cy+102*scale;
+        paint.setColor(Color.rgb(43,73,76));canvas.drawRoundRect(x,y,x+206*scale,y+5*scale,3*scale,3*scale,paint);
+        paint.setColor(Color.rgb(164,239,117));float motion=(float)(.5+.5*Math.sin(now*3.8));
+        float left=x+motion*(135*scale);canvas.drawRoundRect(left,y,left+71*scale,y+5*scale,3*scale,3*scale,paint);
+        paint.setTextSize(11*scale);paint.setColor(Color.rgb(140,174,182));
+        canvas.drawText("Tətbiq açılır…",cx,y+36*scale,paint);
+        if(active)postInvalidateDelayed(16);
+    }
+}
+
+========== END FILE: 05_ANDROID_NATIVE_JAVA_v0946/native/android/app/src/main/java/az/matchlab/mobile/NativeSplashView.java ==========
+
+
+========== BEGIN FILE: 05_ANDROID_NATIVE_JAVA_v0946/native/android/app/src/main/java/az/matchlab/mobile/PitchView.java ==========
+
+package az.matchlab.mobile;
+
+import android.content.Context;
+import android.graphics.*;
+import android.view.View;
+
+/** Native Canvas pitch; player numbers are formation markers only. */
+public final class PitchView extends View {
+    private final Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final String formation;
+    PitchView(Context context,String formation){super(context);this.formation=formation;}
+    @Override protected void onDraw(Canvas canvas){
+        super.onDraw(canvas);float w=getWidth(),h=getHeight(),left=15,top=13,right=w-15,bottom=h-13;
+        p.setStyle(Paint.Style.FILL);p.setColor(Color.rgb(24,94,68));
+        canvas.drawRoundRect(left,top,right,bottom,12,12,p);
+        p.setColor(Color.argb(200,234,251,238));p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(2);
+        canvas.drawRect(left+8,top+8,right-8,bottom-8,p);
+        float cx=w/2f,cy=h/2f;
+        canvas.drawLine(left+8,cy,right-8,cy,p);canvas.drawCircle(cx,cy,40,p);
+        canvas.drawRect(cx-w*.23f,top+8,cx+w*.23f,top+h*.17f,p);
+        canvas.drawRect(cx-w*.23f,bottom-h*.17f,cx+w*.23f,bottom-8,p);
+        String[] parts=formation.split("-");int[] rows=new int[parts.length+1];rows[0]=1;
+        for(int i=0;i<parts.length;i++){try{rows[i+1]=Integer.parseInt(parts[i]);}catch(Exception ignored){}}
+        int number=1;
+        for(int r=0;r<rows.length;r++){
+            float y=bottom-52-r*(h-114)/(rows.length-1f);
+            for(int i=0;i<rows[r];i++){
+                float x=left+((i+1f)/(rows[r]+1f))*(right-left);
+                p.setStyle(Paint.Style.FILL);p.setColor(Color.rgb(164,239,117));canvas.drawCircle(x,y,15,p);
+                p.setColor(Color.rgb(8,20,29));p.setTextAlign(Paint.Align.CENTER);
+                p.setTypeface(Typeface.create(Typeface.DEFAULT,Typeface.BOLD));p.setTextSize(13);
+                canvas.drawText(Integer.toString(number++),x,y+5,p);
+            }
+        }
+    }
+}
+
+========== END FILE: 05_ANDROID_NATIVE_JAVA_v0946/native/android/app/src/main/java/az/matchlab/mobile/PitchView.java ==========
+
+
+========== BEGIN FILE: 05_ANDROID_NATIVE_JAVA_v0946/native/android/build.gradle ==========
+
+plugins {
+    id 'com.android.application' version '8.7.3' apply false
+}
+
+========== END FILE: 05_ANDROID_NATIVE_JAVA_v0946/native/android/build.gradle ==========
+
+
+========== BEGIN FILE: 05_ANDROID_NATIVE_JAVA_v0946/native/android/gradle.properties ==========
+
+org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+android.useAndroidX=true
+
+========== END FILE: 05_ANDROID_NATIVE_JAVA_v0946/native/android/gradle.properties ==========
+
+
+========== BEGIN FILE: 05_ANDROID_NATIVE_JAVA_v0946/native/android/settings.gradle ==========
+
+pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories { google(); mavenCentral() } }
+rootProject.name = 'MATCHLAB_AZ_Mobile'
+include ':app'
+
+========== END FILE: 05_ANDROID_NATIVE_JAVA_v0946/native/android/settings.gradle ==========
