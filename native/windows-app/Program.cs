@@ -35,8 +35,8 @@ public sealed class MatchlabForm : Form
         BaseAddress = new Uri("https://matchlab-az-online.onrender.com"),
         Timeout = TimeSpan.FromSeconds(28)
     };
-    private readonly string[] leagues = {"all","eng.1","esp.1","ger.1","ita.1","fra.1","uefa.champions","uefa.europa","tur.1","por.1","ned.1"};
-    private readonly string[] leagueNames = {"Bütün liqalar","Premier League","La Liga","Bundesliga","Serie A","Ligue 1","Champions League","Europa League","Süper Lig","Primeira Liga","Eredivisie"};
+    private readonly string[] leagues = {"all","aze.1","eng.1","esp.1","ger.1","ita.1","fra.1","uefa.champions","uefa.europa","uefa.europa.conf","tur.1","por.1","ned.1","sco.1","bel.1","usa.1","ksa.1","eng.2","arg.1","bra.1","jpn.1","mex.1"};
+    private readonly string[] leagueNames = {"Bütün liqalar","Azərbaycan Premyer Liqası","Premier League","La Liga","Bundesliga","Serie A","Ligue 1","Çempionlar Liqası","Avropa Liqası","Konfrans Liqası","Süper Lig","Primeira Liga","Eredivisie","Scottish Premiership","Belgian Pro League","MLS","Saudi Pro League","Championship","Argentina Primera","Brasileirão","J1 League","Liga MX"};
     private readonly Dictionary<string, string> favoriteSnapshots = new();
     private readonly string savePath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -48,7 +48,8 @@ public sealed class MatchlabForm : Form
     private readonly Panel nav = new() { Dock=DockStyle.Fill, BackColor=Sidebar };
     private readonly List<Button> navButtons = new();
     private string page="matches";
-    private string league="all";
+    private string matchLeague="all",tableLeague="eng.1",matchMode="all";
+    private readonly HashSet<string> collapsedLeagues=new();
     private DateTime selectedDate=DateTime.UtcNow.AddHours(4).Date;
     private string selectedKind="all";
     private string query="";
@@ -56,7 +57,7 @@ public sealed class MatchlabForm : Form
     private JsonElement openedMatch;
     private bool hasOpenedMatch;
     private int formation=0;
-    private readonly string[] formations={"4-3-3","4-2-3-1","4-4-2","3-5-2"};
+    private readonly string[] formations={"4-3-3","4-2-3-1","4-4-2","3-5-2","3-4-3","4-1-4-1","5-3-2","4-2-2-2"};
     private List<JsonElement> latestMatches = new();
 
     public MatchlabForm()
@@ -116,7 +117,7 @@ public sealed class MatchlabForm : Form
         var brand=Txt("◉  MATCHLAB",18,true,Accent);
         brand.SetBounds(22,29,185,36);
         nav.Controls.Add(brand);
-        var sub=Txt("AZ  ·  NATIVE 0.9.30",9,false,Muted);
+        var sub=Txt("AZ  ·  NATIVE 0.9.48",9,false,Muted);
         sub.SetBounds(24,66,182,26);
         nav.Controls.Add(sub);
         var items=new(string key,string label)[]{
@@ -211,63 +212,99 @@ public sealed class MatchlabForm : Form
     }
     private static string BakuDate(DateTime x)=>x.ToString("yyyy-MM-dd",CultureInfo.InvariantCulture);
     private void DateFilter(){
-        var p=CardPanel(68);
-        var prev=NewButton("‹",Raised,Ink,45);prev.SetBounds(15,13,45,42);
-        prev.Click+=(_,_)=>{selectedDate=selectedDate.AddDays(-1);Render();};
-        p.Controls.Add(prev);
-        var day=Txt(selectedDate.ToString("dd MMM yyyy",CultureInfo.GetCultureInfo("az-Latn-AZ")),12,true,Ink);
-        day.SetBounds(74,15,148,38);p.Controls.Add(day);
-        var next=NewButton("›",Raised,Ink,45);next.SetBounds(223,13,45,42);
-        next.Click+=(_,_)=>{selectedDate=selectedDate.AddDays(1);Render();};p.Controls.Add(next);
-        var today=NewButton("Bu gün",Raised,Accent,95);today.SetBounds(280,13,95,42);
-        today.Click+=(_,_)=>{selectedDate=DateTime.UtcNow.AddHours(4).Date;Render();};p.Controls.Add(today);
-        var combo=LeagueSelect(false);
-        combo.Anchor=AnchorStyles.Right|AnchorStyles.Top;combo.SetBounds(p.Width-240,13,214,42);
-        p.Controls.Add(combo);
-        p.SizeChanged+=(_,_)=>combo.Left=p.Width-240;
+        var panel=CardPanel(119);
+        var previous=NewButton("‹",Raised,Ink,45);previous.SetBounds(14,12,45,41);
+        previous.Click+=(_,_)=>{selectedDate=selectedDate.AddDays(-1);Render();};panel.Controls.Add(previous);
+        var todayText=Txt(selectedDate.ToString("dd MMM yyyy",CultureInfo.GetCultureInfo("az-Latn-AZ")),12,true);
+        todayText.SetBounds(66,12,170,41);panel.Controls.Add(todayText);
+        var next=NewButton("›",Raised,Ink,45);next.SetBounds(238,12,45,41);
+        next.Click+=(_,_)=>{selectedDate=selectedDate.AddDays(1);Render();};panel.Controls.Add(next);
+        var today=NewButton("Bu gün",Raised,Accent,90);today.SetBounds(289,12,90,41);
+        today.Click+=(_,_)=>{selectedDate=DateTime.UtcNow.AddHours(4).Date;Render();};panel.Controls.Add(today);
+        var combo=LeagueSelect(false);combo.Anchor=AnchorStyles.Right|AnchorStyles.Top;
+        combo.SetBounds(Math.Max(395,panel.Width-305),12,275,42);panel.Controls.Add(combo);
+        panel.SizeChanged+=(_,_)=>combo.Left=Math.Max(395,panel.Width-305);
+        string[] keys={"all","live","favorites"},labels={"Hamısı","● Canlı","☆ Seçilmiş"};
+        for(int i=0;i<keys.Length;i++){
+            string mode=keys[i];
+            bool selected=matchMode==mode;
+            var tab=NewButton(labels[i],selected?Accent:Raised,selected?Bg:Ink,120);
+            tab.SetBounds(14+i*128,67,120,36);
+            tab.Click+=(_,_)=>{matchMode=mode;Render();};panel.Controls.Add(tab);
+        }
+        var count=Txt("Oyunlar liqa üzrə avtomatik qruplaşır",10,false,Muted);
+        count.Anchor=AnchorStyles.Right|AnchorStyles.Top;
+        count.SetBounds(Math.Max(397,panel.Width-295),66,285,36);
+        panel.Controls.Add(count);panel.SizeChanged+=(_,_)=>count.Left=Math.Max(397,panel.Width-295);
     }
-    private ComboBox LeagueSelect(bool single){
-        var box=new ComboBox {DropDownStyle=ComboBoxStyle.DropDownList,BackColor=Raised,ForeColor=Ink,FlatStyle=FlatStyle.Flat,Font=new Font("Segoe UI",11),Height=44};
-        int start=single?1:0;
+    private ComboBox LeagueSelect(bool forTable){
+        var box=new ComboBox{
+            DropDownStyle=ComboBoxStyle.DropDownList,BackColor=Raised,ForeColor=Ink,
+            FlatStyle=FlatStyle.Flat,Font=new Font("Segoe UI",10),Height=41
+        };
+        int start=forTable?1:0;
         for(int i=start;i<leagueNames.Length;i++)box.Items.Add(leagueNames[i]);
-        int current=System.Array.IndexOf(leagues,league);
-        box.SelectedIndex=Math.Max(0,current-start);
+        string current=forTable?tableLeague:matchLeague;
+        int selected=Array.IndexOf(leagues,current);
+        box.SelectedIndex=Math.Max(0,selected-start);
         box.SelectedIndexChanged+=(_,_)=>{
             if(box.SelectedIndex<0)return;
-            var value=leagues[box.SelectedIndex+start];
-            if(value==league)return;
-            league=value;Render();
+            string code=leagues[box.SelectedIndex+start];
+            if(code==(forTable?tableLeague:matchLeague))return;
+            if(forTable)tableLeague=code;else matchLeague=code;
+            Render();
         };
         return box;
     }
-    private async Task ReloadMatches(bool reset) {
+    private async Task ReloadMatches(bool reset){
         int token=viewVersion;
-        if(reset){DateFilter(); Message("Mənbədən real nəticələr alınır…");}
+        if(reset){DateFilter();Message("Real mənbədən matçlar yüklənir…");}
         try{
-            var data=await Get("/api/live?league="+Uri.EscapeDataString(league)+"&date="+BakuDate(selectedDate));
+            var data=await Get("/api/live?league="+Uri.EscapeDataString(matchLeague)+"&date="+BakuDate(selectedDate));
             if(page!="matches"||token!=viewVersion)return;
             latestMatches=Array(data,"items").Select(x=>x.Clone()).ToList();
             SetConnection(Yes(data,"available"));
             content.SuspendLayout();content.Controls.Clear();DateFilter();
-            string note=Val(data,"message");
             if(Yes(data,"partial")||Yes(data,"stale"))
-                Message("Qismən və ya köhnə məlumat. Yenilənmə mənbədən təsdiqlənməyib.",true);
-            if(!string.IsNullOrWhiteSpace(note))Message(note,!Yes(data,"available"));
-            if(latestMatches.Count==0){
-                Message(Yes(data,"available")?"Bu tarix və liqa üçün matç yoxdur.":"Mənbə cavab vermədi və ya məlumat təqdim etmədi.",!Yes(data,"available"));
+                Message("Bəzi mənbələr cavab vermir. Köhnə nəticə canlı kimi göstərilmir.",true);
+            var visible=latestMatches.Where(m=>matchMode=="all"||
+                 (matchMode=="live"&&Val(m,"state")=="live"&&!Yes(m,"stale"))||
+                 (matchMode=="favorites"&&favoriteSnapshots.ContainsKey(Val(m,"id")))).ToList();
+            int liveCount=visible.Count(m=>Val(m,"state")=="live"&&!Yes(m,"stale"));
+            Heading(visible.Count+" real matç   ·   "+liveCount+" canlı   ·   "+Val(data,"source","mənbə yoxlanır"));
+            if(visible.Count==0){
+                Message(matchMode=="live"?"Təsdiqlənmiş canlı oyun yoxdur. Hamısı bölməsində bütün oyunları göstər.":
+                    matchMode=="favorites"?"Bu tarixdə seçilmiş matç yoxdur.":
+                    Yes(data,"available")?"Seçilmiş tarixdə mənbələr matç qaytarmadı.":"Matçlar mənbədən alınmadı.",
+                    !Yes(data,"available"));
             }else{
-                string group="";
-                foreach(var m in latestMatches){
-                    string next=Val(m,"leagueName",Val(m,"league","Digər"));
-                    if(next!=group){Heading(next);group=next;}
-                    MatchRow(m);
+                var groups=visible.GroupBy(m=>Val(m,"leagueName",Val(m,"league","Digər yarışlar")));
+                foreach(var group in groups){
+                    string key=group.Key;
+                    var heading=CardPanel(48);
+                    heading.BackColor=Raised;
+                    var label=Txt(key+"   ·   "+group.Count()+" oyun   "+(collapsedLeagues.Contains(key)?"⌄":"⌃"),11,true);
+                    label.Dock=DockStyle.Fill;label.Padding=new Padding(9,1,0,1);
+                    heading.Controls.Add(label);
+                    heading.Cursor=Cursors.Hand;label.Cursor=Cursors.Hand;
+                    EventHandler click=(_,_)=>{
+                        if(!collapsedLeagues.Add(key))collapsedLeagues.Remove(key);
+                        _=ReloadMatches(false);
+                    };
+                    heading.Click+=click;label.Click+=click;
+                    if(!collapsedLeagues.Contains(key))
+                        foreach(var match in group)MatchRow(match);
                 }
             }
+            var msg=Val(data,"message");
+            if(visible.Count==0&&!string.IsNullOrWhiteSpace(msg))Message(msg,!Yes(data,"available"));
             content.ResumeLayout();
-        }catch(Exception e){
+        }catch(Exception){
             if(page!="matches"||token!=viewVersion)return;
             SetConnection(false);content.Controls.Clear();DateFilter();
-            Message("Serverlə əlaqə alınmadı: "+e.Message,true);
+            Message("Serverə bağlantı yoxdur. İnternetini və API-nin işləməsini yoxla.",true);
+            var retry=CardPanel(60);var button=NewButton("↻ Yenilə",Raised,Accent,150);button.Dock=DockStyle.Left;
+            button.Click+=(_,_)=>Render();retry.Controls.Add(button);
         }
     }
     private static string Team(JsonElement m,string key)=>Val(Prop(m,key),"name","—");
@@ -304,7 +341,7 @@ public sealed class MatchlabForm : Form
         try{Directory.CreateDirectory(Path.GetDirectoryName(savePath)!);File.WriteAllText(savePath,JsonSerializer.Serialize(favoriteSnapshots));}catch{}
     }
     private void ShowStandings(){
-        if(league=="all")league="eng.1";
+        if(tableLeague=="all")tableLeague="eng.1";
         var p=CardPanel(67);
         var l=Txt("Liqa",11,true);l.SetBounds(15,14,70,39);p.Controls.Add(l);
         var choose=LeagueSelect(true);choose.SetBounds(90,14,255,39);p.Controls.Add(choose);
@@ -313,7 +350,7 @@ public sealed class MatchlabForm : Form
     private async Task LoadStandings(int token){
         Message("Turnir cədvəli alınır…");
         try{
-            var d=await Get("/api/standings?league="+Uri.EscapeDataString(league));
+            var d=await Get("/api/standings?league="+Uri.EscapeDataString(tableLeague));
             if(page!="standings"||token!=viewVersion)return;
             content.Controls.Clear();
             var p=CardPanel(67);
@@ -442,7 +479,7 @@ public sealed class MatchlabForm : Form
     }
     private async Task ShowSettings(){
         Heading("Proqram məlumatı");
-        Message("MATCHLAB AZ Native v0.9.30 · Windows Forms. Brauzer və WebView işlətmir.");
+        Message("MATCHLAB AZ Native v0.9.48 · Windows Forms. Brauzer və WebView işlətmir.");
         Message("Canlı nəticələr və profillər Render serverindən HTTPS API vasitəsilə gəlir. İnternet olmayanda uydurma statistika göstərilmir.");
         try{
             var d=await Get("/api/status");
