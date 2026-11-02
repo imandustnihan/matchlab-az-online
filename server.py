@@ -401,7 +401,7 @@ def table_from_sources(league):
  if empty_success is not None and league!='aze.1':return empty_success
  prior=snapshot_load('table',league,'')
  if prior:return prior
- return {'items':[],'available':False,'message':('Azərbaycan Premyer Liqasının cari cədvəli mənbədən alınmadı. Rəsmi PFL cədvəlinə baxın.' if league=='aze.1' else 'Cədvəl mənbələri əlçatan deyil: '+', '.join(errors)), 'sourceUrl':('https://pfl.az/turnir-c%C9%99dv%C9%99li' if league=='aze.1' else '')}
+ return {'items':[],'available':False,'message':('Azərbaycan Premyer Liqasının cari cədvəli mənbədən alınmadı. Rəsmi PFL cədvəlinə baxın.' if league=='aze.1' else 'Cədvəl mənbələri əlçatan deyil: '+', '.join(errors))}
 
 
 def media_by_qid(qid,kind='players',retry=False):
