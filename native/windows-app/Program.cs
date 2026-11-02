@@ -14,10 +14,19 @@ namespace MATCHLABAZ;
 internal static class Program
 {
     [STAThread]
-    private static void Main()
+    private static int Main(string[] args)
     {
         ApplicationConfiguration.Initialize();
+        if(args.Contains("--ui-smoke-test",StringComparer.OrdinalIgnoreCase))
+        {
+            using var test=new MatchlabForm();
+            test.Show();Application.DoEvents();
+            bool ok=test.SmokeCheck();
+            test.Close();
+            return ok?0:2;
+        }
         Application.Run(new MatchlabForm());
+        return 0;
     }
 }
 public sealed class MatchlabForm : Form
@@ -195,6 +204,15 @@ public sealed class MatchlabForm : Form
         row.BackColor=Bg;
         row.Padding=Padding.Empty;
         var l=Txt(text,12,true,Accent);l.Dock=DockStyle.Fill;row.Controls.Add(l);
+    }
+    public bool SmokeCheck() {
+        foreach(string target in new[]{ "matches","standings","search","tactics","favorites" }){
+            Button? tab=navButtons.FirstOrDefault(b=>(string?)b.Tag==target);
+            if(tab==null)return false;
+            tab.PerformClick();Application.DoEvents();
+            if(page!=target)return false;
+        }
+        return content.Controls.Count>0;
     }
     private void Render() {
         ClearPage();
