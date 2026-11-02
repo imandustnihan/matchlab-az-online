@@ -570,7 +570,7 @@ public final class MainActivity extends Activity {
             if(rows==null||rows.length()==0){
                 banner(data.optString("message","Cədvəl mövcud deyil."),RED);return;
             }
-            section(NAMES[Math.max(1,Arrays.asList(LEAGUES).indexOf(requestLeague))]);
+            section(leagueLabel(requestLeague));
             LinearLayout toolbar=row();
             TextView lead=single(rows.length()+" klub · Mənbə: "+data.optString("source","məlum deyil"),11,MUTED,false);
             toolbar.addView(lead,new LinearLayout.LayoutParams(0,-2,1));
@@ -635,6 +635,7 @@ public final class MainActivity extends Activity {
         searchResults=column();
         page.addView(searchResults);
         final Runnable searchNow=()->{
+            if(searchPending!=null)ui.removeCallbacks(searchPending);
             searchText=query.getText().toString().trim();
             loadSearch(searchText,kind,0);
         };
@@ -652,6 +653,7 @@ public final class MainActivity extends Activity {
                     searchPending=()->{searchText=q;loadSearch(q,kind,0);};
                     ui.postDelayed(searchPending,550);
                 }else{
+                    searchText=q;
                     searchResults.removeAllViews();
                     renderQuickSearch(query,searchNow);
                 }
