@@ -6,8 +6,8 @@ android {
   applicationId 'az.matchlab.mobile'
   minSdk 26
   targetSdk 35
-  versionCode 946
-  versionName '0.9.46-native'
+  versionCode 947
+  versionName '0.9.47-native'
  }
  buildTypes {
   release { minifyEnabled false }

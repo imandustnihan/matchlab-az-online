@@ -1,9 +1,9 @@
-name: MATCHLAB AZ v0.9.46 native Android Studio project and APK
+name: MATCHLAB AZ v0.9.47 native Android Studio project and APK
 on:
   workflow_dispatch:
   push:
     branches:
-      - fix/android-fully-native-no-webview-v0946
+      - feat/native-compact-ui-standings-v0947
     paths:
       - tools/export_android_studio.py
       - .github/workflows/android_studio_export.yml
@@ -89,17 +89,17 @@ jobs:
         run: python tools/export_android_studio.py pack
       - uses: actions/upload-artifact@v4
         with:
-          name: MATCHLAB_AZ_Native_Android_Studio_Source_v0946
-          path: dist/MATCHLAB_AZ_Android_Studio_Native_v0946.zip
+          name: MATCHLAB_AZ_Native_Android_Studio_Source_v0947
+          path: dist/MATCHLAB_AZ_Android_Studio_Native_v0947.zip
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
         with:
-          name: MATCHLAB_AZ_Native_Android_APK_v0946
+          name: MATCHLAB_AZ_Native_Android_APK_v0947
           path: dist/MATCHLAB_AZ_Android_Studio_Native/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: MATCHLAB_AZ_Native_Android_Emulator_v0946
+          name: MATCHLAB_AZ_Native_Android_Emulator_v0947
           path: dist/matchlab_native.png
           if-no-files-found: warn
