@@ -14,10 +14,20 @@ namespace MATCHLABAZ;
 internal static class Program
 {
     [STAThread]
-    private static void Main()
+    private static int Main(string[] args)
     {
         ApplicationConfiguration.Initialize();
-        Application.Run(new MatchlabForm());
+        using var app=new MatchlabForm();
+        if(args.Contains("--ui-smoke-test",StringComparer.OrdinalIgnoreCase))
+        {
+            var timer=new System.Windows.Forms.Timer {Interval=2200};
+            app.Shown+=(_,_)=>timer.Start();
+            timer.Tick+=(_,_)=>{timer.Stop();app.RunNativeSmokeTest();app.Close();};
+            Application.Run(app);
+            return app.SmokeResult;
+        }
+        Application.Run(app);
+        return 0;
     }
 }
 public sealed class MatchlabForm : Form
@@ -58,6 +68,27 @@ public sealed class MatchlabForm : Form
     private int formation=0;
     private readonly string[] formations={"4-3-3","4-2-3-1","4-4-2","3-5-2"};
     private List<JsonElement> latestMatches = new();
+    private readonly Panel intro = new(){Dock=DockStyle.Fill,BackColor=Bg};
+    private readonly Label introState = new(){ForeColor=Muted,TextAlign=ContentAlignment.MiddleCenter,Font=new Font("Segoe UI",12)};
+    private readonly System.Windows.Forms.Timer introTimer = new(){Interval=95};
+    private int introTicks;
+    private bool introFinished;
+    public int SmokeResult {get;private set;}=10;
+    public void RunNativeSmokeTest()
+    {
+        // Only genuine WinForms widgets are used; verify user-visible navigation.
+        if(WindowState!=FormWindowState.Maximized){SmokeResult=11;return;}
+        if(navButtons.Count!=6){SmokeResult=12;return;}
+        foreach(string route in new[]{"search","tactics","standings","matches"})
+        {
+            var b=navButtons.FirstOrDefault(x=>string.Equals(x.Tag as string,route,StringComparison.Ordinal));
+            if(b==null){SmokeResult=13;return;}
+            b.PerformClick();
+            if(page!=route){SmokeResult=14;return;}
+        }
+        if(!introFinished||intro.Visible){SmokeResult=15;return;}
+        SmokeResult=0;
+    }
 
     public MatchlabForm()
     {
@@ -65,8 +96,11 @@ public sealed class MatchlabForm : Form
         StartPosition=FormStartPosition.CenterScreen;
         MinimumSize=new Size(940,680);
         Size=new Size(1280,830);
+        WindowState=FormWindowState.Maximized; // Windows-maximized, taskbar and window controls stay usable.
         BackColor=Bg;
         ForeColor=Ink;
+        try { Icon=Icon.ExtractAssociatedIcon(Application.ExecutablePath) ?? Icon; }
+        catch { /* Windows may use the embedded executable icon directly. */ }
         Font=new Font("Segoe UI",10);
         try {
             if (File.Exists(savePath)) {
@@ -102,6 +136,52 @@ public sealed class MatchlabForm : Form
         refreshTimer.Tick+=(_,_)=>{ if(page=="matches"&&WindowState!=FormWindowState.Minimized) _=ReloadMatches(false); };
         refreshTimer.Start();
         Render();
+        ConfigureIntro();
+        Controls.Add(intro);intro.BringToFront();
+        introTimer.Tick+=(_,_)=>{
+            introTicks++;
+            introState.Text="Futbol mərkəzi hazırlanır"+new string('.',(introTicks/3)%4);
+            if(introTicks>=12)
+            {
+                introTimer.Stop();introFinished=true;intro.Visible=false;
+            }
+        };
+        Shown+=(_,_)=>introTimer.Start();
+        FormClosed+=(_,_)=>{introTimer.Stop();refreshTimer.Stop();};
+    }
+
+    private void ConfigureIntro()
+    {
+        // Native WinForms splash: intentionally independent of the backend.
+        var layout=new TableLayoutPanel{Dock=DockStyle.Fill,ColumnCount=1,RowCount=6,BackColor=Bg};
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent,34));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute,96));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute,68));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute,42));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute,22));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent,66));
+        var logo=new PictureBox{Dock=DockStyle.Fill,SizeMode=PictureBoxSizeMode.CenterImage};
+        if(Icon!=null)
+        {
+            using var bitmap=Icon.ToBitmap();
+            logo.Image=new Bitmap(bitmap,new Size(86,86));
+        }
+        layout.Controls.Add(logo,0,1);
+        var brand=Txt("MATCHLAB AZ",31,true,Accent);
+        brand.Dock=DockStyle.Fill;
+        brand.TextAlign=ContentAlignment.MiddleCenter;
+        layout.Controls.Add(brand,0,2);
+        var subtitle=Txt("FUTBOL MƏRKƏZİ  ·  v0.9.45",12,false,Ink);
+        subtitle.Dock=DockStyle.Fill;subtitle.TextAlign=ContentAlignment.MiddleCenter;
+        layout.Controls.Add(subtitle,0,3);
+        var progress=new ProgressBar{
+            Style=ProgressBarStyle.Marquee,MarqueeAnimationSpeed=40,
+            Width=210,Height=5,Anchor=AnchorStyles.None
+        };
+        layout.Controls.Add(progress,0,4);
+        introState.Dock=DockStyle.Fill;introState.Text="MATCHLAB AZ açılır";
+        layout.Controls.Add(introState,0,5);
+        intro.Controls.Add(layout);
     }
 
     private static Button NewButton(string label,Color back,Color fore,int width=130) {
@@ -116,7 +196,7 @@ public sealed class MatchlabForm : Form
         var brand=Txt("◉  MATCHLAB",18,true,Accent);
         brand.SetBounds(22,29,185,36);
         nav.Controls.Add(brand);
-        var sub=Txt("AZ  ·  NATIVE 0.9.30",9,false,Muted);
+        var sub=Txt("AZ  ·  NATIVE 0.9.45",9,false,Muted);
         sub.SetBounds(24,66,182,26);
         nav.Controls.Add(sub);
         var items=new(string key,string label)[]{
