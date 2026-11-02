@@ -9,6 +9,7 @@ import re
 import urllib.parse
 
 SPORTSDB = {
+ 'aze.1': 4693,  # Azerbaijani Premier League, TheSportsDB league ID
  'eng.1': 4328, 'ger.1': 4331, 'ita.1': 4332, 'fra.1': 4334,
  'esp.1': 4335, 'ned.1': 4337, 'tur.1': 4339,
 }
