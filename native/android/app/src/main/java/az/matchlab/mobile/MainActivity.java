@@ -7,6 +7,11 @@ import android.os.Looper;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.Color;
+import android.graphics.drawable.AnimationDrawable;
+import android.view.animation.AlphaAnimation;
+import android.view.animation.DecelerateInterpolator;
+import android.content.Intent;
+import android.provider.Settings;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.view.Gravity;
@@ -35,6 +40,11 @@ public final class MainActivity extends Activity {
     private ScrollView contentScroll;
     private int bottomInset=-1,topInset=-1;
     private TextView header, status;
+    private FrameLayout root;
+    private FrameLayout splash;
+    private TextView splashStatus;
+    private TextView moreMenu;
+    private boolean splashFinished=false;
     private String screen="matches", league="all", kind="all", searchText="";
     private Calendar day=Calendar.getInstance(TimeZone.getTimeZone("Asia/Baku"));
     private int generation=0, formation=0;
@@ -54,6 +64,7 @@ public final class MainActivity extends Activity {
         getWindow().setStatusBarColor(BG);getWindow().setNavigationBarColor(BG);
         prefs=getSharedPreferences("matchlab_native",MODE_PRIVATE);
         showShell();
+        showSplash();
         navigate("matches");
         ui.postDelayed(refresh,30000);
     }
@@ -95,9 +106,19 @@ public final class MainActivity extends Activity {
     private void showShell(){
         body=column();body.setBackgroundColor(BG);
         if(Build.VERSION.SDK_INT>=30){getWindow().setDecorFitsSystemWindows(false);}
-        LinearLayout top=row();top.setPadding(dp(18),dp(10),dp(18),dp(10));
-        header=text("MATCHLAB AZ",21,INK,true);top.addView(header,new LinearLayout.LayoutParams(0,dp(49),1));
+        LinearLayout top=row();top.setPadding(dp(13),dp(7),dp(12),dp(7));
+        ImageView logo=new ImageView(this);logo.setImageResource(R.mipmap.ic_launcher);
+        logo.setContentDescription("MATCHLAB AZ loqosu");
+        LinearLayout.LayoutParams iconParams=new LinearLayout.LayoutParams(dp(38),dp(38));iconParams.rightMargin=dp(10);
+        top.addView(logo,iconParams);
+        header=text("MATCHLAB AZ",18,INK,true);top.addView(header,new LinearLayout.LayoutParams(0,dp(49),1));
         status=text("●",16,ACCENT,true);top.addView(status);
+        moreMenu=text("⋮",26,INK,true);moreMenu.setGravity(Gravity.CENTER);
+        moreMenu.setContentDescription("Tətbiq menyusu");
+        moreMenu.setClickable(true);moreMenu.setFocusable(true);
+        moreMenu.setOnClickListener(v->showNativeMenu());
+        LinearLayout.LayoutParams menuParams=new LinearLayout.LayoutParams(dp(48),dp(48));menuParams.leftMargin=dp(4);
+        top.addView(moreMenu,menuParams);
         body.addView(top,new LinearLayout.LayoutParams(-1,dp(70)));
         ScrollView scroll=new ScrollView(this);contentScroll=scroll;scroll.setFillViewport(false);
         scroll.setClipToPadding(false);
@@ -118,9 +139,85 @@ public final class MainActivity extends Activity {
         }else{
             body.setFitsSystemWindows(true);
         }
-        setContentView(body);
+        root=new FrameLayout(this);
+        root.addView(body,new FrameLayout.LayoutParams(-1,-1));
+        setContentView(root);
         if(Build.VERSION.SDK_INT>=30)body.requestApplyInsets();
     }
+
+    private void showSplash(){
+        // Native Android splash, not a web page or remote image.
+        splash=new FrameLayout(this);
+        splash.setBackgroundColor(BG);
+        LinearLayout stack=column();stack.setGravity(Gravity.CENTER);
+        ImageView image=new ImageView(this);image.setImageResource(R.mipmap.ic_launcher);
+        LinearLayout.LayoutParams imageParams=new LinearLayout.LayoutParams(dp(96),dp(96));
+        imageParams.bottomMargin=dp(23);imageParams.gravity=Gravity.CENTER;
+        stack.addView(image,imageParams);
+        TextView brand=text("MATCHLAB AZ",30,ACCENT,true);brand.setGravity(Gravity.CENTER);
+        stack.addView(brand,new LinearLayout.LayoutParams(-1,dp(49)));
+        TextView subtitle=text("FUTBOL MƏRKƏZİ  ·  v0.9.45",13,MUTED,false);
+        subtitle.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams subtitleParams=new LinearLayout.LayoutParams(-1,dp(36));
+        stack.addView(subtitle,subtitleParams);
+        ProgressBar progress=new ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal);
+        progress.setIndeterminate(true);
+        progress.setIndeterminateTintList(android.content.res.ColorStateList.valueOf(ACCENT));
+        LinearLayout.LayoutParams bar=new LinearLayout.LayoutParams(dp(186),dp(5));bar.gravity=Gravity.CENTER;bar.topMargin=dp(21);
+        stack.addView(progress,bar);
+        splashStatus=text("Proqram hazırlanır",13,MUTED,false);splashStatus.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams statusParams=new LinearLayout.LayoutParams(-1,dp(40));statusParams.topMargin=dp(10);
+        stack.addView(splashStatus,statusParams);
+        splash.addView(stack,new FrameLayout.LayoutParams(-1,-1));
+        root.addView(splash,new FrameLayout.LayoutParams(-1,-1));
+        splash.setContentDescription("MATCHLAB AZ açılış animasiyası");
+        ui.postDelayed(()->{
+            if(splash==null||isFinishing())return;
+            AlphaAnimation fade=new AlphaAnimation(1f,0f);
+            fade.setDuration(360);
+            fade.setInterpolator(new DecelerateInterpolator());
+            fade.setFillAfter(true);
+            fade.setAnimationListener(new android.view.animation.Animation.AnimationListener(){
+                @Override public void onAnimationStart(android.view.animation.Animation animation){}
+                @Override public void onAnimationRepeat(android.view.animation.Animation animation){}
+                @Override public void onAnimationEnd(android.view.animation.Animation animation){
+                    if(splash!=null){root.removeView(splash);splash=null;}
+                    splashFinished=true;
+                }
+            });
+            splash.startAnimation(fade);
+        },1050);
+    }
+    private void showNativeMenu(){
+        PopupMenu menu=new PopupMenu(this,moreMenu);
+        menu.getMenu().add(0,1,0,"Matçları yenilə");
+        menu.getMenu().add(0,2,1,"Tətbiq məlumatları");
+        menu.getMenu().add(0,3,2,"Tənzimləmələr");
+        menu.getMenu().add(0,4,3,"MATCHLAB AZ haqqında");
+        menu.setOnMenuItemClickListener(item->{
+            if(item.getItemId()==1){navigate("matches");return true;}
+            if(item.getItemId()==2){
+                try{
+                    Intent appInfo=new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                    appInfo.setData(android.net.Uri.parse("package:"+getPackageName()));
+                    startActivity(appInfo);
+                }catch(Exception ex){Toast.makeText(this,"Tətbiq məlumatları açıla bilmədi",Toast.LENGTH_SHORT).show();}
+                return true;
+            }
+            if(item.getItemId()==3){navigate("settings");return true;}
+            if(item.getItemId()==4){
+                new android.app.AlertDialog.Builder(this)
+                    .setTitle("MATCHLAB AZ · v0.9.45")
+                    .setMessage("Android-in yerli komponentləri ilə hazırlanıb. WebView istifadə olunmur. Canlı məlumatlar serverdən JSON API vasitəsilə alınır.")
+                    .setPositiveButton("Bağla",(dialog,which)->dialog.dismiss())
+                    .show();
+                return true;
+            }
+            return false;
+        });
+        menu.show();
+    }
+
     private void navigate(String name){
         screen=name;generation++;page.removeAllViews();
         if(contentScroll!=null)contentScroll.scrollTo(0,0);
@@ -191,7 +288,7 @@ public final class MainActivity extends Activity {
                 HttpURLConnection conn=(HttpURLConnection)url.openConnection();
                 conn.setConnectTimeout(10000);conn.setReadTimeout(26000);
                 conn.setRequestProperty("Accept","application/json");
-                conn.setRequestProperty("User-Agent","MATCHLABAZ-Native/0.9.33");
+                conn.setRequestProperty("User-Agent","MATCHLABAZ-Native/0.9.45");
                 int code=conn.getResponseCode();
                 if(code<200||code>=300)throw new IOException("HTTP "+code);
                 try(InputStream input=conn.getInputStream();ByteArrayOutputStream out=new ByteArrayOutputStream()){
@@ -387,7 +484,7 @@ public final class MainActivity extends Activity {
         info("Düzülüş yerli olaraq çəkilir. Təsdiqlənməmiş oyunçu adları göstərilmir.",false);
     }
     private void showSettings(){
-        section("MATCHLAB AZ Native 0.9.32");
+        section("MATCHLAB AZ Native 0.9.45");
         info("Bu proqramın ekranları Android-in öz interfeysidir. WebView və brauzer yoxdur.",false);
         info("Canlı matçlar və profillər HTTPS JSON API-dən gəlir. Mənbələrdə boşluqlar ola bilər.",false);
         Button statusButton=button("Server vəziyyətini yoxla");
@@ -407,5 +504,5 @@ public final class MainActivity extends Activity {
         else if(!"matches".equals(screen))navigate("matches");
         else super.onBackPressed();
     }
-    @Override protected void onDestroy(){ui.removeCallbacks(refresh);network.shutdownNow();super.onDestroy();}
+    @Override protected void onDestroy(){ui.removeCallbacks(refresh);network.shutdownNow();if(splash!=null)splash.clearAnimation();super.onDestroy();}
 }
