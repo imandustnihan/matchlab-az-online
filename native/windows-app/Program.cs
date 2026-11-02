@@ -360,32 +360,77 @@ public sealed class MatchlabForm : Form
     }
     private void ShowStandings(){
         if(tableLeague=="all")tableLeague="eng.1";
-        var p=CardPanel(67);
-        var l=Txt("Liqa",11,true);l.SetBounds(15,14,70,39);p.Controls.Add(l);
-        var choose=LeagueSelect(true);choose.SetBounds(90,14,255,39);p.Controls.Add(choose);
+        var choosePanel=CardPanel(72);
+        var label=Txt("Turnir",12,true);label.SetBounds(15,14,65,40);choosePanel.Controls.Add(label);
+        var chooser=LeagueSelect(true);chooser.SetBounds(95,13,345,43);choosePanel.Controls.Add(chooser);
         _=LoadStandings(viewVersion);
     }
     private async Task LoadStandings(int token){
-        Message("Turnir cədvəli alınır…");
+        Message("Təsdiqlənmiş turnir cədvəli alınır…");
         try{
-            var d=await Get("/api/standings?league="+Uri.EscapeDataString(tableLeague));
+            var data=await Get("/api/standings?league="+Uri.EscapeDataString(tableLeague));
             if(page!="standings"||token!=viewVersion)return;
             content.Controls.Clear();
-            var p=CardPanel(67);
-            var l=Txt("Liqa",11,true);l.SetBounds(15,14,70,39);p.Controls.Add(l);
-            var choose=LeagueSelect(true);choose.SetBounds(90,14,255,39);p.Controls.Add(choose);
-            if(Yes(d,"stale"))Message("Cədvəl əvvəlki saxlanmış mənbədən alınıb.",true);
-            var rows=Array(d,"items").ToList();
-            if(rows.Count==0){Message(Val(d,"message","Hazırda cədvəl mövcud deyil."),true);return;}
-            Heading("Sıra     Klub                                         O      Q      H      M      X");
-            foreach(var x in rows){
-                var b=CardPanel(57);
-                var rank=Txt(Val(x,"rank","—"),12,true,Accent);rank.SetBounds(14,6,40,42);b.Controls.Add(rank);
-                var name=Txt(Val(x,"name"),12,true);name.SetBounds(62,6,270,42);b.Controls.Add(name);
-                var stats=Txt(Val(x,"played","—")+"     "+Val(x,"win","—")+"     "+Val(x,"draw","—")+"     "+Val(x,"loss","—")+"     "+Val(x,"points","—"),12);
-                stats.SetBounds(350,6,260,42);b.Controls.Add(stats);
+            var choosePanel=CardPanel(72);
+            var label=Txt("Turnir",12,true);label.SetBounds(15,14,65,40);choosePanel.Controls.Add(label);
+            var chooser=LeagueSelect(true);chooser.SetBounds(95,13,345,43);choosePanel.Controls.Add(chooser);
+            if(Yes(data,"stale"))Message("Cədvəl saxlanmış köhnə mənbədən alınıb, cari deyil.",true);
+            var rows=Array(data,"items").ToList();
+            if(rows.Count==0){
+                Message(Val(data,"message","Bu liqa üçün real cədvəl mövcud deyil."),true);return;
             }
-        }catch(Exception e){if(page!="standings"||token!=viewVersion)return;content.Controls.Clear();Message("Cədvəl yüklənmədi: "+e.Message,true);}
+            Heading(rows.Count+" klub   ·   Mənbə: "+Val(data,"source","mənbə göstərilməyib"));
+            var panel=CardPanel(Math.Min(730,Math.Max(220,rows.Count*35+75)));
+            panel.Padding=new Padding(7);
+            var grid=new DataGridView{
+                Dock=DockStyle.Fill,BackgroundColor=Card,BorderStyle=BorderStyle.None,
+                EnableHeadersVisualStyles=false,ColumnHeadersHeight=40,ColumnHeadersHeightSizeMode=DataGridViewColumnHeadersHeightSizeMode.DisableResizing,
+                ReadOnly=true,AllowUserToAddRows=false,AllowUserToDeleteRows=false,
+                RowHeadersVisible=false,CellBorderStyle=DataGridViewCellBorderStyle.SingleHorizontal,
+                GridColor=Raised,SelectionMode=DataGridViewSelectionMode.FullRowSelect,
+                MultiSelect=false,AutoSizeColumnsMode=DataGridViewAutoSizeColumnsMode.Fill,
+                ScrollBars=ScrollBars.Vertical
+            };
+            grid.ColumnHeadersDefaultCellStyle.BackColor=Raised;
+            grid.ColumnHeadersDefaultCellStyle.ForeColor=Accent;
+            grid.ColumnHeadersDefaultCellStyle.Font=new Font("Segoe UI Semibold",10);
+            grid.ColumnHeadersDefaultCellStyle.Alignment=DataGridViewContentAlignment.MiddleCenter;
+            grid.DefaultCellStyle.BackColor=Card;
+            grid.DefaultCellStyle.ForeColor=Ink;
+            grid.DefaultCellStyle.SelectionBackColor=Color.FromArgb(29,62,62);
+            grid.DefaultCellStyle.SelectionForeColor=Ink;
+            grid.AlternatingRowsDefaultCellStyle.BackColor=Sidebar;
+            grid.RowTemplate.Height=35;
+            foreach(var col in new[]{
+                ("#","Sıra",40),("club","Klub",300),("p","O",60),("w","Q",60),
+                ("d","H",60),("l","M",60),("gf","VQ",65),("ga","BQ",65),
+                ("gd","QF",65),("pts","XAL",75)
+            }){
+                var column=new DataGridViewTextBoxColumn{
+                    Name=col.Item1,HeaderText=col.Item2,FillWeight=col.Item3,
+                    SortMode=DataGridViewColumnSortMode.NotSortable
+                };
+                if(col.Item1!="club"){
+                    column.DefaultCellStyle.Alignment=DataGridViewContentAlignment.MiddleCenter;
+                }
+                grid.Columns.Add(column);
+            }
+            for(int i=0;i<Math.Min(rows.Count,60);i++){
+                var row=rows[i];
+                string gf=Val(row,"gf","—"),ga=Val(row,"ga","—");
+                string diff=Val(row,"gd","—");
+                if(diff=="—"&&int.TryParse(gf,out int gfor)&&int.TryParse(ga,out int gagainst))
+                    diff=(gfor-gagainst).ToString();
+                grid.Rows.Add(Val(row,"rank",(i+1).ToString()),Val(row,"name","—"),
+                    Val(row,"played","—"),Val(row,"win","—"),Val(row,"draw","—"),
+                    Val(row,"loss","—"),gf,ga,diff,Val(row,"points","—"));
+            }
+            panel.Controls.Add(grid);
+            Message("O: oyun · Q: qələbə · H: heç-heçə · M: məğlubiyyət · VQ/BQ: vurulan/buraxılan qollar · QF: qol fərqi. Boş məlumatlar “—” göstərilir.");
+        }catch(Exception){
+            if(page!="standings"||token!=viewVersion)return;
+            content.Controls.Clear();Message("Cədvəl mənbədən alınmadı. Server bağlantısını yoxla.",true);
+        }
     }
     private void ShowSearch(){
         Heading("DÜNYA FUTBOL ARXİVİ");
