@@ -506,32 +506,108 @@ public final class MainActivity extends Activity {
     }
     private void showDetails(){
         if(currentMatch==null){info("Matç seçilməyib.",true);return;}
-        JSONObject m=currentMatch;
-        JSONObject h=m.optJSONObject("home"),a=m.optJSONObject("away");
-        section((h!=null?h.optString("name"):"—")+"   "+m.optString("homeScore","—")+" : "+m.optString("awayScore","—")+"   "+(a!=null?a.optString("name"):"—"));
-        info(m.optString("leagueName")+" · "+m.optString("state")+" · "+m.optString("source"),false);
-        String[] id=m.optString("id").split(":",3);
-        if(id.length!=3||!Arrays.asList("espn","sportsdb","open").contains(id[0])){info("Bu matç üçün hadisə mənbəyi yoxdur.",false);return;}
-        int token=generation;info("Matç hadisələri alınır…",false);
-        fetch("/api/match-detail?provider="+id[0]+"&league="+encode(id[1])+"&id="+encode(id[2]),(data,error)->{
-            if(token!=generation||!screen.equals("details"))return;
-            if(error!=null){info("Detallar alınmadı: "+error.getMessage(),true);return;}
-            if(!data.optBoolean("available"))info(data.optString("message","Hadisələr mövcud deyil."),true);
-            JSONArray events=data.optJSONArray("events");
-            if(events!=null&&events.length()>0){
-                section("Matç hadisələri");
-                for(int i=0;i<Math.min(events.length(),70);i++){
-                    JSONObject e=events.optJSONObject(i);if(e!=null)info(e.optString("minute",e.optString("clock"))+"  "+e.optString("text",e.optString("type")),false);
-                }
+        JSONObject match=currentMatch;
+        JSONObject home=match.optJSONObject("home"),away=match.optJSONObject("away");
+        String homeName=val(home,"name"),awayName=val(away,"name");
+        section(match.optString("leagueName","MATÇ MƏRKƏZİ"));
+        LinearLayout hero=column();
+        hero.setPadding(dp(13),dp(15),dp(13),dp(15));
+        hero.setBackground(shape(CARD,16));
+        LinearLayout teams=row();
+        for(JSONObject side:new JSONObject[]{home,away}){
+            LinearLayout team=column();team.setGravity(Gravity.CENTER);
+            String name=val(side,"name");
+            TeamBadge badge=new TeamBadge(this,name,side==null?"":side.optString("image"),42);
+            LinearLayout.LayoutParams badgeLayout=new LinearLayout.LayoutParams(dp(42),dp(42));badgeLayout.gravity=Gravity.CENTER_HORIZONTAL;
+            team.addView(badge,badgeLayout);gap(team,7);
+            TextView label=single(name,12,INK,true);label.setGravity(Gravity.CENTER);team.addView(label);
+            teams.addView(team,new LinearLayout.LayoutParams(0,-2,1));
+            if(side==home){
+                TextView score=single("scheduled".equals(match.optString("state"))?"– : –":val(match,"homeScore")+" : "+val(match,"awayScore"),22,INK,true);
+                score.setGravity(Gravity.CENTER);teams.addView(score,new LinearLayout.LayoutParams(dp(96),-2));
             }
+        }
+        hero.addView(teams);gap(hero,12);
+        TextView status=text(stateLabel(match,false)+" · "+match.optString("source",""),11,MUTED,true);
+        status.setGravity(Gravity.CENTER);hero.addView(status);
+        page.addView(hero);gap(page,11);
+        String[] parts=match.optString("id").split(":",3);
+        if(parts.length!=3||!Arrays.asList("espn","sportsdb","open").contains(parts[0])){
+            banner("Bu matç üçün doğrulanmış hadisə mənbəyi yoxdur.",MUTED);return;
+        }
+        final int token=generation;
+        info("Mənbədən real matç məlumatları alınır…",false);
+        fetch("/api/match-detail?provider="+parts[0]+"&league="+encode(parts[1])+"&id="+encode(parts[2]),(data,error)->{
+            if(token!=generation||!screen.equals("details"))return;
+            // Remove only the last progress card; keep the score header.
+            if(page.getChildCount()>3)page.removeViewAt(page.getChildCount()-1);
+            if(error!=null){banner("Məlumat alınmadı: "+error.getMessage(),RED);return;}
+            if(!data.optBoolean("available"))
+                banner(data.optString("message","Detallar mövcud deyil."),RED);
+            if(data.optBoolean("partial"))banner("Mənbənin bəzi hissələri əlçatan deyil.",RED);
             JSONArray stats=data.optJSONArray("statistics");
             if(stats!=null&&stats.length()>0){
-                section("Statistika");
-                for(int i=0;i<Math.min(stats.length(),40);i++){
-                    JSONObject s=stats.optJSONObject(i);if(s!=null)info(s.optString("name",s.optString("label"))+"  "+s.optString("home",s.optString("homeValue","—"))+" : "+s.optString("away",s.optString("awayValue","—")),false);
+                section("MATÇ STATİSTİKASI");
+                for(int i=0;i<Math.min(stats.length(),32);i++){
+                    JSONObject stat=stats.optJSONObject(i);
+                    if(stat==null)continue;
+                    LinearLayout line=row();
+                    line.setPadding(dp(9),dp(8),dp(9),dp(8));
+                    line.addView(fixed(val(stat,"home"),12,INK,true,48));
+                    TextView title=single(stat.optString("name",stat.optString("label","Statistika")),11,MUTED,false);
+                    title.setGravity(Gravity.CENTER);line.addView(title,new LinearLayout.LayoutParams(0,-2,1));
+                    line.addView(fixed(val(stat,"away"),12,INK,true,48));
+                    line.setBackgroundColor(i%2==0?CARD:RAISED);
+                    page.addView(line);
+                }
+            }else info("Mənbədə təsdiqlənmiş statistika yoxdur.",false);
+            JSONObject lineup=data.optJSONObject("lineup");
+            if(lineup!=null){
+                section("TƏSDİQLƏNMİŞ HEYƏTLƏR");
+                for(String side:new String[]{"home","away"}){
+                    JSONObject squad=lineup.optJSONObject(side);
+                    if(squad==null)continue;
+                    JSONArray starters=squad.optJSONArray("starters");
+                    JSONArray subs=squad.optJSONArray("substitutes");
+                    if((starters==null||starters.length()==0)&&(subs==null||subs.length()==0))continue;
+                    String team=side.equals("home")?homeName:awayName;
+                    section(team+" · "+(squad.optBoolean("formationVerified")?squad.optString("formation",""):"Düzülüş təsdiqlənməyib"));
+                    if(squad.optBoolean("incomplete"))banner("Heyət mənbədə natamamdır.",RED);
+                    addSquad("İlk 11",starters);
+                    addSquad("Ehtiyatlar",subs);
                 }
             }
+            JSONArray events=data.optJSONArray("events");
+            if(events!=null&&events.length()>0){
+                section("MATÇ HADİSƏLƏRİ");
+                for(int i=0;i<Math.min(events.length(),60);i++){
+                    JSONObject event=events.optJSONObject(i);if(event==null)continue;
+                    String when=event.optString("clock",event.optString("minute",""));
+                    String title=event.optString("text",event.optString("type",""));
+                    LinearLayout line=row();line.setPadding(dp(6),dp(8),dp(6),dp(8));
+                    line.addView(fixed(when,11,ACCENT,true,50));
+                    line.addView(text(title.isEmpty()?"Təfsilat yoxdur":title,12,INK,false),new LinearLayout.LayoutParams(0,-2,1));
+                    card(line);
+                }
+            }else info("Mənbədə təsdiqlənmiş hadisə siyahısı yoxdur.",false);
+            String note=data.optString("message","");
+            if(!note.isEmpty()&&data.optBoolean("available"))info(note,false);
         });
+    }
+    private void addSquad(String label,JSONArray entries){
+        if(entries==null||entries.length()==0)return;
+        TextView h=text(label+" · "+entries.length(),12,MUTED,true);
+        h.setPadding(dp(6),dp(7),0,dp(4));page.addView(h);
+        for(int i=0;i<Math.min(entries.length(),22);i++){
+            JSONObject player=entries.optJSONObject(i);if(player==null)continue;
+            LinearLayout line=row();line.setPadding(dp(7),dp(6),dp(7),dp(6));
+            line.addView(fixed(val(player,"number"),11,ACCENT,true,28));
+            String detail=val(player,"name");
+            if(!"—".equals(val(player,"position")))detail+=" · "+val(player,"position");
+            line.addView(single(detail,12,INK,false),new LinearLayout.LayoutParams(0,-2,1));
+            page.addView(line);
+            line(line);
+        }
     }
     private void showFavorites(){
         section("Seçilmiş matçlar");
