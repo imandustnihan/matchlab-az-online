@@ -203,7 +203,7 @@ jobs:
             adb pull /sdcard/window.xml native/android/window.xml >/dev/null
             python -c "import xml.etree.ElementTree as E; r=E.parse('native/android/window.xml'); assert any('Tətbiq menyusu' in n.attrib.get('content-desc','') for n in r.iter()), 'native menu button inaccessible'"
             # Read the actual clickable menu's accessibility bounds.
-            python -c 'import subprocess,xml.etree.ElementTree as E; root=E.parse("native/android/window.xml"); b=next(n.attrib["bounds"] for n in root.iter() if "Tətbiq menyusu" in n.attrib.get("content-desc","")); a=list(map(int,b.replace("[",",").replace("]",",").split(",")[1:-1])); x=(a[0]+a[2])//2; y=(a[1]+a[3])//2; print("Menu target:",x,y); subprocess.check_call(["adb","shell","input","tap",str(x),str(y)])'
+            python -c 'import subprocess,xml.etree.ElementTree as E; root=E.parse("native/android/window.xml"); b=next(n.attrib["bounds"] for n in root.iter() if "Tətbiq menyusu" in n.attrib.get("content-desc","")); a=list(map(int,b.replace("][",",").strip("[]").split(","))); x=(a[0]+a[2])//2; y=(a[1]+a[3])//2; print("Menu target:",x,y); subprocess.check_call(["adb","shell","input","tap",str(x),str(y)])'
             sleep 2
             adb shell uiautomator dump /sdcard/menu.xml >/dev/null
             adb pull /sdcard/menu.xml native/android/native_menu.xml >/dev/null
