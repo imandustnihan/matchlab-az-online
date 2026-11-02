@@ -18,6 +18,7 @@ LEAGUE_NAMES = {
     'uefa.europa': 'Europa League', 'tur.1': 'Süper Lig',
     'por.1': 'Primeira Liga', 'ned.1': 'Eredivisie',
     'usa.1': 'MLS', 'ksa.1': 'Saudi Pro League',
+    'aze.1': 'Azərbaycan Premyer Liqası', 'sco.1':'Scottish Premiership', 'bel.1':'Belgian Pro League',
 }
 LEAGUE_NAMES.update(league_catalog.EXTRA_LEAGUES)
 _LOCK = threading.Lock()
@@ -52,9 +53,9 @@ def _compute_view(league, date, load_one):
             return name, {'items': [], 'available': False, 'partial': True,
                           'source': name, 'message': type(exc).__name__}
     if league == 'all':
-        # 6 concurrent adapters bound per-user latency; the API cache prevents
+        # 8 concurrent adapters bound per-user latency; the API cache prevents
         # every open browser tab from hammering the sources.
-        with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
             for name, result in executor.map(load, targets):
                 results[name] = result
     else:

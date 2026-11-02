@@ -11,6 +11,7 @@ import urllib.parse
 SPORTSDB = {
  'eng.1': 4328, 'ger.1': 4331, 'ita.1': 4332, 'fra.1': 4334,
  'esp.1': 4335, 'ned.1': 4337, 'tur.1': 4339,
+ 'aze.1': 4693, 'sco.1': 4330, 'bel.1': 4338, 'den.1': 4340,
 }
 OPENLIGA = {'ger.1':'bl1','eng.1':'pl','esp.1':'la1'}
 

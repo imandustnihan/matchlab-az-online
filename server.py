@@ -340,8 +340,12 @@ def openliga_table():
 def live_from_sources(league,date):
  # ESPN is often the broadest source; alternative APIs are used on failure or empty result.
  errors=[]; empty_success=None
- candidates=[('ESPN',lambda:feeds.espn_games(source_call('ESPN',
-  f'https://site.api.espn.com/apis/site/v2/sports/soccer/{league}/scoreboard?dates={date.replace("-","")}&limit=200',23),league),False)]
+ candidates=[]
+ # Azerbaijan does not have a confirmed ESPN route. Query the documented
+ # TheSportsDB league 4693 instead of silently calling a made-up ESPN slug.
+ if league!='aze.1':
+  candidates.append(('ESPN',lambda:feeds.espn_games(source_call('ESPN',
+   f'https://site.api.espn.com/apis/site/v2/sports/soccer/{league}/scoreboard?dates={date.replace("-", "")}&limit=200',23),league),False))
  if league in feeds.OPENLIGA:
   candidates.append(('OpenLigaDB',lambda:feeds.openliga_games(source_call('OpenLigaDB',feeds.openliga_matches_url(date,league),120),league,date),True))
  if league in feeds.SPORTSDB:
@@ -377,7 +381,7 @@ def live_from_sources(league,date):
 
 def table_from_sources(league):
  errors=[]; empty_success=None
- candidates=[('ESPN',lambda:espn_standings(league))]
+ candidates=[] if league=='aze.1' else [('ESPN',lambda:espn_standings(league))]
  if league in feeds.OPENLIGA:
   date=_dt.date.today().isoformat()
   candidates.append(('OpenLigaDB',lambda:feeds.openliga_table(source_call('OpenLigaDB',feeds.openliga_table_url(league,date),900))))
@@ -451,7 +455,7 @@ def send_data(path,params):
    return season_stats.lookup(profile,get_json)
   except Exception:
    return {'available':False,'items':[],'message':'Pulsuz mövsüm statistikası mənbəsinə qoşulmaq mümkün olmadı.','source':'TheSportsDB V1 Free'}
- if path=='/api/status':return {'ok':True,'backend':True,'version':'0.9.27-local','catalog':len(CATALOG),'world':world_db.counts(),'liveGuaranteed':False,'livePollingSeconds':25,'canInstall':True,'wikipedia':{'mode':'on_demand_verified_qid','verifiedSeedCount':len(wiki.SEED),'linkedQids':sum(x['linked'] for kind,x in world_db.qid_coverage().items() if kind in ('players','teams','coaches')),'teamProfiles':True,'shortExtracts':True}}
+ if path=='/api/status':return {'ok':True,'backend':True,'version':'0.9.48-api','catalog':len(CATALOG),'world':world_db.counts(),'liveGuaranteed':False,'livePollingSeconds':25,'canInstall':True,'wikipedia':{'mode':'on_demand_verified_qid','verifiedSeedCount':len(wiki.SEED),'linkedQids':sum(x['linked'] for kind,x in world_db.qid_coverage().items() if kind in ('players','teams','coaches')),'teamProfiles':True,'shortExtracts':True}}
  if path=='/api/media-status':return {'source':'Verified Wikidata P18/P154 + free Wikipedia pageimages','cached':extra_media.cache_stats(),'linked':world_db.qid_coverage(),'allProfilesGuaranteed':False,'licensing':'Per-file Wikimedia Commons license applies'}
  if path=='/api/leagues':return {'items':[{'id':k,'name':v,'automatic':k in league_catalog.CORE_LEAGUES} for k,v in league_catalog.ALL_LEAGUES.items()],'count':len(league_catalog.ALL_LEAGUES),'note':'Kataloqda olmaq bu turnirin cari cədvəlinin mütləq işləməsi demək deyil.'}
  if path=='/api/sources':return {'sources':SOURCE_STATUS,
