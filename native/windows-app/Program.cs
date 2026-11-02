@@ -520,7 +520,7 @@ public sealed class MatchlabForm : Form
 
 public sealed class PitchPanel : Panel
 {
-    private sealed class Player {
+    public sealed class Player {
         public float X {get;set;}
         public float Y {get;set;}
         public string Name {get;set;}="";

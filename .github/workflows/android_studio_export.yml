@@ -3,12 +3,17 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - feat/native-compact-ui-standings-v0947
+      - feat/unified-live-leagues-tactics-v0948
     paths:
       - tools/export_android_studio.py
       - .github/workflows/android_studio_export.yml
       - native/android/**
       - native/branding/**
+      - league_catalog.py
+      - match_sources.py
+      - live_center.py
+      - server.py
+      - test_new_leagues_v0948.py
 permissions:
   contents: read
 jobs:
@@ -28,6 +33,10 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+      - name: Backend league and fixture parser regression tests
+        run: |
+          python -m py_compile league_catalog.py match_sources.py live_center.py server.py
+          python -m unittest -v test_new_leagues_v0948
       - name: Install SDK 35
         run: |
           set -euo pipefail
@@ -89,17 +98,17 @@ jobs:
         run: python tools/export_android_studio.py pack
       - uses: actions/upload-artifact@v4
         with:
-          name: MATCHLAB_AZ_Native_Android_Studio_Source_v0947
-          path: dist/MATCHLAB_AZ_Android_Studio_Native_v0947.zip
+          name: MATCHLAB_AZ_Native_Android_Studio_Source_v0948
+          path: dist/MATCHLAB_AZ_Android_Studio_Native_v0948.zip
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
         with:
-          name: MATCHLAB_AZ_Native_Android_APK_v0947
+          name: MATCHLAB_AZ_Native_Android_APK_v0948
           path: dist/MATCHLAB_AZ_Android_Studio_Native/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: MATCHLAB_AZ_Native_Android_Emulator_v0947
+          name: MATCHLAB_AZ_Native_Android_Emulator_v0948
           path: dist/matchlab_native.png
           if-no-files-found: warn

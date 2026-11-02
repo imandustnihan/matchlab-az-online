@@ -1,0 +1,81 @@
+name: MATCHLAB AZ v0.9.48 Windows native EXE and Setup
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feat/unified-live-leagues-tactics-v0948
+    paths:
+      - native/windows-app/**
+      - native/branding/**
+      - .github/workflows/native_windows_v0948.yml
+permissions:
+  contents: read
+jobs:
+  native-windows:
+    name: Build WinForms and install desktop version
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Brand icon
+        shell: pwsh
+        run: |
+          python -m pip install pillow
+          python native/branding/generate_icons.py
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Compile genuine native Windows application
+        shell: pwsh
+        run: |
+          dotnet publish native/windows-app/MATCHLABAZ.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o native/windows-app/out
+          if ($LASTEXITCODE -ne 0) { throw 'WinForms build failure' }
+          if (!(Test-Path 'native/windows-app/out/MATCHLAB_AZ.exe')) { throw 'EXE missing' }
+      - name: Windows Forms startup and navigation smoke
+        shell: pwsh
+        run: |
+          $exe = Join-Path (Get-Location) 'native/windows-app/out/MATCHLAB_AZ.exe'
+          $p = Start-Process -FilePath $exe -ArgumentList '--ui-smoke-test' -PassThru
+          if (!$p.WaitForExit(50000)) { $p.Kill(); throw 'Windows UI timeout' }
+          if ($p.ExitCode -ne 0) { throw "Windows native smoke failed $($p.ExitCode)" }
+      - name: Compile Inno Setup installer
+        shell: pwsh
+        run: |
+          $iscc = Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) 'Inno Setup 6/ISCC.exe'
+          if (!(Test-Path $iscc)) {
+            choco install innosetup --yes --no-progress --limit-output
+          }
+          if (!(Test-Path $iscc)) { throw 'Inno Setup not available' }
+          & $iscc 'native/windows-app/installer.iss'
+          if ($LASTEXITCODE -ne 0) { throw 'Installer build failed' }
+      - name: Verify installer, desktop icon and uninstall
+        shell: pwsh
+        run: |
+          $setup = Join-Path (Get-Location) 'native/windows-app/installer-out/MATCHLAB_AZ_Native_Setup_v0948.exe'
+          if (!(Test-Path $setup)) { throw 'Installer missing' }
+          $p = Start-Process $setup -ArgumentList '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /TASKS=desktopicon' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw 'Installer exit code: '+$p.ExitCode }
+          $exe = Join-Path $env:LOCALAPPDATA 'Programs/MATCHLAB AZ/MATCHLAB_AZ.exe'
+          if (!(Test-Path $exe)) { throw 'Installed application missing' }
+          $desktop = Join-Path ([Environment]::GetFolderPath('DesktopDirectory')) 'MATCHLAB AZ.lnk'
+          if (!(Test-Path $desktop)) { throw 'Desktop shortcut missing' }
+          $start = Join-Path ([Environment]::GetFolderPath('Programs')) 'MATCHLAB AZ.lnk'
+          if (!(Test-Path $start)) { throw 'Start menu shortcut missing' }
+          $uninstaller = Join-Path (Split-Path $exe) 'unins000.exe'
+          if (!(Test-Path $uninstaller)) { throw 'Uninstall entry missing' }
+          $u = Start-Process $uninstaller -ArgumentList '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART' -Wait -PassThru
+          if ($u.ExitCode -ne 0) { throw 'Uninstall exit: '+$u.ExitCode }
+          Write-Host 'PASS native WinForms installer and shortcuts'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MATCHLAB_AZ_Windows_Native_EXE_v0948
+          path: native/windows-app/out/MATCHLAB_AZ.exe
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MATCHLAB_AZ_Windows_Native_Setup_v0948
+          path: native/windows-app/installer-out/MATCHLAB_AZ_Native_Setup_v0948.exe
+          if-no-files-found: error

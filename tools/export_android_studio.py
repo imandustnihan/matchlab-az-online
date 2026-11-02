@@ -8,10 +8,10 @@ import sys
 ROOT=Path(__file__).resolve().parents[1]
 DIST=ROOT/"dist"
 PROJECT=DIST/"MATCHLAB_AZ_Android_Studio_Native"
-ARCHIVE=DIST/"MATCHLAB_AZ_Android_Studio_Native_v0947.zip"
+ARCHIVE=DIST/"MATCHLAB_AZ_Android_Studio_Native_v0948.zip"
 SOURCE=ROOT/"native"/"android"
 
-README="""MATCHLAB AZ v0.9.47 — TAM YERLI ANDROID TETBIQI (WebView YOXDUR)
+README="""MATCHLAB AZ v0.9.48 — TAM YERLI ANDROID TETBIQI (WebView YOXDUR)
 
 1. ZIP faylini tam cixart, MATCHLAB_AZ_Android_Studio_Native qovlugunu sec.
 2. Android Studio > File > Open bolmesinde hemin qovlugu ac.
@@ -46,7 +46,7 @@ def export():
     app_gradle=(PROJECT/"app"/"build.gradle").read_text(encoding="utf-8")
     for forbidden in ("bundleHtmlAssets","assets.srcDirs","from('../../../')"):
         if forbidden in app_gradle:raise ValueError("HTML bundling still active: "+forbidden)
-    assert "versionCode 947" in app_gradle
+    assert "versionCode 948" in app_gradle
     assets=PROJECT/"app"/"src"/"main"/"assets"
     if assets.is_dir() and any(assets.rglob("*")):
         raise ValueError("Unexpected browser asset in native Android project")
