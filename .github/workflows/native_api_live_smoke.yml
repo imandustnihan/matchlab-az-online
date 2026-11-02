@@ -1,0 +1,79 @@
+name: MATCHLAB AZ - verify deployed API for native apps
+on:
+  push:
+    branches:
+      - 'test/native-v0945-backend-smoke-20261102'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  backend-smoke:
+    name: Real deployed API reachability and JSON contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify host, public API health, native search and fixtures
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json,time,urllib.request,urllib.error,datetime
+          base='https://matchlab-az-online.onrender.com'
+          routes=[
+            ('healthz','/healthz',True),
+            ('status','/api/status',True),
+            ('search','/api/search?q=Messi&kind=players',True),
+            ('live','/api/live?league=eng.1&date=2026-11-02',False),
+          ]
+          report=[]
+          errors=[]
+          for name, path, required in routes:
+              result=None
+              for attempt in range(1,4 if required else 2):
+                  try:
+                      start=time.monotonic()
+                      req=urllib.request.Request(base+path,headers={'User-Agent':'MATCHLABAZ-CI-native-api-smoke/0.9.45','Accept':'application/json'})
+                      with urllib.request.urlopen(req,timeout=50) as response:
+                          code=response.status
+                          payload=json.loads(response.read(1500000))
+                      elapsed=round(time.monotonic()-start,2)
+                      valid=isinstance(payload,dict)
+                      if name=='healthz':
+                          valid=valid and bool(payload.get('ok')) and int(payload.get('registryTotal',0))==506207
+                      if name=='status':
+                          valid=valid and bool(payload.get('publicHosting')) and 'world' in payload
+                      if name=='search':
+                          valid=valid and isinstance(payload.get('items'),list)
+                      if name=='live':
+                          valid=valid and ('items' in payload or 'available' in payload)
+                      result={'route':name,'http':code,'response_seconds':elapsed,'json_ok':valid,'attempt':attempt,'keys':list(payload)[:15]}
+                      if name=='healthz':
+                          result['registryTotal']=payload.get('registryTotal')
+                      if name=='search':
+                          result['item_count']=len(payload.get('items',[]))
+                      if name=='live':
+                          result['available']=payload.get('available')
+                          result['items_count']=len(payload.get('items',[]))
+                      break
+                  except Exception as exc:
+                      result={'route':name,'attempt':attempt,'exception':type(exc).__name__,'error':str(exc)[:190]}
+                      if attempt<(3 if required else 1):time.sleep(9)
+              report.append(result)
+              print(json.dumps(result,ensure_ascii=False),flush=True)
+              if required and (not result.get('json_ok') or result.get('http')!=200):
+                  errors.append(name)
+          with open('native_api_smoke_report.json','w') as fp:
+              json.dump({'checked_at_utc':datetime.datetime.now(datetime.timezone.utc).isoformat(),'report':report,'failed_required':errors},fp,indent=2,ensure_ascii=False)
+          if errors:
+              raise SystemExit('BACKEND CHECK FAILED (required routes): '+', '.join(errors))
+          print('PASS: deployed backend accepts /healthz, /api/status and /api/search')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: MATCHLAB_AZ_Native_v0945_Backend_Smoke_Report
+          path: native_api_smoke_report.json
+          if-no-files-found: warn
