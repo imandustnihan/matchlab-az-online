@@ -6,8 +6,8 @@ android {
   applicationId 'az.matchlab.mobile'
   minSdk 26
   targetSdk 35
-  versionCode 944
-  versionName '0.9.44-android-app'
+  versionCode 946
+  versionName '0.9.46-native'
  }
  buildTypes {
   release { minifyEnabled false }
@@ -17,16 +17,4 @@ android {
   sourceCompatibility JavaVersion.VERSION_17
   targetCompatibility JavaVersion.VERSION_17
  }
- sourceSets {
-  main { assets.srcDirs += ["$buildDir/generated/matchlab-assets"] }
- }
 }
-// Bundle production HTML and scripts from the same commit, not the incomplete native UI.
-tasks.register('bundleHtmlAssets',Copy) {
- from('../../../') {
-  include 'index.html','styles.css','app.js','catalog.js','featured_media.js','coach_tactics.js','assets/icon.svg','assets/pwa-192.png','assets/pwa-512.png','assets/pwa-512-maskable.png','manifest.webmanifest','service-worker.js','install.js'
- }
- from('../../packed') { include 'shell.css','shell.js' }
- into("$buildDir/generated/matchlab-assets/web")
-}
-tasks.named('preBuild').configure { dependsOn(tasks.named('bundleHtmlAssets')) }

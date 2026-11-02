@@ -1,251 +1,450 @@
 package az.matchlab.mobile;
+
 import android.app.Activity;
 import android.os.Bundle;
-import android.os.Build;
-import android.content.Intent;
-import android.content.pm.ShortcutManager;
-import android.content.pm.ShortcutInfo;
-import android.graphics.drawable.Icon;
-import android.provider.Settings;
+import android.os.Handler;
+import android.os.Looper;
+import android.content.Context;
+import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.graphics.Typeface;
-import android.net.Uri;
+import android.graphics.drawable.GradientDrawable;
 import android.view.Gravity;
-import android.view.View;
 import android.view.WindowInsets;
+import android.os.Build;
 import android.view.View;
-import android.webkit.*;
+import android.view.ViewGroup;
+import android.content.Intent;
+import android.provider.Settings;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.*;
+import org.json.*;
 import java.io.*;
 import java.net.*;
-import java.nio.charset.StandardCharsets;
+import java.text.*;
 import java.util.*;
+import java.util.concurrent.*;
 
 public final class MainActivity extends Activity {
-    static final String ORIGIN="https://matchlab.local", BACKEND="https://matchlab-az-online.onrender.com";
-    static final int BG=Color.rgb(8,14,25);
-    WebView web;
-    ProgressBar loading;
-    TextView failure;
-    TextView menuButton;
-    int dp(int n){return Math.round(n*getResources().getDisplayMetrics().density);}
-    @Override public void onCreate(Bundle state){
-        super.onCreate(state);
-        getWindow().setStatusBarColor(BG);
-        getWindow().setNavigationBarColor(BG);
-        FrameLayout root=new FrameLayout(this);
-        root.setBackgroundColor(BG);
-        web=new WebView(this);web.setBackgroundColor(BG);
-        WebSettings settings=web.getSettings();
-        settings.setJavaScriptEnabled(true);
-        settings.setDomStorageEnabled(true);
-        settings.setAllowFileAccess(false);
-        settings.setAllowContentAccess(false);
-        settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
-        settings.setMediaPlaybackRequiresUserGesture(false);
-        settings.setUserAgentString(settings.getUserAgentString()+" MATCHLABAZ/0.9.44");
-        web.setOverScrollMode(View.OVER_SCROLL_NEVER);
-        web.setWebChromeClient(new WebChromeClient());
-        web.setWebViewClient(new WebViewClient(){
-            @Override public WebResourceResponse shouldInterceptRequest(WebView view,WebResourceRequest req){
-                Uri uri=req.getUrl();
-                if(!"https".equals(uri.getScheme())||!"matchlab.local".equalsIgnoreCase(uri.getHost()))return null;
-                String path=uri.getPath();
-                return path!=null&&path.startsWith("/api/")?proxy(uri,req.getMethod()):local(path);
+    private static final String BASE="https://matchlab-az-online.onrender.com";
+    private static final int BG=Color.rgb(9,19,31), CARD=Color.rgb(22,38,54), RAISED=Color.rgb(30,49,66),
+        INK=Color.rgb(241,248,253), MUTED=Color.rgb(167,184,198), ACCENT=Color.rgb(155,236,118), RED=Color.rgb(248,133,130);
+    private static final String[] LEAGUES={"all","eng.1","esp.1","ger.1","ita.1","fra.1","uefa.champions","uefa.europa","tur.1","por.1","ned.1"};
+    private static final String[] NAMES={"Bütün liqalar","Premier League","La Liga","Bundesliga","Serie A","Ligue 1","Champions League","Europa League","Süper Lig","Primeira Liga","Eredivisie"};
+    private final ExecutorService network=Executors.newFixedThreadPool(3);
+    private final Handler ui=new Handler(Looper.getMainLooper());
+    private LinearLayout body, nav, page;
+    private ScrollView contentScroll;
+    private int bottomInset=-1,topInset=-1;
+    private TextView header, status;
+    private String screen="matches", league="all", kind="all", searchText="";
+    private Calendar day=Calendar.getInstance(TimeZone.getTimeZone("Asia/Baku"));
+    private int generation=0, formation=0;
+    private final String[] formations={"4-3-3","4-2-3-1","4-4-2","3-5-2"};
+    private JSONArray matches=new JSONArray();
+    private JSONObject currentMatch=null;
+    private SharedPreferences prefs;
+    private final Runnable refresh=new Runnable(){
+        @Override public void run(){
+            if("matches".equals(screen)) loadMatches(false);
+            ui.postDelayed(this,30000);
+        }
+    };
+
+    @Override public void onCreate(Bundle saved){
+        super.onCreate(saved);
+        getWindow().setStatusBarColor(BG);getWindow().setNavigationBarColor(BG);
+        prefs=getSharedPreferences("matchlab_native",MODE_PRIVATE);
+        showShell();
+        navigate("matches");
+        ui.postDelayed(refresh,30000);
+    }
+    private int dp(float n){return Math.round(n*getResources().getDisplayMetrics().density);}
+    private GradientDrawable shape(int bg,int radius){
+        GradientDrawable d=new GradientDrawable();d.setColor(bg);d.setCornerRadius(dp(radius));return d;
+    }
+    private TextView text(String s,int size,int color,boolean bold){
+        TextView t=new TextView(this);t.setText(s);t.setTextSize(size);t.setTextColor(color);
+        if(bold)t.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
+        t.setGravity(Gravity.CENTER_VERTICAL);
+        return t;
+    }
+    private LinearLayout column(){
+        LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.VERTICAL);return l;
+    }
+    private LinearLayout row(){
+        LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.HORIZONTAL);l.setGravity(Gravity.CENTER_VERTICAL);return l;
+    }
+    private void gap(LinearLayout p,int h){View v=new View(this);p.addView(v,new LinearLayout.LayoutParams(1,dp(h)));}
+    private void card(View v){
+        LinearLayout wrapper=column();wrapper.setPadding(dp(15),dp(12),dp(15),dp(12));wrapper.setBackground(shape(CARD,14));
+        wrapper.addView(v);
+        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.bottomMargin=dp(11);
+        page.addView(wrapper,lp);
+    }
+    private void info(String message,boolean error){
+        TextView t=text(message,14,error?RED:MUTED,false);t.setPadding(dp(4),dp(8),dp(4),dp(8));card(t);
+    }
+    private void section(String label){
+        TextView t=text(label,16,ACCENT,true);t.setPadding(dp(2),dp(13),0,dp(12));
+        page.addView(t);
+    }
+    private Button button(String label){
+        Button b=new Button(this);b.setText(label);b.setTextSize(13);b.setAllCaps(false);
+        b.setTextColor(INK);b.setBackground(shape(RAISED,11));
+        b.setMinHeight(dp(44));b.setMinimumHeight(dp(44));b.setPadding(dp(10),dp(8),dp(10),dp(8));return b;
+    }
+    private void showShell(){
+        body=column();body.setBackgroundColor(BG);
+        if(Build.VERSION.SDK_INT>=30)getWindow().setDecorFitsSystemWindows(false);
+        else body.setFitsSystemWindows(true);
+        LinearLayout top=row();top.setPadding(dp(16),dp(8),dp(10),dp(8));
+        LinearLayout brandBox=column();
+        TextView brand=text("MATCHLAB AZ",12,ACCENT,true);brand.setLetterSpacing(.12f);
+        brandBox.addView(brand);
+        header=text("Canlı matçlar",20,INK,true);brandBox.addView(header);
+        top.addView(brandBox,new LinearLayout.LayoutParams(0,-2,1));
+        status=text("●",16,ACCENT,true);top.addView(status);
+        TextView menu=text("⋮",26,INK,true);menu.setGravity(Gravity.CENTER);
+        menu.setContentDescription("Tətbiq menyusu");menu.setClickable(true);
+        menu.setOnClickListener(v->showMenu(menu));
+        top.addView(menu,new LinearLayout.LayoutParams(dp(48),dp(52)));
+        top.setBackgroundColor(Color.rgb(13,28,42));
+        body.addView(top,new LinearLayout.LayoutParams(-1,dp(72)));
+        ScrollView scroll=new ScrollView(this);contentScroll=scroll;scroll.setFillViewport(false);
+        scroll.setClipToPadding(false);
+        page=column();page.setPadding(dp(16),dp(6),dp(16),dp(24));scroll.addView(page);
+        body.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+        nav=row();nav.setBackgroundColor(Color.rgb(14,30,46));
+        nav.setMinimumHeight(dp(72));
+        body.addView(nav,new LinearLayout.LayoutParams(-1,dp(72)));
+        if(Build.VERSION.SDK_INT>=30){
+            body.setOnApplyWindowInsetsListener((v,insets)->{
+                android.graphics.Insets sys=insets.getInsets(WindowInsets.Type.systemBars()|WindowInsets.Type.displayCutout());
+                if(sys.top!=topInset||sys.bottom!=bottomInset){
+                    topInset=sys.top;bottomInset=sys.bottom;
+                    body.setPadding(sys.left,sys.top,sys.right,sys.bottom);
+                }
+                return insets;
+            });
+        }
+        setContentView(body);
+        if(Build.VERSION.SDK_INT>=30)body.requestApplyInsets();
+    }
+    private void navigate(String name){
+        screen=name;generation++;page.removeAllViews();
+        if(contentScroll!=null)contentScroll.scrollTo(0,0);
+        header.setText(name.equals("matches")?"Canlı matçlar":name.equals("standings")?"Turnir cədvəli":name.equals("search")?"Axtarış":name.equals("tactics")?"Taktika":name.equals("favorites")?"Seçilmişlər":name.equals("details")?"Matç mərkəzi":name.equals("profile")?"Futbol profili":"Tənzimləmələr");
+        nav.removeAllViews();
+        String[][] items={{"matches","⚽","Matçlar"},{"standings","▤","Cədvəl"},{"search","⌕","Axtar"},{"favorites","☆","Seçilmiş"},{"tactics","▦","Taktika"}};
+        for(String[] item:items){
+            LinearLayout cell=column();cell.setGravity(Gravity.CENTER);
+            boolean active=name.equals(item[0]);
+            TextView icon=text(item[1],23,active?ACCENT:MUTED,true);icon.setGravity(Gravity.CENTER);
+            TextView label=text(item[2],11,active?ACCENT:INK,active);label.setGravity(Gravity.CENTER);
+            cell.addView(icon);cell.addView(label);
+            cell.setPadding(dp(2),dp(7),dp(2),dp(7));
+            cell.setMinimumHeight(dp(56));
+            if(active)cell.setBackground(shape(Color.rgb(29,55,48),10));
+            cell.setContentDescription(item[2]);
+            cell.setClickable(true);
+            cell.setOnClickListener(v->navigate(item[0]));
+            nav.addView(cell,new LinearLayout.LayoutParams(0,-1,1));
+        }
+        if(name.equals("matches"))loadMatches(true);
+        else if(name.equals("standings"))showStandings();
+        else if(name.equals("search"))showSearch();
+        else if(name.equals("favorites"))showFavorites();
+        else if(name.equals("tactics"))showTactics();
+        else if(name.equals("details"))showDetails();
+        else if(name.equals("settings"))showSettings();
+    }
+    private String date(){
+        return new SimpleDateFormat("yyyy-MM-dd",Locale.US).format(day.getTime());
+    }
+    private Spinner spinner(String[] options,int selected,java.util.function.IntConsumer change){
+        Spinner s=new Spinner(this);ArrayAdapter<String> adapter=new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,options);
+        s.setAdapter(adapter);s.setSelection(Math.max(0,selected),false);
+        s.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
+            boolean first=true;
+            @Override public void onItemSelected(android.widget.AdapterView<?> parent,View v,int pos,long id){
+                if(first){first=false;return;}change.accept(pos);
             }
-            @Override public boolean shouldOverrideUrlLoading(WebView view,WebResourceRequest req){
-                Uri u=req.getUrl();
-                if("https".equals(u.getScheme())&&"matchlab.local".equalsIgnoreCase(u.getHost()))return false;
-                if("https".equals(u.getScheme())||"http".equals(u.getScheme()))
-                    try{startActivity(new Intent(Intent.ACTION_VIEW,u));}catch(Exception ignored){}
-                return true;
+            @Override public void onNothingSelected(android.widget.AdapterView<?> parent){}
+        });
+        return s;
+    }
+    private void filters(boolean standings){
+        LinearLayout r=row();
+        if(!standings){
+            Button prev=button("‹");prev.setOnClickListener(v->{day.add(Calendar.DATE,-1);navigate("matches");});r.addView(prev);
+            TextView date=text("  "+date()+"  ",14,INK,true);r.addView(date);
+            Button next=button("›");next.setOnClickListener(v->{day.add(Calendar.DATE,1);navigate("matches");});r.addView(next);
+            Button today=button("Bu gün");today.setOnClickListener(v->{day=Calendar.getInstance(TimeZone.getTimeZone("Asia/Baku"));navigate("matches");});
+            r.addView(today);
+            HorizontalScrollView dates=new HorizontalScrollView(this);dates.setHorizontalScrollBarEnabled(false);
+            dates.addView(r);card(dates);
+        }
+        int idx=Arrays.asList(LEAGUES).indexOf(league);
+        if(standings&&idx==0){league="eng.1";idx=1;}
+        final int offset=standings?1:0;
+        String[] options=standings?Arrays.copyOfRange(NAMES,1,NAMES.length):NAMES;
+        Spinner s=spinner(options,Math.max(0,idx-offset),p->{
+            String next=LEAGUES[p+offset];if(next.equals(league))return;league=next;navigate(standings?"standings":"matches");
+        });
+        card(s);
+    }
+    private interface JsonCallback{void done(JSONObject json,Exception error);}
+    private void fetch(String path,JsonCallback callback){
+        network.execute(()->{
+            JSONObject result=null;Exception error=null;
+            try{
+                URL url=new URL(BASE+path);
+                HttpURLConnection conn=(HttpURLConnection)url.openConnection();
+                conn.setConnectTimeout(10000);conn.setReadTimeout(26000);
+                conn.setRequestProperty("Accept","application/json");
+                conn.setRequestProperty("User-Agent","MATCHLABAZ-Native/0.9.46");
+                int code=conn.getResponseCode();
+                if(code<200||code>=300)throw new IOException("HTTP "+code);
+                try(InputStream input=conn.getInputStream();ByteArrayOutputStream out=new ByteArrayOutputStream()){
+                    byte[] buf=new byte[8192];int n;
+                    while((n=input.read(buf))!=-1){out.write(buf,0,n);if(out.size()>2_000_000)throw new IOException("Response too large");}
+                    result=new JSONObject(out.toString("UTF-8"));
+                }finally{conn.disconnect();}
+            }catch(Exception ex){error=ex;}
+            JSONObject data=result;Exception failure=error;
+            ui.post(()->callback.done(data,failure));
+        });
+    }
+    private void loadMatches(boolean reset){
+        int token=generation;
+        if(reset){filters(false);info("Canlı nəticələr yüklənir…",false);}
+        fetch("/api/live?league="+encode(league)+"&date="+date(),(json,error)->{
+            if(token!=generation||!screen.equals("matches"))return;
+            if(error!=null){status.setTextColor(RED);status.setText("●");if(reset){page.removeAllViews();filters(false);}info("Bağlantı yoxdur: "+error.getMessage(),true);return;}
+            status.setTextColor(json.optBoolean("available")?ACCENT:RED);
+            status.setText("●");
+            matches=json.optJSONArray("items");if(matches==null)matches=new JSONArray();
+            page.removeAllViews();filters(false);
+            if(json.optBoolean("partial")||json.optBoolean("stale"))info("Bəzi mənbələr əlçatan deyil. Köhnə nəticələr canlı kimi göstərilmir.",true);
+            String message=json.optString("message");if(!message.isEmpty())info(message,!json.optBoolean("available"));
+            if(matches.length()==0){info(json.optBoolean("available")?"Bu tarix üçün matç yoxdur.":"Nəticələr mənbədən alınmadı.",!json.optBoolean("available"));return;}
+            String previous="";
+            for(int i=0;i<Math.min(matches.length(),100);i++){
+                JSONObject m=matches.optJSONObject(i);if(m==null)continue;
+                String group=m.optString("leagueName",m.optString("league"));
+                if(!group.equals(previous)){section(group);previous=group;}
+                matchRow(m,false);
             }
-            @Override public void onPageFinished(WebView view,String url){
-                loading.setVisibility(View.GONE);failure.setVisibility(View.GONE);
+        });
+    }
+    private void matchRow(JSONObject m,boolean saved){
+        LinearLayout line=row();
+        LinearLayout teams=column();
+        TextView home=text(m.optJSONObject("home")!=null?m.optJSONObject("home").optString("name","—"):"—",15,INK,true);
+        TextView away=text(m.optJSONObject("away")!=null?m.optJSONObject("away").optString("name","—"):"—",15,INK,true);
+        teams.addView(home);gap(teams,7);teams.addView(away);
+        line.addView(teams,new LinearLayout.LayoutParams(0,-2,1));
+        LinearLayout scores=column();scores.setGravity(Gravity.CENTER);
+        String score=m.optString("state").equals("scheduled")?"— : —":
+            (m.isNull("homeScore")?"—":m.optString("homeScore","—"))+" : "+
+            (m.isNull("awayScore")?"—":m.optString("awayScore","—"));
+        TextView scoreText=text(score,19,INK,true);scoreText.setGravity(Gravity.CENTER);scores.addView(scoreText);
+        String st=saved?"Saxlanmış":m.optString("state").equals("live")?"● CANLI":m.optString("state").equals("final")?"Bitib":"Gözlənilir";
+        TextView state=text(st,10,m.optString("state").equals("live")&&!saved?ACCENT:MUTED,false);
+        state.setGravity(Gravity.CENTER);scores.addView(state);
+        line.addView(scores);
+        String id=m.optString("id");
+        Button star=button(prefs.contains("fav_"+id)?"★":"☆");
+        star.setTextColor(ACCENT);
+        star.setOnClickListener(v->{
+            if(prefs.contains("fav_"+id))prefs.edit().remove("fav_"+id).apply();
+            else prefs.edit().putString("fav_"+id,m.toString()).apply();
+            star.setText(prefs.contains("fav_"+id)?"★":"☆");
+        });
+        line.addView(star);
+        line.setOnClickListener(v->{currentMatch=m;navigate("details");});
+        card(line);
+    }
+    private void showStandings(){
+        filters(true);info("Turnir cədvəli yüklənir…",false);
+        int token=generation;
+        fetch("/api/standings?league="+encode(league),(data,error)->{
+            if(token!=generation||!screen.equals("standings"))return;
+            page.removeAllViews();filters(true);
+            if(error!=null){info("Cədvəl alınmadı: "+error.getMessage(),true);return;}
+            JSONArray rows=data.optJSONArray("items");
+            if(data.optBoolean("stale"))info("Cədvəl saxlanmış məlumatdır, cari olmaya bilər.",true);
+            if(rows==null||rows.length()==0){info(data.optString("message","Cədvəl mövcud deyil."),true);return;}
+            for(int i=0;i<rows.length();i++){
+                JSONObject r=rows.optJSONObject(i);if(r==null)continue;
+                LinearLayout line=row();
+                TextView rank=text(r.optString("rank","—")+"  ",15,ACCENT,true);line.addView(rank);
+                LinearLayout main=column();
+                main.addView(text(r.optString("name","—"),15,INK,true));
+                main.addView(text("O "+r.optString("played","—")+"   Q "+r.optString("win","—")+"   H "+r.optString("draw","—")+"   M "+r.optString("loss","—"),11,MUTED,false));
+                line.addView(main,new LinearLayout.LayoutParams(0,-2,1));
+                line.addView(text(r.optString("points","—")+" xal",15,INK,true));
+                card(line);
             }
-            @Override public void onReceivedError(WebView view,WebResourceRequest request,WebResourceError err){
-                if(request.isForMainFrame()){
-                    loading.setVisibility(View.GONE);
-                    failure.setText("MATCHLAB AZ interfeysi açıla bilmədi.\nTəkrar yoxlamaq üçün toxun.");
-                    failure.setVisibility(View.VISIBLE);
+        });
+    }
+    private void showSearch(){
+        EditText query=new EditText(this);query.setSingleLine(true);query.setHint("Futbolçu, klub, məşqçi…");
+        query.setText(searchText);query.setTextColor(INK);query.setHintTextColor(MUTED);
+        query.setTextSize(17);query.setMinHeight(dp(48));
+        query.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH);
+        card(query);
+        String[] types={"Hamısı","Futbolçular","Klublar","Məşqçilər"};
+        Spinner typesSpinner=spinner(types,Arrays.asList(new String[]{"all","players","teams","coaches"}).indexOf(kind),i->kind=new String[]{"all","players","teams","coaches"}[i]);
+        card(typesSpinner);
+        Button go=button("⌕  Axtar");
+        go.setOnClickListener(v->{searchText=query.getText().toString().trim();loadSearch(searchText,kind);});
+        query.setOnEditorActionListener((v,action,event)->{
+            if(action==android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH){go.performClick();return true;}
+            return false;
+        });
+        card(go);
+        info("Futbol arxivi serverin məlumat bazasında axtarılır.",false);
+    }
+    private void loadSearch(String q,String kind){
+        if(q.isEmpty()){info("Ad yaz və axtar.",true);return;}
+        ((InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(page.getWindowToken(),0);
+        while(page.getChildCount()>4)page.removeViewAt(page.getChildCount()-1);
+        info("Axtarılır: "+q,false);
+        int token=generation;
+        fetch("/api/search?q="+encode(q)+"&kind="+kind,(json,error)->{
+            if(token!=generation||!screen.equals("search"))return;
+            while(page.getChildCount()>4)page.removeViewAt(page.getChildCount()-1);
+            if(error!=null){info("Axtarış alınmadı: "+error.getMessage(),true);return;}
+            JSONArray arr=json.optJSONArray("items");
+            if(arr==null||arr.length()==0){info("Nəticə tapılmadı.",false);return;}
+            section("Nəticələr · "+arr.length());
+            for(int i=0;i<Math.min(arr.length(),75);i++){
+                JSONObject p=arr.optJSONObject(i);if(p==null)continue;
+                LinearLayout c=column();
+                c.addView(text(p.optString("name"),16,INK,true));
+                c.addView(text(p.optString("country")+" · "+p.optString("kind"),12,MUTED,false));
+                c.setOnClickListener(v->openProfile(p.optString("id")));
+                card(c);
+            }
+        });
+    }
+    private void openProfile(String id){
+        navigate("profile");
+        int token=generation;info("Profil yüklənir…",false);
+        fetch("/api/profile?id="+encode(id),(data,error)->{
+            if(token!=generation||!screen.equals("profile"))return;
+            page.removeAllViews();
+            if(error!=null){info("Profil yüklənmədi: "+error.getMessage(),true);return;}
+            JSONObject p=data.optJSONObject("profile");
+            if(p==null){info("Təsdiqlənmiş profil tapılmadı.",true);return;}
+            section(p.optString("name","—"));
+            info(p.optString("kind")+" · "+p.optString("country"),false);
+            for(String k:new String[]{"birth","death","position","description","source","lifeStatus","careerStatus"}){
+                String value=p.optString(k);
+                if(!value.isEmpty()&&!value.equals("null"))info(k+": "+value,false);
+            }
+            for(String k:new String[]{"clubs","coached","awards"}){
+                JSONArray a=p.optJSONArray(k);if(a==null||a.length()==0)continue;
+                section(k+" · "+a.length());
+                for(int i=0;i<Math.min(a.length(),35);i++){
+                    Object v=a.opt(i);info(v instanceof JSONObject?((JSONObject)v).optString("name",v.toString()):String.valueOf(v),false);
                 }
             }
         });
-        // Native Android application frame around the real packaged HTML interface.
-        LinearLayout shell = new LinearLayout(this);
-        shell.setOrientation(LinearLayout.VERTICAL);
-        LinearLayout toolbar = new LinearLayout(this);
-        toolbar.setBackgroundColor(Color.rgb(13,27,43));
-        toolbar.setGravity(Gravity.CENTER_VERTICAL);
-        toolbar.setPadding(dp(12),dp(2),dp(8),dp(2));
-        ImageView logo = new ImageView(this);
-        logo.setImageResource(R.mipmap.ic_launcher);
-        logo.setContentDescription("MATCHLAB AZ loqosu");
-        LinearLayout.LayoutParams logoParams=new LinearLayout.LayoutParams(dp(38),dp(38));
-        logoParams.rightMargin=dp(10);
-        toolbar.addView(logo,logoParams);
-        LinearLayout titleColumn=new LinearLayout(this);
-        titleColumn.setOrientation(LinearLayout.VERTICAL);
-        TextView title=new TextView(this);
-        title.setText("MATCHLAB AZ");
-        title.setTextSize(16);
-        title.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
-        title.setTextColor(Color.WHITE);
-        titleColumn.addView(title);
-        TextView subtitle=new TextView(this);
-        subtitle.setText("Futbol mərkəzi");
-        subtitle.setTextSize(11);
-        subtitle.setTextColor(Color.rgb(151,180,194));
-        titleColumn.addView(subtitle);
-        toolbar.addView(titleColumn,new LinearLayout.LayoutParams(0,-2,1));
-        menuButton=new TextView(this);
-        menuButton.setText("⋮");
-        menuButton.setTextSize(26);
-        menuButton.setTextColor(Color.WHITE);
-        menuButton.setGravity(Gravity.CENTER);
-        menuButton.setContentDescription("Tətbiq menyusu");
-        menuButton.setClickable(true);
-        menuButton.setFocusable(true);
-        menuButton.setOnClickListener(v->showAppMenu());
-        toolbar.addView(menuButton,new LinearLayout.LayoutParams(dp(48),dp(48)));
-        shell.addView(toolbar,new LinearLayout.LayoutParams(-1,dp(52)));
-        shell.addView(web,new LinearLayout.LayoutParams(-1,0,1));
-        root.addView(shell,new FrameLayout.LayoutParams(-1,-1));
-        loading=new ProgressBar(this);
-        root.addView(loading,new FrameLayout.LayoutParams(dp(40),dp(40),Gravity.CENTER));
-        failure=new TextView(this);
-        failure.setTextColor(Color.WHITE);failure.setTextSize(16);
-        failure.setGravity(Gravity.CENTER);failure.setBackgroundColor(BG);
-        failure.setPadding(dp(24),dp(24),dp(24),dp(24));
-        failure.setVisibility(View.GONE);
-        failure.setOnClickListener(v->{failure.setVisibility(View.GONE);loading.setVisibility(View.VISIBLE);web.reload();});
-        root.addView(failure,new FrameLayout.LayoutParams(-1,-1));
-        if(Build.VERSION.SDK_INT>=30){
-            getWindow().setDecorFitsSystemWindows(false);
-            root.setOnApplyWindowInsetsListener((v,insets)->{
-                android.graphics.Insets safe=insets.getInsets(WindowInsets.Type.systemBars()|WindowInsets.Type.displayCutout());
-                root.setPadding(safe.left,safe.top,safe.right,safe.bottom);
-                return insets;
+    }
+    private void showDetails(){
+        if(currentMatch==null){info("Matç seçilməyib.",true);return;}
+        JSONObject m=currentMatch;
+        JSONObject h=m.optJSONObject("home"),a=m.optJSONObject("away");
+        section((h!=null?h.optString("name"):"—")+"   "+m.optString("homeScore","—")+" : "+m.optString("awayScore","—")+"   "+(a!=null?a.optString("name"):"—"));
+        info(m.optString("leagueName")+" · "+m.optString("state")+" · "+m.optString("source"),false);
+        String[] id=m.optString("id").split(":",3);
+        if(id.length!=3||!Arrays.asList("espn","sportsdb","open").contains(id[0])){info("Bu matç üçün hadisə mənbəyi yoxdur.",false);return;}
+        int token=generation;info("Matç hadisələri alınır…",false);
+        fetch("/api/match-detail?provider="+id[0]+"&league="+encode(id[1])+"&id="+encode(id[2]),(data,error)->{
+            if(token!=generation||!screen.equals("details"))return;
+            if(error!=null){info("Detallar alınmadı: "+error.getMessage(),true);return;}
+            if(!data.optBoolean("available"))info(data.optString("message","Hadisələr mövcud deyil."),true);
+            JSONArray events=data.optJSONArray("events");
+            if(events!=null&&events.length()>0){
+                section("Matç hadisələri");
+                for(int i=0;i<Math.min(events.length(),70);i++){
+                    JSONObject e=events.optJSONObject(i);if(e!=null)info(e.optString("minute",e.optString("clock"))+"  "+e.optString("text",e.optString("type")),false);
+                }
+            }
+            JSONArray stats=data.optJSONArray("statistics");
+            if(stats!=null&&stats.length()>0){
+                section("Statistika");
+                for(int i=0;i<Math.min(stats.length(),40);i++){
+                    JSONObject s=stats.optJSONObject(i);if(s!=null)info(s.optString("name",s.optString("label"))+"  "+s.optString("home",s.optString("homeValue","—"))+" : "+s.optString("away",s.optString("awayValue","—")),false);
+                }
+            }
+        });
+    }
+    private void showFavorites(){
+        section("Seçilmiş matçlar");
+        info("Bunlar saxlanmış məlumatlardır, canlı nəticə deyil.",false);
+        int count=0;
+        for(Map.Entry<String,?> entry:prefs.getAll().entrySet()){
+            if(!entry.getKey().startsWith("fav_"))continue;
+            try{matchRow(new JSONObject(String.valueOf(entry.getValue())),true);count++;}catch(Exception ignored){}
+        }
+        if(count==0)info("Seçilmiş matç yoxdur. ☆ düyməsinə toxun.",false);
+    }
+    private void showTactics(){
+        section("Taktika studiyası");
+        Spinner s=spinner(formations,formation,i->{formation=i;navigate("tactics");});card(s);
+        PitchView pitch=new PitchView(this,formations[formation]);
+        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(530));lp.bottomMargin=dp(15);page.addView(pitch,lp);
+        info("Düzülüş yerli olaraq çəkilir. Təsdiqlənməmiş oyunçu adları göstərilmir.",false);
+    }
+    private void showSettings(){
+        section("MATCHLAB AZ Native 0.9.46");
+        info("Ekranlar yalnız Android Java komponentlərindən qurulub. Veb səhifə göstərilmir.",false);
+        info("Canlı matçlar və profillər HTTPS JSON API-dən gəlir. Mənbələrdə boşluqlar ola bilər.",false);
+        Button statusButton=button("Server vəziyyətini yoxla");
+        statusButton.setOnClickListener(v->{
+            fetch("/api/status",(json,error)->{
+                if(error!=null){info("Bağlantı: "+error.getMessage(),true);return;}
+                info("Versiya: "+json.optString("version")+" · Arxiv: "+(json.optJSONObject("world")!=null?json.optJSONObject("world").optString("total","—"):"—"),false);
             });
-        }else root.setFitsSystemWindows(true);
-        setContentView(root);
-        if(Build.VERSION.SDK_INT>=30)root.requestApplyInsets();
-        web.loadUrl(ORIGIN+"/index.html");
+        });card(statusButton);
     }
 
-    private void showAppMenu(){
-        PopupMenu popup=new PopupMenu(this,menuButton);
-        popup.getMenu().add(0,1,0,"Ana ekrana qısayol əlavə et");
-        popup.getMenu().add(0,2,1,"Yenilə");
-        popup.getMenu().add(0,3,2,"Android tətbiq məlumatları");
-        popup.getMenu().add(0,4,3,"MATCHLAB AZ haqqında");
+    private void showMenu(View anchor){
+        PopupMenu popup=new PopupMenu(this,anchor);
+        popup.getMenu().add(0,1,0,"Canlı matçlar");
+        popup.getMenu().add(0,2,1,"Axtarış");
+        popup.getMenu().add(0,3,2,"Seçilmişlər");
+        popup.getMenu().add(0,4,3,"Tənzimləmələr və server");
+        popup.getMenu().add(0,5,4,"Android tətbiq məlumatları");
         popup.setOnMenuItemClickListener(item->{
             switch(item.getItemId()){
-                case 1: requestHomeShortcut();return true;
-                case 2:
-                    if(web!=null){loading.setVisibility(View.VISIBLE);web.reload();}
+                case 1:navigate("matches");return true;
+                case 2:navigate("search");return true;
+                case 3:navigate("favorites");return true;
+                case 4:navigate("settings");return true;
+                case 5:
+                    Intent intent=new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        android.net.Uri.parse("package:"+getPackageName()));
+                    try{startActivity(intent);}
+                    catch(Exception ex){Toast.makeText(this,"Tətbiq məlumatları açılmadı",Toast.LENGTH_SHORT).show();}
                     return true;
-                case 3:
-                    Intent details=new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
-                    details.setData(Uri.parse("package:"+getPackageName()));
-                    try{startActivity(details);}
-                    catch(Exception ex){Toast.makeText(this,"Android tətbiq ayarları açıla bilmədi",Toast.LENGTH_SHORT).show();}
-                    return true;
-                case 4:
-                    new android.app.AlertDialog.Builder(this)
-                        .setTitle("MATCHLAB AZ")
-                        .setMessage("Versiya 0.9.44 · Futbol mərkəzi\n\nHTML interfeysi APK daxilindədir. Canlı məlumatlar internet tələb edir.\n\nTətbiqi silmək üçün Android Ayarlar → Tətbiqlər → MATCHLAB AZ.")
-                        .setPositiveButton("Bağla",(dialog,which)->dialog.dismiss()).show();
-                    return true;
+                default:return false;
             }
-            return false;
         });
         popup.show();
     }
-    private void requestHomeShortcut(){
-        // Launcher/user approval is required. Never claim the icon was added
-        // until Android itself completes the pin request.
-        final ShortcutManager manager=(ShortcutManager)getSystemService(SHORTCUT_SERVICE);
-        if(manager==null||!manager.isRequestPinShortcutSupported()){
-            Toast.makeText(this,"Başlatma ekranı qısayol əlavə etməyi dəstəkləmir",Toast.LENGTH_LONG).show();
-            return;
-        }
-        Intent launch=new Intent(this,MainActivity.class);
-        launch.setAction(Intent.ACTION_MAIN);
-        launch.addCategory(Intent.CATEGORY_LAUNCHER);
-        launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP);
-        ShortcutInfo shortcut=new ShortcutInfo.Builder(this,"matchlab-home")
-            .setShortLabel("MATCHLAB AZ")
-            .setLongLabel("MATCHLAB AZ — Futbol mərkəzi")
-            .setIcon(Icon.createWithResource(this,R.mipmap.ic_launcher))
-            .setIntent(launch)
-            .build();
-        new Thread(()->{
-            boolean accepted=false;
-            try{accepted=manager.requestPinShortcut(shortcut,null);}catch(Exception ignored){}
-            final boolean requested=accepted;
-            runOnUiThread(()->Toast.makeText(this,requested
-                ?"Ana ekran qısayolunu əlavə etmə sorğusunu təsdiqlə"
-                :"Qısayol sorğusu bu başlatma ekranında qəbul edilmədi",
-                Toast.LENGTH_LONG).show());
-        }).start();
+    private static String encode(String s){
+        try{return java.net.URLEncoder.encode(s,"UTF-8");}catch(Exception ignored){return s;}
     }
-
-    static final Map<String,String> MIME=new HashMap<>();
-    static{
-        MIME.put("/index.html","text/html");MIME.put("/styles.css","text/css");
-        MIME.put("/app.js","text/javascript");MIME.put("/catalog.js","text/javascript");
-        MIME.put("/featured_media.js","text/javascript");
-        MIME.put("/coach_tactics.js","text/javascript");
-        MIME.put("/assets/icon.svg","image/svg+xml");MIME.put("/shell.css","text/css");MIME.put("/shell.js","text/javascript");
-        MIME.put("/install.js","text/javascript");MIME.put("/service-worker.js","text/javascript");
-        MIME.put("/manifest.webmanifest","application/manifest+json");
-        MIME.put("/assets/pwa-192.png","image/png");MIME.put("/assets/pwa-512.png","image/png");MIME.put("/assets/pwa-512-maskable.png","image/png");
+    @Override public void onBackPressed(){
+        if("details".equals(screen))navigate("matches");
+        else if("profile".equals(screen))navigate("search");
+        else if(!"matches".equals(screen))navigate("matches");
+        else super.onBackPressed();
     }
-    static WebResourceResponse response(int code,String mime,byte[] bytes){
-        Map<String,String> h=new HashMap<>();
-        h.put("Cache-Control","no-store");
-        h.put("X-Content-Type-Options","nosniff");
-        return new WebResourceResponse(mime,"UTF-8",code,code<400?"OK":"Unavailable",h,new ByteArrayInputStream(bytes));
-    }
-    static WebResourceResponse unavailable(){
-        return response(503,"application/json","{\"available\":false,\"error\":\"Server bağlantısı yoxdur\"}".getBytes(StandardCharsets.UTF_8));
-    }
-    WebResourceResponse local(String path){
-        if(path==null||"/".equals(path))path="/index.html";
-        String mime=MIME.get(path);
-        if(mime==null)return response(404,"text/plain","Not Found".getBytes(StandardCharsets.UTF_8));
-        try(InputStream in=getAssets().open("web/"+path.substring(1));ByteArrayOutputStream out=new ByteArrayOutputStream()){
-            byte[] b=new byte[8192];int n;
-            while((n=in.read(b))!=-1)out.write(b,0,n);
-            byte[] bytes=out.toByteArray();
-            return response(200,mime,bytes);
-        }catch(Exception ex){return response(500,"text/plain","HTML asset missing".getBytes(StandardCharsets.UTF_8));}
-    }
-    WebResourceResponse proxy(Uri uri,String method){
-        if(!"GET".equalsIgnoreCase(method))
-            return response(403,"application/json","{\"error\":\"Bu əməliyyat bağlıdır\"}".getBytes(StandardCharsets.UTF_8));
-        HttpURLConnection c=null;
-        try{
-            c=(HttpURLConnection)new URL(BACKEND+uri.getEncodedPath()+
-                (uri.getEncodedQuery()==null?"":"?"+uri.getEncodedQuery())).openConnection();
-            c.setConnectTimeout(17000);c.setReadTimeout(50000);
-            c.setRequestProperty("Accept","application/json");
-            c.setRequestProperty("User-Agent","MATCHLABAZ-HTML/0.9.44");
-            int code=c.getResponseCode();
-            InputStream stream=code>=400?c.getErrorStream():c.getInputStream();
-            if(stream==null)return unavailable();
-            try(InputStream in=stream;ByteArrayOutputStream out=new ByteArrayOutputStream()){
-                byte[] b=new byte[8192];int n;
-                while((n=in.read(b))!=-1){
-                    out.write(b,0,n);
-                    if(out.size()>8000000)return unavailable();
-                }
-                return response(code,"application/json",out.toByteArray());
-            }
-        }catch(Exception ex){return unavailable();}
-        finally{if(c!=null)c.disconnect();}
-    }
-    @Override public void onBackPressed(){if(web!=null&&web.canGoBack())web.goBack();else super.onBackPressed();}
-    @Override protected void onDestroy(){if(web!=null){web.stopLoading();web.destroy();web=null;}super.onDestroy();}
+    @Override protected void onDestroy(){ui.removeCallbacks(refresh);network.shutdownNow();super.onDestroy();}
 }
