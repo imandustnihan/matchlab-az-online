@@ -203,7 +203,7 @@ jobs:
             adb pull /sdcard/window.xml native/android/window.xml >/dev/null
             python -c "import xml.etree.ElementTree as E; r=E.parse('native/android/window.xml'); assert any('Tətbiq menyusu' in n.attrib.get('content-desc','') for n in r.iter()), 'native menu button inaccessible'"
             # Read the actual clickable menu's accessibility bounds.
-            python -c 'import re,subprocess,xml.etree.ElementTree as E; root=E.parse("native/android/window.xml"); b=next(n.attrib["bounds"] for n in root.iter() if "Tətbiq menyusu" in n.attrib.get("content-desc","")); a=list(map(int,re.findall(r"\\d+",b))); x=(a[0]+a[2])//2; y=(a[1]+a[3])//2; print("Menu target:",x,y); subprocess.check_call(["adb","shell","input","tap",str(x),str(y)])'
+            python -c 'import subprocess,xml.etree.ElementTree as E; root=E.parse("native/android/window.xml"); b=next(n.attrib["bounds"] for n in root.iter() if "Tətbiq menyusu" in n.attrib.get("content-desc","")); a=list(map(int,b.replace("[",",").replace("]",",").split(",")[1:-1])); x=(a[0]+a[2])//2; y=(a[1]+a[3])//2; print("Menu target:",x,y); subprocess.check_call(["adb","shell","input","tap",str(x),str(y)])'
             sleep 2
             adb shell uiautomator dump /sdcard/menu.xml >/dev/null
             adb pull /sdcard/menu.xml native/android/native_menu.xml >/dev/null
@@ -213,7 +213,7 @@ jobs:
             adb shell input keyevent KEYCODE_BACK
             sleep 1
             # Tap in the HTML navigation, not the Android system gesture strip.
-            python -c 'import re,subprocess; data=subprocess.check_output(["adb","shell","wm","size"],text=True); w,h=map(int,re.findall(r"(\\d+)x(\\d+)",data)[-1]); subprocess.check_call(["adb","shell","input","tap",str(w*92//100),str(h*91//100)])'
+            python -c 'import subprocess; data=subprocess.check_output(["adb","shell","wm","size"],text=True); w,h=map(int,data.strip().split()[-1].split("x")); subprocess.check_call(["adb","shell","input","tap",str(w*92//100),str(h*91//100)])'
             sleep 2
             adb shell screencap -p /sdcard/matchlab_more.png
             adb pull /sdcard/matchlab_more.png native/android/matchlab_more.png
