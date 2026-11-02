@@ -25,6 +25,10 @@ public final class PitchView extends View {
     private final float[] x=new float[11],y=new float[11];
     private final String[] names=new String[11],numbers=new String[11];
     private int dragging=-1;
+    private boolean showGrid=false,showLines=true;
+    private final java.util.ArrayList<float[]> arrows=new java.util.ArrayList<>();
+    private boolean arrowMode=false;
+    private float arrowStartX=-1,arrowStartY=-1;
     private float downX,downY;
     private boolean changed=false;
     private long pressedAt;
@@ -55,6 +59,8 @@ public final class PitchView extends View {
     }
     private void load(){
         defaults();
+        String saved=prefs.getString(formation+"_arrows","");
+        for(String entry:saved.split(";")){String[] parts=entry.split(",");if(parts.length!=4)continue;try{float[] a=new float[4];for(int z=0;z<4;z++)a[z]=clamp(Float.parseFloat(parts[z]),0,1);arrows.add(a);}catch(Exception ignored){}}
         for(int i=0;i<11;i++){
             String key=formation+"_"+i;
             x[i]=clamp(prefs.getFloat(key+"_x",x[i]),.09f,.91f);
@@ -72,13 +78,18 @@ public final class PitchView extends View {
         }
         edit.apply();
     }
+    public void toggleGrid(){showGrid=!showGrid;invalidate();}
+    public void toggleLines(){showLines=!showLines;invalidate();}
+    public void toggleArrows(){arrowMode=!arrowMode;Toast.makeText(getContext(),arrowMode?"Ox aləti aktivdir: iki nöqtəyə toxun":"Ox aləti söndürüldü",Toast.LENGTH_SHORT).show();}
+    public void clearArrows(){arrows.clear();prefs.edit().remove(formation+"_arrows").apply();invalidate();}
+    private void saveArrows(){StringBuilder s=new StringBuilder();for(float[] a:arrows){if(s.length()>0)s.append(";");s.append(a[0]).append(",").append(a[1]).append(",").append(a[2]).append(",").append(a[3]);}prefs.edit().putString(formation+"_arrows",s.toString()).apply();}
     public void reset(){
         SharedPreferences.Editor edit=prefs.edit();
         for(int i=0;i<11;i++){
             String k=formation+"_"+i;
             for(String suffix:new String[]{"_x","_y","_name","_no"})edit.remove(k+suffix);
         }
-        edit.apply();defaults();invalidate();
+        edit.remove(formation+"_arrows");edit.apply();arrows.clear();defaults();invalidate();
     }
     public String exportText(){
         StringBuilder b=new StringBuilder("MATCHLAB AZ · Taktiki plan "+formation);
@@ -135,6 +146,9 @@ public final class PitchView extends View {
         c.drawRect(inner.centerX()-boxW/2,inner.top,inner.centerX()+boxW/2,inner.top+boxH,p);
         c.drawRect(inner.centerX()-boxW/2,inner.bottom-boxH,inner.centerX()+boxW/2,inner.bottom,p);
         c.drawCircle(inner.centerX(),inner.centerY(),dp(2),p);
+        if(showGrid){stroke(Color.argb(65,255,255,255),dp(1));for(int i=1;i<6;i++){float xx=inner.left+inner.width()*i/6f;c.drawLine(xx,inner.top,xx,inner.bottom,p);}for(int i=1;i<10;i++){float yy=inner.top+inner.height()*i/10f;c.drawLine(inner.left,yy,inner.right,yy,p);}}
+        if(showLines){stroke(Color.argb(110,190,255,190),dp(1.5f));for(int i=1;i<11;i++){if(Math.abs(y[i]-y[i-1])<.12f)c.drawLine(inner.left+x[i-1]*inner.width(),inner.top+y[i-1]*inner.height(),inner.left+x[i]*inner.width(),inner.top+y[i]*inner.height(),p);}}
+        for(float[] a:arrows){float sx=inner.left+a[0]*inner.width(),sy=inner.top+a[1]*inner.height(),ex=inner.left+a[2]*inner.width(),ey=inner.top+a[3]*inner.height();stroke(Color.rgb(255,210,95),dp(3));c.drawLine(sx,sy,ex,ey,p);double angle=Math.atan2(ey-sy,ex-sx);float len=dp(14);c.drawLine(ex,ey,(float)(ex-len*Math.cos(angle-.55)),(float)(ey-len*Math.sin(angle-.55)),p);c.drawLine(ex,ey,(float)(ex-len*Math.cos(angle+.55)),(float)(ey-len*Math.sin(angle+.55)),p);}
         for(int i=0;i<11;i++)drawPlayer(c,inner,i);
     }
     private int findPlayer(float px,float py){
@@ -172,6 +186,13 @@ public final class PitchView extends View {
     }
     @Override public boolean onTouchEvent(MotionEvent event){
         int action=event.getActionMasked();
+        if(action==MotionEvent.ACTION_DOWN&&arrowMode){
+            RectF f=field();RectF inner=new RectF(f.left+dp(11),f.top+dp(11),f.right-dp(11),f.bottom-dp(11));
+            float xx=clamp((event.getX()-inner.left)/inner.width(),0,1),yy=clamp((event.getY()-inner.top)/inner.height(),0,1);
+            if(arrowStartX<0){arrowStartX=xx;arrowStartY=yy;}else{arrows.add(new float[]{arrowStartX,arrowStartY,xx,yy});arrowStartX=-1;saveArrows();invalidate();}
+            return true;
+        }
+        if(arrowMode&&action==MotionEvent.ACTION_UP)return true;
         if(action==MotionEvent.ACTION_DOWN){
             dragging=findPlayer(event.getX(),event.getY());
             if(dragging<0)return false;
