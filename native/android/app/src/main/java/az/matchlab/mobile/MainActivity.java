@@ -2,6 +2,11 @@ package az.matchlab.mobile;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.graphics.drawable.ColorDrawable;
+import android.media.ToneGenerator;
+import android.media.AudioManager;
+import android.content.ClipboardManager;
+import android.content.ClipData;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -295,7 +300,7 @@ public final class MainActivity extends Activity {
             return;
         }
         LinearLayout controls=row();
-        TextView hint=single("Turnir seçin",12,MUTED,true);
+        TextView hint=single(leagueLabel(league),12,ACCENT,true);
         controls.addView(hint,new LinearLayout.LayoutParams(0,dp(42),1));
         Button choose=button("Liqa  ⌄");
         choose.setOnClickListener(v->showLeaguePicker(choose,true));
@@ -306,47 +311,62 @@ public final class MainActivity extends Activity {
         int at=Arrays.asList(LEAGUES).indexOf(id);
         return at<0?id:NAMES[at];
     }
+    private void themedPicker(String title,ArrayList<String> ids,ArrayList<String> labels,boolean standings){
+        LinearLayout box=column();box.setPadding(dp(16),dp(12),dp(16),dp(12));box.setBackground(shape(CARD,18));
+        TextView heading=text(title,19,INK,true);box.addView(heading);gap(box,12);
+        EditText search=new EditText(this);search.setSingleLine(true);search.setHint("Liqa axtar…");
+        search.setTextColor(INK);search.setHintTextColor(MUTED);search.setBackground(shape(RAISED,12));
+        search.setPadding(dp(12),0,dp(12),0);box.addView(search,new LinearLayout.LayoutParams(-1,dp(48)));
+        ScrollView scroll=new ScrollView(this);LinearLayout results=column();scroll.addView(results);
+        LinearLayout.LayoutParams scrollParams=new LinearLayout.LayoutParams(-1,0,1);scrollParams.topMargin=dp(10);
+        box.addView(scroll,scrollParams);
+        AlertDialog dialog=new AlertDialog.Builder(this).setView(box).create();
+        Runnable update=()->{
+            results.removeAllViews();
+            String q=search.getText().toString().toLowerCase(Locale.ROOT);
+            for(int i=0;i<labels.size();i++){
+                final String id=ids.get(i),label=labels.get(i);
+                if(!label.toLowerCase(Locale.ROOT).contains(q))continue;
+                TextView item=text((id.equals(league)?"✓  ":"   ")+label,15,id.equals(league)?ACCENT:INK,id.equals(league));
+                item.setPadding(dp(12),dp(14),dp(12),dp(14));item.setBackground(shape(RAISED,10));
+                LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.bottomMargin=dp(5);results.addView(item,p);
+                item.setOnClickListener(v->{
+                    dialog.dismiss();
+                    if(id.equals("__more__")){showAllLeaguesPicker(standings);return;}
+                    league=id;if(standings)tableLeague=id;else matchLeague=id;
+                    prefs.edit().putString(standings?"tableleague":"matchleague",id).apply();
+                    navigate(standings?"standings":"matches");
+                });
+            }
+            if(results.getChildCount()==0)results.addView(text("Uyğun liqa tapılmadı",13,MUTED,false));
+        };
+        search.addTextChangedListener(new android.text.TextWatcher(){
+            public void beforeTextChanged(CharSequence s,int start,int count,int after){}
+            public void onTextChanged(CharSequence s,int start,int before,int count){update.run();}
+            public void afterTextChanged(android.text.Editable e){}
+        });
+        update.run();dialog.show();
+        if(dialog.getWindow()!=null){dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            dialog.getWindow().setLayout(getResources().getDisplayMetrics().widthPixels-dp(28),Math.min(dp(620),getResources().getDisplayMetrics().heightPixels-dp(110)));}
+    }
     private void showLeaguePicker(View anchor,boolean standings){
-        final String oldLeague=league;
-        final ArrayList<String> names=new ArrayList<>();
-        final ArrayList<String> ids=new ArrayList<>();
-        for(int i=standings?1:0;i<LEAGUES.length;i++){
-            ids.add(LEAGUES[i]);names.add(NAMES[i]);
-        }
-        names.add("Daha çox liqa…");
-        new AlertDialog.Builder(this)
-            .setTitle(standings?"Turnir cədvəli":"Matç filtri")
-            .setItems(names.toArray(new String[0]),(dialog,selected)->{
-                if(selected==ids.size()){showAllLeaguesPicker(standings);return;}
-                league=ids.get(selected);
-                if(standings&&league.equals("all"))league="eng.1";
-                if(standings)tableLeague=league;else matchLeague=league;
-                prefs.edit().putString(standings?"tableleague":"matchleague",league).apply();
-                if(!oldLeague.equals(league))navigate(standings?"standings":"matches");
-            }).setNegativeButton("Bağla",null).show();
+        ArrayList<String> ids=new ArrayList<>(),labels=new ArrayList<>();
+        for(int i=standings?1:0;i<LEAGUES.length;i++){ids.add(LEAGUES[i]);labels.add(NAMES[i]);}
+        ids.add("__more__");labels.add("＋  Bütün liqalar");
+        themedPicker(standings?"Turnir cədvəli":"Matç filtri",ids,labels,standings);
     }
     private void showAllLeaguesPicker(boolean standings){
         fetch("/api/leagues",(data,error)->{
             if(isFinishing()||isDestroyed())return;
-            if(error!=null||data==null){
-                Toast.makeText(this,"Liqa kataloqunu yükləmək mümkün olmadı",Toast.LENGTH_LONG).show();return;
-            }
-            JSONArray items=data.optJSONArray("items");
-            if(items==null||items.length()==0)return;
+            if(error!=null||data==null){Toast.makeText(this,"Liqa kataloqu yüklənmədi",Toast.LENGTH_LONG).show();return;}
+            JSONArray items=data.optJSONArray("items");if(items==null)return;
             ArrayList<String> labels=new ArrayList<>(),ids=new ArrayList<>();
             for(int i=0;i<items.length();i++){
                 JSONObject item=items.optJSONObject(i);if(item==null)continue;
-                String id=item.optString("id",""),name=item.optString("name","");
-                if(id.isEmpty()||name.isEmpty()||(standings&&id.equals("all")))continue;
-                ids.add(id);labels.add(name);
+                String id=item.optString("id"),name=item.optString("name");
+                if(id.isEmpty()||name.isEmpty())continue;ids.add(id);labels.add(name);
             }
-            new AlertDialog.Builder(this).setTitle("Bütün yarışlar")
-                .setItems(labels.toArray(new String[0]),(d,index)->{
-                    league=ids.get(index);
-                    if(standings)tableLeague=league;else matchLeague=league;
-                    prefs.edit().putString(standings?"tableleague":"matchleague",league).apply();
-                    navigate(standings?"standings":"matches");
-                }).setNegativeButton("Bağla",null).show();
+            themedPicker("Bütün yarışlar",ids,labels,standings);
         });
     }
     private interface JsonCallback{void done(JSONObject json,Exception error);}
@@ -568,7 +588,9 @@ public final class MainActivity extends Activity {
             if(data.optBoolean("partial"))banner("Bəzi cədvəl məlumatları mənbədən alınmadı.",RED);
             JSONArray rows=data.optJSONArray("items");
             if(rows==null||rows.length()==0){
-                banner(data.optString("message","Cədvəl mövcud deyil."),RED);return;
+                banner(data.optString("message","Cədvəl mövcud deyil."),RED);
+                if("aze.1".equals(requestLeague))externalLink("Rəsmi PFL saytı","https://pfl.az/");
+                return;
             }
             section(leagueLabel(requestLeague));
             LinearLayout toolbar=row();
@@ -735,28 +757,59 @@ public final class MainActivity extends Activity {
             }
         });
     }
+    private void profileFact(String label,String value){
+        if(value==null||value.trim().isEmpty()||value.equalsIgnoreCase("null")||value.equalsIgnoreCase("unknown")||value.equalsIgnoreCase("unverified"))return;
+        LinearLayout line=row();TextView a=text(label,12,MUTED,true);line.addView(a,new LinearLayout.LayoutParams(0,-2,1));
+        TextView b=text(value,13,INK,false);b.setGravity(Gravity.RIGHT);line.addView(b,new LinearLayout.LayoutParams(0,-2,2));card(line);
+    }
+    private void externalLink(String label,String url){
+        if(url==null||!url.startsWith("https://"))return;
+        Button b=button("↗  "+label);b.setTextColor(ACCENT);
+        b.setOnClickListener(v->{try{startActivity(new Intent(Intent.ACTION_VIEW,android.net.Uri.parse(url)));}catch(Exception e){Toast.makeText(this,"Keçid açıla bilmədi",Toast.LENGTH_SHORT).show();}});
+        card(b);
+    }
     private void openProfile(String id){
-        navigate("profile");
-        int token=generation;info("Profil yüklənir…",false);
+        navigate("profile");int token=generation;info("Profil yüklənir…",false);
         fetch("/api/profile?id="+encode(id),(data,error)->{
             if(token!=generation||!screen.equals("profile"))return;
             page.removeAllViews();
-            if(error!=null){info(networkMessage(error),true);return;}
-            JSONObject p=data.optJSONObject("profile");
-            if(p==null){info("Təsdiqlənmiş profil tapılmadı.",true);return;}
+            if(error!=null){info(networkMessage(error),true);retry("search");return;}
+            JSONObject p=data.optJSONObject("profile");if(p==null){info("Profil tapılmadı",true);return;}
             section(p.optString("name","—"));
-            info(p.optString("kind")+" · "+p.optString("country"),false);
-            for(String k:new String[]{"birth","death","position","description","source","lifeStatus","careerStatus"}){
-                String value=p.optString(k);
-                if(!value.isEmpty()&&!value.equals("null"))info(k+": "+value,false);
-            }
+            String kind=p.optString("kind"),name=p.optString("name");
+            LinearLayout hero=row();
+            TeamBadge badge=new TeamBadge(this,name,p.optString("image"),70);
+            hero.addView(badge,new LinearLayout.LayoutParams(dp(70),dp(70)));
+            LinearLayout caption=column();caption.setPadding(dp(15),0,0,0);
+            caption.addView(text(name,19,INK,true));
+            caption.addView(text(("teams".equals(kind)?"Klub":("coaches".equals(kind)?"Məşqçi":"Futbolçu"))+" · "+p.optString("country",""),12,MUTED,false));
+            hero.addView(caption,new LinearLayout.LayoutParams(0,-2,1));card(hero);
+            section("Ümumi məlumat");
+            profileFact("Ölkə",p.optString("country"));
+            profileFact("Doğum tarixi",p.optString("birth"));
+            profileFact("Vəfat tarixi",p.optString("death"));
+            profileFact("Mövqe",p.optString("position"));
+            profileFact("Haqqında",p.optString("description"));
             for(String k:new String[]{"clubs","coached","awards"}){
-                JSONArray a=p.optJSONArray(k);if(a==null||a.length()==0)continue;
-                section(k+" · "+a.length());
-                for(int i=0;i<Math.min(a.length(),35);i++){
-                    Object v=a.opt(i);info(v instanceof JSONObject?((JSONObject)v).optString("name",v.toString()):String.valueOf(v),false);
+                JSONArray arr=p.optJSONArray(k);if(arr==null||arr.length()==0)continue;
+                section(k.equals("clubs")?"Klub karyerası":k.equals("coached")?"Məşqçilik karyerası":"Nailiyyətlər");
+                for(int i=0;i<Math.min(45,arr.length());i++){
+                    Object o=arr.opt(i);JSONObject obj=o instanceof JSONObject?(JSONObject)o:null;
+                    String label=obj==null?String.valueOf(o):obj.optString("name",String.valueOf(o));
+                    if(!label.isEmpty())info("• "+label,false);
                 }
             }
+            section("Mənbələr və keçidlər");
+            String qid=p.optString("wikidataId",p.optString("qid",""));
+            if(qid.matches("Q[1-9][0-9]{0,11}")){
+                externalLink("Wikidata profili","https://www.wikidata.org/wiki/"+qid);
+                externalLink("Wikipedia məqalələrini tap","https://www.wikidata.org/wiki/Special:EntityData/"+qid+".json");
+            }
+            String url=p.optString("wikipediaUrl",p.optString("url",""));
+            if(url.startsWith("https://"))externalLink("Mənbə səhifəsi",url);
+            profileFact("Məlumat mənbəyi",p.optString("source"));
+            if("teams".equals(kind))externalLink("Klub haqqında axtarış","https://www.google.com/search?q="+encode(name+" football club"));
+            if(qid.isEmpty()&&url.isEmpty())info("Bu profil üçün təsdiqlənmiş birbaşa Wikipedia bağlantısı yoxdur.",false);
         });
     }
     private void showDetails(){
@@ -914,7 +967,20 @@ public final class MainActivity extends Activity {
         info("Bu plan sənin öz taktiki layihəndir. Real matç heyəti və təsdiqlənmiş formasiya kimi təqdim edilmir.",false);
     }
     private void showSettings(){
-        section("MATCHLAB AZ Native 0.9.47");
+        section("MATCHLAB AZ Native 0.9.49");
+        section("Bildiriş və səs idarəetməsi");
+        for(String[] setting:new String[][]{{"notif_goals","Qol bildirişləri"},{"notif_kickoff","Matç başlanğıcı"},{"notif_halftime","Fasilə"},{"notif_final","Matçın bitməsi"},{"notif_cards","Qırmızı kart"},{"notif_favorites","Yalnız seçilmiş matçlar"},{"sound_enabled","Tətbiqdaxili səs"},{"sound_vibrate","Vibrasiya"}}){
+            Switch toggle=new Switch(this);toggle.setText(setting[1]);toggle.setTextSize(13);toggle.setTextColor(INK);
+            toggle.setChecked(prefs.getBoolean(setting[0],false));toggle.setPadding(dp(9),dp(9),dp(9),dp(9));
+            toggle.setOnCheckedChangeListener((view,checked)->prefs.edit().putBoolean(setting[0],checked).apply());card(toggle);
+        }
+        Button preview=button("♪  Qol səsini sına");preview.setOnClickListener(v->{
+            if(prefs.getBoolean("sound_enabled",false)){
+                ToneGenerator tone=new ToneGenerator(AudioManager.STREAM_NOTIFICATION,65);
+                tone.startTone(ToneGenerator.TONE_PROP_ACK,180);ui.postDelayed(tone::release,300);
+            }else Toast.makeText(this,"Əvvəlcə tətbiqdaxili səsi aktivləşdir",Toast.LENGTH_SHORT).show();
+        });card(preview);
+        info("Bu seçimlər yerli yaddaşa yazılır. Real hadisə bildirişlərinin avtomatik gəlməsi ayrıca bildiriş mühərriki tələb edir; hələ aktiv deyil.",false);
         info("Ekranlar yalnız Android Java komponentlərindən qurulub. Veb səhifə göstərilmir.",false);
         info("Canlı matçlar və profillər HTTPS JSON API-dən gəlir. Mənbələrdə boşluqlar ola bilər.",false);
         Button statusButton=button("Server vəziyyətini yoxla");
