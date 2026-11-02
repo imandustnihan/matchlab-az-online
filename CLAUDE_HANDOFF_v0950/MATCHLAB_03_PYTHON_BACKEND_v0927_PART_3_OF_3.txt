@@ -1,0 +1,3497 @@
+MATCHLAB AZ Python backend / source handoff, segment 3/3. Original TXT line range: 8001-11495. Preserve lines in order.
+
+
+"""v0.9.16 regression: no fake live/finished fixtures, genuine status, timezone and UI."""
+import datetime as dt
+import unittest
+from pathlib import Path
+from zoneinfo import ZoneInfo
+import match_sources as feeds
+import server
+
+ROOT=Path(__file__).resolve().parent
+
+class ScoreStatusReliability(unittest.TestCase):
+    @staticmethod
+    def event(status, when, home='2', away='1'):
+        return {'idEvent':'1290','strStatus':status,'strSport':'Soccer',
+                'strHomeTeam':'Team A','strAwayTeam':'Team B',
+                'intHomeScore':home,'intAwayScore':away,
+                'dateEvent':when,'strTimestamp':when+'T18:00:00'}
+
+    def test_explicit_not_started_remains_not_started_even_on_old_date_with_score(self):
+        past=(dt.date.today()-dt.timedelta(days=30)).isoformat()
+        for value in ['NS','Not Started','TBD','PST','Postponed','Abandoned','UNKNOWN']:
+            with self.subTest(value=value):
+                result=feeds.sportsdb_games({'events':[self.event(value,past)]},'eng.1')[0]
+                self.assertEqual(result['state'],'scheduled')
+                self.assertIsNone(result['homeScore'])
+                self.assertIsNone(result['awayScore'])
+
+    def test_explicit_status_live_and_final(self):
+        past=(dt.date.today()-dt.timedelta(days=5)).isoformat()
+        for code in ['1H','HT','2H','ET']:
+            self.assertEqual(feeds.sportsdb_games({'events':[self.event(code,past)]},'eng.1')[0]['state'],'live')
+        for code in ['FT','AET','PEN']:
+            self.assertEqual(feeds.sportsdb_games({'events':[self.event(code,past)]},'eng.1')[0]['state'],'final')
+
+    def test_statusless_old_results_may_be_final_but_never_live(self):
+        past=(dt.date.today()-dt.timedelta(days=20)).isoformat()
+        future=(dt.date.today()+dt.timedelta(days=1)).isoformat()
+        self.assertEqual(feeds.sportsdb_games({'events':[self.event('',past)]},'eng.1')[0]['state'],'final')
+        x=feeds.sportsdb_games({'events':[self.event('',future)]},'eng.1')[0]
+        self.assertEqual(x['state'],'scheduled')
+        self.assertIsNone(x['homeScore'])
+
+    @staticmethod
+    def open_event(kick,finished=False):
+        local=kick.astimezone(ZoneInfo('Europe/Berlin'))
+        return {'matchID':90,'matchDateTime':local.strftime('%Y-%m-%dT%H:%M:%S'),
+                'matchDateTimeUTC':kick.strftime('%Y-%m-%dT%H:%M:%S'),
+                'matchIsFinished':finished,
+                'matchResults':[{'resultTypeID':1,'pointsTeam1':1,'pointsTeam2':0}],
+                'team1':{'teamId':1,'teamName':'Home'},
+                'team2':{'teamId':2,'teamName':'Away'}}
+
+    def test_openliga_never_infers_live_from_future_or_stale_score(self):
+        now=dt.datetime.now(dt.timezone.utc)
+        for delta in [dt.timedelta(hours=8),-dt.timedelta(days=2)]:
+            ev=self.open_event(now+delta)
+            date=ev['matchDateTime'][:10]
+            match=feeds.openliga_games([ev],'ger.1',date)[0]
+            self.assertEqual(match['state'],'scheduled')
+            self.assertIsNone(match['homeScore'])
+            self.assertIsNone(match['awayScore'])
+
+    def test_openliga_actual_live_and_finished(self):
+        now=dt.datetime.now(dt.timezone.utc)
+        for finished,expected in [(False,'live'),(True,'final')]:
+            ev=self.open_event(now-dt.timedelta(minutes=25),finished=finished)
+            rows=feeds.openliga_games([ev],'ger.1',ev['matchDateTime'][:10])
+            self.assertEqual(rows[0]['state'],expected)
+            self.assertEqual(rows[0]['homeScore'],1)
+
+    def test_browser_does_not_treat_absent_scores_as_zero(self):
+        js=(ROOT/'app.js').read_text(encoding='utf8')
+        self.assertIn('h.score==null?null:Number(h.score)',js)
+        self.assertIn('a.score==null?null:Number(a.score)',js)
+
+    def test_standings_all_fallback_not_discarded(self):
+        js=(ROOT/'app.js').read_text(encoding='utf8')
+        self.assertIn("league!==(st.league==='all'?'eng.1':st.league)",js)
+
+    def test_health_and_version(self):
+        self.assertEqual(server.send_data('/api/status',{})['version'],'0.9.27-local')
+        self.assertIn('v=0927',(ROOT/'index.html').read_text(encoding='utf8'))
+
+if __name__=='__main__':unittest.main(verbosity=2)
+
+========== END FILE: 04_ORIGINAL_BACKEND_AND_TESTS_v0927/test_v0916_reliability.py ==========
+
+
+========== BEGIN FILE: 04_ORIGINAL_BACKEND_AND_TESTS_v0927/test_v0917_media_expansion.py ==========
+
+"""v0.9.17: identity-safe, free-licensed, multilingual portrait/crest fallback tests."""
+import json
+import tempfile
+import unittest
+import urllib.parse
+from pathlib import Path
+from unittest.mock import patch
+import media_expansion as media
+import server
+
+BASE='https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/'
+
+def fake_upstream(qid2title, pictures, fail=None):
+    calls=[]
+    def handler(url,ttl=0):
+        calls.append(url)
+        parts=urllib.parse.urlsplit(url)
+        qs=urllib.parse.parse_qs(parts.query)
+        if parts.hostname=='www.wikidata.org':
+            return {'entities':{qid:{'sitelinks':{'enwiki':{'title':title},'trwiki':{'title':'TR '+title}}} for qid,title in qid2title.items()}}
+        if fail and parts.hostname==fail:raise ConnectionError('upstream unavailable')
+        titles=qs.get('titles',[''])[0].split('|')
+        pages=[]
+        for title in titles:
+            pic=pictures.get((parts.hostname,title))
+            if pic:
+                page_qid=pic.get('qid')
+                pages.append({'ns':0,'title':title,'pageprops':{'wikibase_item':page_qid},
+                              'pageimage':pic.get('filename',''),
+                              'thumbnail':{'source':pic.get('url',BASE+'Test.jpg')}})
+        return {'query':{'pages':pages}}
+    return handler,calls
+
+class VerifiedMedia17(unittest.TestCase):
+    def setUp(self):
+        self.tmp=tempfile.TemporaryDirectory()
+        self.patch=patch.object(media,'CACHE_FILE',Path(self.tmp.name)/'media.sqlite')
+        self.patch.start()
+    def tearDown(self):
+        self.patch.stop();self.tmp.cleanup()
+
+    def test_two_verified_players_from_one_wikimedia_batch(self):
+        titles={'Q10':'Player One','Q11':'Player Two'}
+        imgs={('en.wikipedia.org','Player One'):{'qid':'Q10','filename':'Player-one.jpg'},
+              ('en.wikipedia.org','Player Two'):{'qid':'Q11','filename':'Player-two.jpg'}}
+        fake,calls=fake_upstream(titles,imgs)
+        found,complete=media.verified_page_images(['Q10','Q11'],'players',fake)
+        self.assertTrue(complete)
+        self.assertEqual(set(found),{'Q10','Q11'})
+        self.assertEqual(len(calls),2) # one Wikidata request + one batched enwiki request
+        self.assertEqual(found['Q10']['verifiedQid'],'Q10')
+        self.assertEqual(found['Q11']['wikiLanguage'],'en')
+        self.assertIn('pilicense=free',calls[-1])
+        self.assertEqual(len([x for x in found.values() if x['url']]),2)
+
+    def test_wrong_person_not_accepted_even_if_title_matches(self):
+        fake,_=fake_upstream({'Q10':'Namesake'},{('en.wikipedia.org','Namesake'):{'qid':'Q999','filename':'Other.jpg'}})
+        found,complete=media.verified_page_images(['Q10'],'players',fake)
+        self.assertTrue(complete)
+        self.assertEqual(found,{})
+
+    def test_club_accepts_logo_and_rejects_stadium(self):
+        fake,_=fake_upstream({'Q20':'Club One','Q21':'Club Two'},{
+            ('en.wikipedia.org','Club One'):{'qid':'Q20','filename':'FC_Club_One_logo.svg'},
+            ('en.wikipedia.org','Club Two'):{'qid':'Q21','filename':'Club_Two_Stadium.jpg'}})
+        found,complete=media.verified_page_images(['Q20','Q21'],'teams',fake)
+        self.assertTrue(complete)
+        self.assertEqual(set(found),{'Q20'})
+        self.assertEqual(found['Q20']['mediaType'],'crest')
+
+    def test_player_shirt_photo_not_considered_portrait(self):
+        fake,_=fake_upstream({'Q45':'Player Five'},{('en.wikipedia.org','Player Five'):{'qid':'Q45','filename':'Player_Five_jersey.png'}})
+        found,complete=media.verified_page_images(['Q45'],'players',fake)
+        self.assertTrue(complete)
+        self.assertEqual(found,{})
+
+    def test_wrong_host_never_allowed(self):
+        fake,_=fake_upstream({'Q30':'Player Three'},{('en.wikipedia.org','Player Three'):{'qid':'Q30','filename':'Portrait.jpg','url':'https://example.com/unsafe.jpg'}})
+        found,_=media.verified_page_images(['Q30'],'players',fake)
+        self.assertEqual(found,{})
+
+    def test_network_error_not_negative_cached(self):
+        fake,calls=fake_upstream({'Q40':'Player Four'},{},fail='en.wikipedia.org')
+        found,complete=media.verified_page_images(['Q40'],'players',fake)
+        self.assertFalse(complete)
+        self.assertEqual(found,{})
+        self.assertIsNone(media.cache_load('Q40','players'))
+
+    def test_found_media_persisted_and_cache_avoids_remote(self):
+        fake,_=fake_upstream({'Q10':'Player One'},{('en.wikipedia.org','Player One'):{'qid':'Q10','filename':'One.jpg'}})
+        first,_=media.verified_page_images(['Q10'],'players',fake)
+        def no_web(*args):raise AssertionError('cache should avoid new internet requests')
+        second,complete=media.verified_page_images(['Q10'],'players',no_web)
+        self.assertTrue(complete)
+        self.assertEqual(first,second)
+        self.assertEqual(media.cache_stats()['players']['found'],1)
+
+    def test_server_batch_adds_confirmed_fallback_and_credits(self):
+        fallback={'Q77':{'url':BASE+'Picture.jpg','source':'Wikipedia (en) · sərbəst pageimage','verifiedQid':'Q77','imagePage':'https://commons.wikimedia.org/wiki/File:Picture.jpg'}}
+        with patch.object(server,'wd_entities',return_value={'Q77':{'claims':{}}}),patch.object(server.extra_media,'verified_page_images',return_value=(fallback,True)):
+            res=server.send_data('/api/photos',{'qids':['Q77'],'kind':['players']})
+        self.assertEqual(res['found'],1)
+        self.assertEqual(res['items']['Q77'],BASE+'Picture.jpg')
+        self.assertIn('imagePage',res['details']['Q77'])
+        self.assertTrue(res['complete'])
+
+    def test_single_profile_media_fallback(self):
+        fallback={'Q77':{'url':BASE+'Picture.jpg','verifiedQid':'Q77','source':'Wikipedia en'}}
+        with patch.object(server,'wd_entities',return_value={'Q77':{'claims':{}}}),patch.object(server.extra_media,'verified_page_images',return_value=(fallback,True)):
+            res=server.send_data('/api/photo',{'qid':['Q77'],'kind':['players']})
+        self.assertEqual(res['url'],fallback['Q77']['url'])
+
+    def test_batch_does_not_mark_media_missing_when_fallback_offline(self):
+        with patch.object(server,'wd_entities',return_value={'Q77':{'claims':{}}}),patch.object(server.extra_media,'verified_page_images',return_value=({},False)):
+            res=server.send_data('/api/photos',{'qids':['Q77'],'kind':['players']})
+        self.assertFalse(res['complete'])
+        self.assertEqual(res['found'],0)
+
+    def test_wikipedia_profile_requests_free_images(self):
+        from wikipedia_enrichment import article_details
+        def fake(url,ttl):
+            self.assertIn('pilicense=free',url)
+            return {'query':{'pages':[{'ns':0,'title':'Test','pageprops':{'wikibase_item':'Q999'},'thumbnail':{'source':BASE+'Free.jpg'}}]}}
+        self.assertEqual(article_details('en','Test','Q999',fake)['wikiThumbnail'],BASE+'Free.jpg')
+
+    def test_crest_regex_does_not_accept_team_jersey(self):
+        self.assertTrue(media.crest_like('Real_Madrid_logo.svg'))
+        self.assertFalse(media.crest_like('Real_Madrid_stadium.jpg'))
+        self.assertFalse(media.crest_like('Real_Madrid_jersey.png'))
+
+    def test_endpoint_status_includes_media_cache_metadata(self):
+        self.assertIn('cached',server.send_data('/api/media-status',{}))
+        self.assertEqual(server.send_data('/api/status',{})['version'],'0.9.27-local')
+
+if __name__=='__main__':unittest.main(verbosity=2)
+
+========== END FILE: 04_ORIGINAL_BACKEND_AND_TESTS_v0927/test_v0917_media_expansion.py ==========
+
+
+========== BEGIN FILE: 04_ORIGINAL_BACKEND_AND_TESTS_v0927/test_v0917_tactic_media.py ==========
+
+"""Playwright: a QID-identified footballer can be placed on tactics pitch with a photo."""
+import base64
+import unittest
+from pathlib import Path
+from playwright.sync_api import sync_playwright
+
+ROOT=Path(__file__).resolve().parent
+PNG=base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jZxoAAAAASUVORK5CYII=')
+
+class TacticMedia17(unittest.TestCase):
+ def test_profile_to_pitch_and_exportable_identity(self):
+  with sync_playwright() as p:
+   browser=p.chromium.launch(headless=True,executable_path='/usr/bin/chromium',args=['--no-sandbox','--disable-dev-shm-usage'])
+   page=browser.new_page(viewport={'width':1280,'height':900})
+   page.route('https://commons.wikimedia.org/**',lambda route:route.fulfill(status=200,body=PNG,content_type='image/png'))
+   page.set_content('<html><head><meta charset="utf-8"></head><body><div id="app"></div></body></html>')
+   page.add_style_tag(content=(ROOT/'styles.css').read_text(encoding='utf-8'))
+   page.evaluate('''() => {
+      const memory={};Object.defineProperty(window,'localStorage',{configurable:true,value:{getItem:k=>memory[k]??null,setItem:(k,v)=>{memory[k]=String(v)},removeItem:k=>{delete memory[k]}}});
+      window.ML_CATALOG=[{id:'Q5705',qid:'Q5705',kind:'players',name:'Example Star',country:'Azerbaijan',image:'https://commons.wikimedia.org/wiki/Special:FilePath/Example_star.jpg?width=280'}];
+      window.ML_FEATURED={};
+      window.fetch=async (input)=>{let url=String(input);let d={items:[]};
+       if(url.startsWith('/api/status'))d={ok:true,backend:true,world:{total:506207,counts:{players:437525,teams:43031,coaches:24120}}};
+       else if(url.startsWith('/api/profile'))d={profile:{id:'Q5705',qid:'Q5705',kind:'players',name:'Example Star',image:'https://commons.wikimedia.org/wiki/Special:FilePath/Example_star.jpg?width=280'}};
+       else if(url.startsWith('/api/search'))d={items:window.ML_CATALOG,worldInstalled:true,nextOffset:null};
+       return {ok:true,status:200,json:async()=>d};
+      };
+    }''')
+   script=(ROOT/'app.js').read_text(encoding='utf8').replace("const BACKEND=()=>['http:','https:'].includes(location.protocol);",'const BACKEND=()=>true;')
+   page.add_script_tag(content=script)
+   page.locator('[data-id="Q5705"]').first.click(timeout=9000)
+   page.locator('[data-action="to-tactic-profile"]').click(timeout=9000)
+   page.locator('#pitch .player-dot').first.wait_for(timeout=9000)
+   self.assertEqual(page.locator('#pitch .player-dot').count(),11)
+   self.assertEqual(page.locator('#pitch .tactic-portrait').count(),1)
+   self.assertIn('Example Star',page.locator('#pitch .player-dot').first.inner_text())
+   saved=page.evaluate("JSON.parse(localStorage.getItem('matchlab_v08_pitchPlayers')||'[]')")
+   self.assertEqual(saved[0]['profileId'],'Q5705')
+   self.assertEqual(saved[0]['name'],'Example Star')
+   self.assertTrue(saved[0]['image'].startswith('https://commons.wikimedia.org/'))
+   browser.close()
+
+if __name__=='__main__':unittest.main(verbosity=2)
+
+========== END FILE: 04_ORIGINAL_BACKEND_AND_TESTS_v0927/test_v0917_tactic_media.py ==========
+
+
+========== BEGIN FILE: 04_ORIGINAL_BACKEND_AND_TESTS_v0927/test_v0918_browser.py ==========
+
+"""Browser-based v0.9.18 regression: Arteta identity, pitch dark rectangle and career."""
+import json
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+import server
+from playwright.sync_api import sync_playwright
+
+ROOT=Path(__file__).resolve().parent
+
+class Browser18(unittest.TestCase):
+ def test_profile_search_and_clean_tactics_pitch_desktop_mobile(self):
+  with patch.object(server,'get_json',side_effect=ConnectionError('offline')):
+   arteta=server.send_data('/api/profile',{'id':['p:mikel-arteta']})['profile']
+  result=server.send_data('/api/search',{'q':['Mikel Arteta'],'kind':['all']})
+  legacy=[x for x in server.CATALOG if x['id'] in ('p:mikel-arteta','c:mikel-arteta')]
+  js=(ROOT/'app.js').read_text(encoding='utf-8').replace("const BACKEND=()=>['http:','https:'].includes(location.protocol);",'const BACKEND=()=>true;')
+  css=(ROOT/'styles.css').read_text(encoding='utf-8')
+  with sync_playwright() as p:
+   browser=p.chromium.launch(headless=True,executable_path='/usr/bin/chromium',args=['--no-sandbox','--disable-dev-shm-usage'])
+   for name,width,height in [('desktop',1440,950),('mobile',390,844)]:
+    page=browser.new_page(viewport={'width':width,'height':height})
+    exceptions=[]
+    page.on('pageerror', lambda error:exceptions.append(str(error)))
+    page.set_content('<!doctype html><html lang="az"><head><meta charset="utf-8"></head><body><div id="app"></div></body></html>')
+    page.add_style_tag(content=css)
+    page.evaluate('''(data)=>{
+      const memory={};
+      Object.defineProperty(window,'localStorage',{configurable:true,value:{getItem:k=>memory[k]??null,setItem:(k,v)=>{memory[k]=String(v)},removeItem:k=>delete memory[k]}});
+      window.ML_CATALOG=data.legacy;
+      window.ML_FEATURED={};
+      window.fetch=async input=>{
+        const url=String(input);let d={items:[]};
+        if(url.startsWith('/api/status'))d={ok:true,backend:true,world:{total:506207,counts:{players:437525,teams:43031,coaches:24120}},version:'0.9.18'};
+        else if(url.startsWith('/api/search'))d=data.search;
+        else if(url.startsWith('/api/profile'))d={profile:data.profile};
+        else if(url.startsWith('/api/photos'))d={items:{}};
+        else if(url.startsWith('/api/world/countries'))d={items:[]};
+        return {ok:true,status:200,json:async()=>d};
+      };
+    }''',{'legacy':legacy,'search':result,'profile':arteta})
+    page.add_script_tag(content=js)
+    page.wait_for_function("document.querySelector('.connection')?.textContent.includes('Server işləyir')",timeout=12000)
+    page.locator(('.mobilebar ' if name=='mobile' else '.sidebar ')+ '[data-page="search"]').first.click()
+    page.locator('#search-input').fill('Mikel Arteta')
+    page.locator('#main-search button').click()
+    page.wait_for_function("document.querySelector('.entity .name')?.textContent.includes('Mikel Arteta')",timeout=12000)
+    self.assertEqual(page.locator('.entity').count(),1)
+    self.assertIn('Futbolçu / məşqçi',page.locator('.entity').first.inner_text())
+    page.locator('.entity').first.click()
+    page.wait_for_function("document.querySelector('.career-scroll')?.textContent.includes('Paris Saint-Germain')",timeout=12000)
+    self.assertIn('Arsenal',page.locator('.career-scroll').inner_text())
+    self.assertIn('Manchester City',page.locator('.timeline').first.inner_text())
+    page.locator('[data-action="to-tactic-profile"]').click()
+    self.assertEqual(page.locator('#pitch .player-dot').count(),11)
+    self.assertEqual(page.locator('#pitch .player-dot[data-player="0"] .pname').inner_text(),'Qapıçı')
+    self.assertEqual(page.locator('#pitch .player-dot[data-player="6"] .pname').inner_text(),'Mikel Arteta Amatriain')
+    self.assertEqual(page.locator('#tactic-role').input_value(),'CM')
+    north=page.locator('#pitch .area.pitch-north')
+    self.assertEqual(north.count(),1)
+    info=north.evaluate('''el=>{const s=getComputedStyle(el);return {background:s.backgroundColor,position:s.position,filter:s.backdropFilter}}''')
+    self.assertEqual(info['background'],'rgba(0, 0, 0, 0)')
+    self.assertEqual(info['position'],'absolute')
+    self.assertEqual(info['filter'],'none')
+    page.screenshot(path=str(ROOT/f'preview_v0918_tactic_{name}.png'),full_page=(name=='desktop'))
+    self.assertEqual(exceptions,[])
+    page.close()
+   browser.close()
+
+if __name__=='__main__':unittest.main(verbosity=2)
+
+========== END FILE: 04_ORIGINAL_BACKEND_AND_TESTS_v0927/test_v0918_browser.py ==========
+
+
+========== BEGIN FILE: 04_ORIGINAL_BACKEND_AND_TESTS_v0927/test_v0918_identity_career.py ==========
+
+"""v0.9.18: conservative QID unification, documented careers, tactics visuals."""
+import json
+import re
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+import identity_unification as people
+import server
+import wikipedia_enrichment as wiki
+
+ROOT=Path(__file__).resolve().parent
+
+class IdentityCareer18(unittest.TestCase):
+    def test_arteta_legacy_aliases_have_verified_qid(self):
+        self.assertEqual(people.qid_of({'id':'p:mikel-arteta','kind':'players'}),'Q185572')
+        self.assertEqual(people.qid_of({'id':'c:mikel-arteta','kind':'coaches'}),'Q185572')
+
+    def test_arteta_search_one_person(self):
+        result=server.send_data('/api/search',{'q':['Mikel Arteta'],'kind':['all']})
+        matching=[x for x in result['items'] if people.qid_of(x)=='Q185572']
+        self.assertEqual(len(matching),1,matching)
+        self.assertEqual(set(matching[0]['roles']),{'players','coaches'})
+        self.assertTrue(matching[0]['id'].startswith('rc'))
+
+    def test_arteta_both_filters_stay_available(self):
+        for role in ('players','coaches'):
+            result=server.send_data('/api/search',{'q':['Mikel Arteta'],'kind':[role]})
+            matching=[x for x in result['items'] if people.qid_of(x)=='Q185572']
+            self.assertEqual(len(matching),1,(role,matching))
+
+    def test_same_name_different_qids_never_merge(self):
+        rows=[{'id':'rpfoo111111','name':'A. Example','kind':'players','qid':'Q123'},
+              {'id':'rcbar111111','name':'A. Example','kind':'coaches','qid':'Q456'}]
+        self.assertEqual(len(people.unify(rows)),2)
+
+    def test_same_qid_across_player_and_coach_merges(self):
+        rows=[{'id':'rpabc123456','name':'Ex','kind':'players','qid':'Q123'},
+              {'id':'rcdef123456','name':'Ex','kind':'coaches','qid':'Q123'}]
+        result=people.unify(rows)
+        self.assertEqual(len(result),1)
+        self.assertEqual(set(result[0]['roles']),{'players','coaches'})
+
+    def test_names_without_qids_never_merge(self):
+        rows=[{'id':'rpabc123456','name':'A Same','kind':'players','qid':''},
+              {'id':'rcdef123456','name':'A Same','kind':'coaches','qid':''}]
+        self.assertEqual(len(people.unify(rows)),2)
+
+    def test_arteta_legacy_profile_resolves_to_one_registry_person(self):
+        for identifier in ('p:mikel-arteta','c:mikel-arteta','rc47c64951da111e'):
+            with patch.object(server,'get_json',side_effect=ConnectionError('offline')):
+                p=server.send_data('/api/profile',{'id':[identifier]})['profile']
+            self.assertEqual(p['wikidataId'],'Q185572')
+            self.assertEqual(p['id'],'rc47c64951da111e')
+            self.assertIn('coaches',p['roles'])
+            self.assertIn('players',p['roles'])
+            self.assertEqual(p['otherRoles'],[])
+            self.assertGreaterEqual(len(p['clubs']),6)
+            self.assertGreaterEqual(len(p['coached']),2)
+            self.assertTrue(p.get('careerUrl','').startswith('https://en.wikipedia.org/'))
+
+    def test_wikipedia_11_language_fallback(self):
+        self.assertEqual(wiki.wiki_title({'sitelinks':{'plwiki':{'title':'Pilkarz Test'}}}),('pl','Pilkarz Test'))
+        self.assertIn('es',wiki.verified_language_links({'sitelinks':{'eswiki':{'title':'Jugador'}}}))
+
+    def test_wikipedia_assists_only_when_explicit(self):
+        markup='{{Infobox football biography|years1=2010–2012|clubs1=Sample FC|caps1=35|goals1=7|assists1=4|years2=2012–2014|clubs2=Other FC|caps2=55|goals2=8}}'
+        p=wiki.parse_football_infobox(markup)
+        self.assertEqual(p['clubs'][0]['assists'],4)
+        self.assertIsNone(p['clubs'][1]['assists'])
+
+    def test_tactics_field_not_styled_as_top_navigation(self):
+        src=(ROOT/'app.js').read_text()
+        css=(ROOT/'styles.css').read_text()
+        self.assertIn('class="area pitch-north"',src)
+        self.assertIn('class="goal pitch-north"',src)
+        self.assertNotIn('class="area top"',src)
+        self.assertIn('.pitch .area.pitch-north',css)
+        self.assertIn('background:transparent',css)
+
+    def test_tactics_photo_from_coach_who_used_to_play(self):
+        src=(ROOT/'app.js').read_text()
+        self.assertIn("source.kind!=='players'&&!(source.roles||[]).includes('players')",src)
+
+    def test_assist_absent_marked_unknown_in_ui(self):
+        src=(ROOT/'app.js').read_text()
+        self.assertIn("assists??'Məlumat yoxdur'",src)
+
+if __name__=='__main__':unittest.main()
+
+========== END FILE: 04_ORIGINAL_BACKEND_AND_TESTS_v0927/test_v0918_identity_career.py ==========
+
+
+========== BEGIN FILE: 04_ORIGINAL_BACKEND_AND_TESTS_v0927/test_v0919_club_profile.py ==========
+
+import unittest
+from pathlib import Path
+import wikipedia_enrichment as wiki
+
+ROOT=Path(__file__).resolve().parent
+
+class ClubProfile19(unittest.TestCase):
+    def test_club_infobox_parses_multiple_nicknames(self):
+        markup='{{Infobox football club|fullname=Real Example Club|founded=1902|ground=Bernabéu|capacity=83,186|nickname={{hlist|Los Blancos|Los Merengues|Madridistas}}|league=La Liga|manager=Carlo Example}}'
+        data=wiki.parse_club_infobox(markup)
+        self.assertEqual(data['fullName'],'Real Example Club')
+        self.assertEqual(data['foundedYear'],1902)
+        self.assertEqual(data['stadium'],'Bernabéu')
+        self.assertEqual(data['stadiumCapacity'],83186)
+        self.assertEqual(data['nicknames'][:3],['Los Blancos','Los Merengues','Madridistas'])
+
+    def test_with_wikipedia_applies_club_identity_fields(self):
+        profile={'id':'rtdemo','name':'Demo FC','kind':'teams','source':'Reep CC0'}
+        info={'country':'Spain','league':'La Liga','fullName':'Demo Fútbol Club','shortName':'Demo','manager':'Coach','chairman':'Chair','owner':'Owners','website':'https://example.com','colors':'White','nickname':'Los Demo','nicknames':['Los Demo','The Demos'],'wikiMatch':True,'wikiKind':'teams'}
+        out=wiki.with_wikipedia(profile,info)
+        self.assertEqual(out['country'],'Spain')
+        self.assertEqual(out['fullName'],'Demo Fútbol Club')
+        self.assertEqual(out['nicknames'][0],'Los Demo')
+        self.assertTrue(out['source'].endswith('+ Wikipedia'))
+
+    def test_profile_ui_contains_new_club_fields(self):
+        src=(ROOT/'app.js').read_text(encoding='utf-8')
+        self.assertIn('Sədr / prezident',src)
+        self.assertIn('Klub rəngləri',src)
+        self.assertIn('Tarixdə bu klubla əlaqəli məşqçilər',src)
+        self.assertIn('badgeList(p.nicknames||p.nickname)',src)
+
+    def test_compare_ui_mentions_assists(self):
+        src=(ROOT/'app.js').read_text(encoding='utf-8')
+        self.assertIn("['Asist',sumCareer(a,'assists'),sumCareer(b,'assists')]",src)
+
+if __name__=='__main__':
+    unittest.main()
+
+========== END FILE: 04_ORIGINAL_BACKEND_AND_TESTS_v0927/test_v0919_club_profile.py ==========
+
+
+========== BEGIN FILE: 04_ORIGINAL_BACKEND_AND_TESTS_v0927/test_v0920_club_browser.py ==========
+
+"""Desktop/mobile browser regression with deterministic club data (not live Wikipedia)."""
+import unittest
+from pathlib import Path
+from playwright.sync_api import sync_playwright
+ROOT=Path(__file__).resolve().parent
+
+class ClubBrowser20(unittest.TestCase):
+ def test_four_features_desktop_mobile_and_settings(self):
+  js=(ROOT/'app.js').read_text(encoding='utf8').replace("const BACKEND=()=>['http:','https:'].includes(location.protocol);",'const BACKEND=()=>true;')
+  css=(ROOT/'styles.css').read_text(encoding='utf8')
+  with sync_playwright() as playwright:
+   b=playwright.chromium.launch(headless=True,executable_path='/usr/bin/chromium',args=['--no-sandbox','--disable-dev-shm-usage'])
+   for label,width,height in [('desktop',1440,950),('mobile',390,844)]:
+    page=b.new_page(viewport={'width':width,'height':height});errors=[]
+    page.on('pageerror',lambda e:errors.append(str(e)))
+    page.set_content('<html lang="az"><head><meta charset="utf-8"></head><body><div id="app"></div></body></html>')
+    page.add_style_tag(content=css)
+    page.evaluate('''()=>{
+      const saved={};Object.defineProperty(window,'localStorage',{configurable:true,value:{getItem:k=>saved[k]??null,setItem:(k,v)=>{saved[k]=String(v)},removeItem:k=>delete saved[k]}});
+      window.ML_CATALOG=[{id:'Q8682',name:'Example Club',kind:'teams',country:'Spain',image:''},{id:'Q5705',name:'Example Star',kind:'players',country:'Spain',clubs:['Example Club']}];window.ML_FEATURED={};
+      const club={id:'Q8682',qid:'Q8682',name:'Example Club',kind:'teams',country:'Spain',foundedYear:1902,city:'Madrid',stadium:'Example Stadium',stadiumCapacity:83186,league:'La Liga',colors:'White',honours:[{name:'La Liga',count:36,category:'Domestic'},{name:'UEFA Champions League',count:15,category:'International'}],squadSnapshot:[{name:'Example Keeper',number:'1',position:'GK'},{name:'Example Forward',number:'9',position:'FW'}],squadChecked:'2026-11-01',wikiUrl:'https://en.wikipedia.org/wiki/Example_Club',historicalConnections:{players:[{id:'Q5705',name:'Example Star',kind:'players',career:[{name:'Example Club',from:2001,to:2008}]}],coaches:[{id:'Q185572',name:'Example Coach',kind:'coaches'}]},stadiumPhoto:'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a9/example.jpg',stadiumPhotoPage:'https://commons.wikimedia.org/wiki/File:Example.jpg',stadiumPhotoLicense:'CC BY-SA 4.0',stadiumPhotoLicenseUrl:'https://creativecommons.org/licenses/by-sa/4.0/',colorHexes:['#FFFFFF','#0000FF'],source:'Test fixture'};
+      window.fetch=async input=>{const url=String(input);let data={items:[]};
+       if(url.startsWith('/api/status'))data={ok:true,backend:true,world:{total:506207,counts:{players:437525,teams:43031,coaches:24120}},version:'0.9.20'};
+       else if(url.startsWith('/api/profile?id=Q8682'))data={profile:club};
+       else if(url.startsWith('/api/profile?id=Q5705'))data={profile:{id:'Q5705',name:'Example Star',kind:'players',clubs:[{name:'Example Club',from:2001,to:2008}],source:'Test fixture'}};
+       else if(url.startsWith('/api/world/countries'))data={items:[]};
+       else if(url.startsWith('/api/photos'))data={items:{}};
+       return {ok:true,status:200,json:async()=>data};
+      };
+    }''')
+    page.add_script_tag(content=js)
+    page.wait_for_function("document.querySelector('.connection')?.textContent.includes('Server işləyir')",timeout=15000)
+    page.locator('[data-id="Q8682"]').first.click()
+    page.wait_for_selector('#club-honours .honour-item',timeout=10000)
+    self.assertIn('36 dəfə',page.locator('#club-honours').inner_text())
+    self.assertIn('15 dəfə',page.locator('#club-honours').inner_text())
+    self.assertEqual(page.locator('#club-squad .club-squad-row').count(),2)
+    self.assertIn('rəsmi cari heyət deyil',page.locator('#club-squad').inner_text().lower())
+    self.assertEqual(page.locator('#club-stadium .club-stadium-image img').count(),1)
+    self.assertEqual(page.locator('#club-stadium .club-swatch').count(),2)
+    self.assertEqual(page.locator('#club-history [data-id="Q5705"]').count(),1)
+    page.screenshot(path=str(ROOT/f'preview_v0920_club_{label}.png'),full_page=True)
+    page.locator(('.mobilebar ' if label=='mobile' else '.sidebar ')+'[data-page="settings"]').first.click()
+    opt=page.locator('[data-club-pref="showClubHonours"]')
+    self.assertTrue(opt.is_checked())
+    opt.uncheck()
+    page.locator(('.mobilebar ' if label=='mobile' else '.sidebar ')+'[data-page="home"]').first.click()
+    page.locator('[data-id="Q8682"]').first.click()
+    page.wait_for_selector('#club-stadium')
+    self.assertEqual(page.locator('#club-honours').count(),0)
+    self.assertEqual(errors,[])
+    page.close()
+   b.close()
+
+if __name__=='__main__':unittest.main(verbosity=2)
+
+========== END FILE: 04_ORIGINAL_BACKEND_AND_TESTS_v0927/test_v0920_club_browser.py ==========
+
+
+========== BEGIN FILE: 04_ORIGINAL_BACKEND_AND_TESTS_v0927/test_v0920_club_history.py ==========
+
+"""v0.9.20 offline fixture tests: no invented honours, rosters, images or links."""
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+import club_history as club
+import wikipedia_enrichment as wiki
+import server
+
+ROOT=Path(__file__).resolve().parent
+WIKI='''{{Infobox football club|fullname=Example Athletic Club|nickname=The Stars|founded=1902|ground=Example Stadium|league=Example League}}
+== Honours ==
+=== Domestic ===
+* [[Example League]]: Winners (12): 2001, 2002.
+* [[Example Cup]] (4): 2010, 2011.
+* Runners-up (8): 2012.
+=== International ===
+* [[Continental Cup]]: Champions (3).
+== Players ==
+=== Current squad ===
+{{Fs player|no=1|pos=GK|name=[[Jane Keeper]]}}
+{{Fs player|no=9|pos=FW|name=[[Alex Striker]]}}
+{{Fs player|no=9|pos=FW|name=[[Alex Striker]]}}
+=== Out on loan ===
+{{Fs player|no=99|pos=FW|name=[[Loan Person]]}}
+== Personnel ==
+'''
+
+class ClubHistory20(unittest.TestCase):
+    def test_honours_exact_counts_only(self):
+        h=club.parse_honours(WIKI)
+        self.assertEqual([(x['name'],x['count']) for x in h],[('Example League',12),('Example Cup',4),('Continental Cup',3)])
+        self.assertFalse(any('Runners-up' in x['name'] for x in h))
+
+    def test_real_madrid_style_tabular_honours(self):
+        table="""== Honours ==
+{| class="wikitable sortable"
+! Type !! Competition !! Titles !! Seasons
+|-
+| rowspan="2" | Domestic
+| [[La Liga]]
+| 36
+| 1931–32, 2023–24
+|-
+| [[Copa del Rey]]
+| 20
+| 1905, 2022–23
+|-
+| Continental
+| [[European Cup]] / [[UEFA Champions League]]
+| 15
+| 1955–56
+|}
+== Players ==
+"""
+        honours=club.parse_honours(table)
+        self.assertEqual(len(honours),3)
+        self.assertEqual([x['count'] for x in honours],[36,20,15])
+        self.assertEqual(honours[0]['category'],'Domestic')
+        self.assertEqual(honours[2]['category'],'Continental')
+
+    def test_honours_unknown_is_not_zero(self):
+        h=club.parse_honours('== Honours ==\n* [[Unspecified Trophy]]\n== Players ==')
+        self.assertEqual(len(h),1)
+        self.assertIsNone(h[0]['count'])
+        self.assertEqual(club.parse_honours('== History ==\n* Fictional trophy\n'),[])
+
+    def test_squad_only_from_verified_section_and_not_loans(self):
+        squad=club.parse_squad(WIKI)
+        self.assertEqual([x['name'] for x in squad],['Jane Keeper','Alex Striker'])
+        self.assertEqual(squad[0]['number'],'1')
+        self.assertEqual(club.parse_squad('== History ==\n{{Fs player|no=4|name=Name}}'),[])
+
+    def test_stadium_image_requires_p115_license(self):
+        stadium={'claims':{'P115':[{'mainsnak':{'datavalue':{'value':{'id':'Q500'}}}}]}}
+        def get_json(url,ttl):
+            if 'www.wikidata.org' in url:
+                entity={'labels':{'en':{'value':'The Stadium'}},'claims':{'P18':[{'mainsnak':{'datavalue':{'value':'Example Stadium.jpg'}}}]}}
+                return {'entities':{'Q500':entity}}
+            return {'query':{'pages':[{'imageinfo':[{'thumburl':'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a9/x.jpg','descriptionurl':'https://commons.wikimedia.org/wiki/File:Example_Stadium.jpg','extmetadata':{'LicenseShortName':{'value':'CC BY-SA 4.0'},'LicenseUrl':{'value':'https://creativecommons.org/licenses/by-sa/4.0/'}}}]}]}}
+        value=club.stadium_media(stadium,get_json)
+        self.assertTrue(value['stadiumPhoto'].startswith('https://upload.wikimedia.org/'))
+        self.assertEqual(value['stadiumQid'],'Q500')
+        self.assertEqual(value['stadiumPhotoLicense'],'CC BY-SA 4.0')
+
+    def test_stadium_nonfree_is_rejected(self):
+        stadium={'claims':{'P115':[{'mainsnak':{'datavalue':{'value':{'id':'Q500'}}}}]}}
+        def bad(url,ttl):
+            if 'www.wikidata.org' in url:
+                entity={'claims':{'P18':[{'mainsnak':{'datavalue':{'value':'Example.jpg'}}}]}}
+                return {'entities':{'Q500':entity}}
+            return {'query':{'pages':[{'imageinfo':[{'thumburl':'https://upload.wikimedia.org/x.jpg','extmetadata':{'NonFree':{'value':'true'},'LicenseShortName':{'value':'CC BY 4.0'},'LicenseUrl':{'value':'https://creativecommons.org/licenses/by/4.0/'}}}]}]}}
+        self.assertEqual(club.stadium_media(stadium,bad),{})
+
+    def test_stadium_no_unverified_qid_photo(self):
+        self.assertEqual(club.stadium_media({'claims':{}},lambda *_:None),{})
+
+    def test_historical_links_only_curated_and_distinct_kinds(self):
+        seed={
+          'Q100':{'name':'Former Player','clubs':[{'id':'Q500','name':'Example Athletic Club','from':1990,'to':1999}]},
+          'Q200':{'name':'Former Coach','coached':[{'name':'Example Athletic Club','from':2000,'to':2002}]},
+          'Q300':{'name':'Other Person','clubs':[{'name':'Other Club','from':2001}]},
+          'foo':{'name':'Unverified Person','clubs':[{'name':'Example Athletic Club'}]},
+        }
+        rel=club.historical_links('Example Athletic Club',seed,'Q500')
+        self.assertEqual([x['id'] for x in rel['players']],['Q100'])
+        self.assertEqual([x['id'] for x in rel['coaches']],['Q200'])
+
+    def test_remote_verified_page_extracts_honours_roster(self):
+        qid='Q8682'
+        def get_json(url,ttl):
+            if 'wbgetentities' in url and 'ids=Q8682' in url:
+                return {'entities':{qid:{'sitelinks':{'enwiki':{'title':'Example Athletic Club'}},'claims':{'P571':[{'mainsnak':{'datavalue':{'value':{'time':'+1902-01-01T00:00:00Z'}}}}]}}}}
+            if 'pageprops' in url:return {'query':{'pages':[{'ns':0,'pageprops':{'wikibase_item':qid},'extract':'Example is a club.'}]}}
+            if 'rest.php' in url:return {'source':WIKI}
+            return {'entities':{},'query':{'pages':[]}}
+        info=wiki.remote_enrich(qid,get_json,'teams')
+        self.assertEqual(info['honours'][0]['count'],12)
+        self.assertEqual(len(info['squadSnapshot']),2)
+        self.assertTrue(info['wikiMatch'])
+        self.assertEqual(info['clubDataVersion'],2)
+
+    def test_unverified_page_never_supplies_roster(self):
+        def get_json(url,ttl):
+            if 'wbgetentities' in url:return {'entities':{'Q8682':{'sitelinks':{'enwiki':{'title':'Example Club'}},'claims':{}}}}
+            if 'pageprops' in url:return {'query':{'pages':[{'ns':0,'pageprops':{'wikibase_item':'Q999'},'extract':'Wrong club.'}]}}
+            raise AssertionError('Wikitext must not be read without QID match')
+        info=wiki.remote_enrich('Q8682',get_json,'teams')
+        self.assertNotIn('squadSnapshot',info)
+        self.assertNotIn('honours',info)
+        self.assertFalse(info['wikiMatch'])
+
+    def test_wiki_merging_new_fields(self):
+        profile=wiki.with_wikipedia({'id':'Q8682','kind':'teams'}, {'honours':[{'name':'Cup','count':3}],'squadSnapshot':[{'name':'Keeper'}],'stadiumPhoto':'https://upload.wikimedia.org/x.jpg','colorHexes':['#FFFFFF'],'clubDataVersion':2,'wikiMatch':True})
+        self.assertEqual(profile['honours'][0]['count'],3)
+        self.assertEqual(profile['squadSnapshot'][0]['name'],'Keeper')
+
+    def test_frontend_has_four_sections_and_prefs(self):
+        js=(ROOT/'app.js').read_text(encoding='utf-8')
+        for name in ('clubHonoursBlock','clubStadiumBlock','clubSquadBlock','clubHistoryBlock','data-club-pref','showClubHonours','showClubStadium','showClubHistory'):
+            self.assertIn(name,js)
+        self.assertIn('squadChecked',js)
+        self.assertIn('stadiumPhotoLicense',js)
+
+    def test_old_arteta_identity_unchanged(self):
+        with patch.object(server,'get_json',side_effect=ConnectionError('offline')):
+            p=server.send_data('/api/profile',{'id':['p:mikel-arteta']})['profile']
+        self.assertEqual(p['wikidataId'],'Q185572')
+        self.assertGreaterEqual(len(p.get('coached',[])),2)
+
+if __name__=='__main__':unittest.main()
+
+========== END FILE: 04_ORIGINAL_BACKEND_AND_TESTS_v0927/test_v0920_club_history.py ==========
+
+
+========== BEGIN FILE: 04_ORIGINAL_BACKEND_AND_TESTS_v0927/test_v0921_assists.py ==========
+
+"""v0.9.21: trusted identity matching, bounded free statistics and UI regression."""
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+import season_stats as ss
+import server
+
+ROOT=Path(__file__).resolve().parent
+
+class SeasonStatsTests(unittest.TestCase):
+    def setUp(self):
+        self.person={'id':'rpabcdef123456','kind':'players','name':'Lionel Messi','birth':'1987-06-24'}
+        self.player={'idPlayer':'34146304','strPlayer':'Lionel Andrés Messi','strSport':'Soccer','dateBorn':'1987-06-24'}
+
+    def test_verified_name_and_birth_only(self):
+        self.assertEqual(ss.verified_provider_id(self.person,[self.player])[0],'34146304')
+        self.assertIsNone(ss.verified_provider_id(self.person,[{**self.player,'dateBorn':'1986-06-24'}])[0])
+        self.assertIsNone(ss.verified_provider_id(self.person,[{**self.player,'strPlayer':'Other Person'}])[0])
+        self.assertIsNone(ss.verified_provider_id(self.person,[{**self.player,'strSport':'Basketball'}])[0])
+
+    def test_ambiguous_matches_rejected(self):
+        self.assertIsNone(ss.verified_provider_id(self.person,[self.player,{**self.player,'idPlayer':'56'}])[0])
+
+    def test_partial_dates_rejected(self):
+        self.assertEqual(ss.iso_birth('1987'),'')
+        self.assertEqual(ss.iso_birth('1987-06'),'')
+        self.assertEqual(ss.iso_birth('1987-06-24'),'1987-06-24')
+        self.assertEqual(ss.iso_birth('1987-02-30'),'')
+
+    def test_lookups_on_demand_with_public_api(self):
+        calls=[]
+        def getter(url,ttl):
+            calls.append(url)
+            if 'searchplayers.php' in url:return {'player':[self.player]}
+            return {'playerstats':[
+                {'idPlayer':'34146304','strSport':'Soccer','strSeason':'2025-2026','strTeam':'Inter Miami','strLeague':'MLS','strStatistic':'Assists','strValue':'7'},
+                {'idPlayer':'34146304','strSport':'Soccer','strSeason':'2025-2026','strTeam':'Inter Miami','strLeague':'MLS','strStatistic':'Goals','strValue':'15'},
+                {'idPlayer':'34146304','strSport':'Soccer','strSeason':'2025-2026','strTeam':'Inter Miami','strLeague':'MLS','strStatistic':'Games Played','strValue':'19'}]}
+        result=ss.lookup(self.person,getter)
+        self.assertTrue(result['available']);self.assertTrue(result['identityVerified'])
+        self.assertEqual(result['items'][0]['assists'],7)
+        self.assertEqual(result['items'][0]['goals'],15)
+        self.assertEqual(result['items'][0]['appearances'],19)
+        self.assertEqual(len(calls),2)
+        self.assertTrue(all(x.startswith(ss.ROOT) for x in calls))
+
+    def test_zero_only_when_source_says_zero(self):
+        val=ss.parse_player_stats({'playerstats':[{'idPlayer':'1','strSport':'Soccer','strSeason':'2024','strStatistic':'Assists','strValue':'0'}]},'1')
+        self.assertEqual(val['items'][0]['assists'],0)
+        val=ss.parse_player_stats({'playerstats':[{'idPlayer':'1','strSport':'Soccer','strSeason':'2024','strStatistic':'Goals','strValue':'2'}]},'1')
+        self.assertIsNone(val['items'][0]['assists'])
+
+    def test_free_cap_is_not_full_career(self):
+        rows=[{'idPlayer':'1','strSport':'Soccer','strSeason':'2024','strStatistic':'Goals','strValue':str(i),'strTeam':f'Team {i}'} for i in range(10)]
+        res=ss.parse_player_stats({'playerstats':rows},'1')
+        self.assertTrue(res['partial']);self.assertEqual(res['recordsSeen'],10)
+
+    def test_unknown_stat_not_mislabeled(self):
+        rows=[{'idPlayer':'1','strSport':'Soccer','strSeason':'2024','strStatistic':'Goalkeeper Goals Conceded','strValue':'9'}]
+        self.assertFalse(ss.parse_player_stats({'playerstats':rows},'1')['available'])
+
+    def test_unverified_person_never_calls_external_source(self):
+        with patch.object(ss,'lookup',wraps=ss.lookup) as noop:
+            def never(*args):raise AssertionError('external API must not be called')
+            result=ss.lookup({**self.person,'birth':'1987'},never)
+            self.assertFalse(result['available'])
+            self.assertFalse(noop.call_count==0) # test wrapper was invoked
+
+    def test_server_endpoint_uses_verified_profile(self):
+        with patch.object(server,'get_json',side_effect=lambda url,ttl=0: {'player':[self.player]} if 'searchplayers.php' in url else {'playerstats':[{'idPlayer':'34146304','strSport':'Soccer','strSeason':'2026','strStatistic':'Assists','strValue':'4'}]}),patch.object(server,'send_data',wraps=server.send_data) as routed:
+            # keep profile source deterministic, no external Wikidata/Wikipedia required
+            def fake_profile(path,params):
+                if path=='/api/profile':return {'profile':self.person}
+                return real(path,params)
+            real=server.send_data
+            with patch.object(server,'send_data',side_effect=fake_profile):
+                res=server.send_data('/api/season-stats',{'id':['Q5705']})
+                self.assertTrue(res['available']);self.assertEqual(res['items'][0]['assists'],4)
+
+    def test_frontend_shows_source_and_full_database_search(self):
+        src=(ROOT/'app.js').read_text(encoding='utf-8')
+        self.assertIn('/api/season-stats?id=',src)
+        self.assertIn('/api/search?kind=players&q=',src)
+        self.assertIn('Mövsüm statistikaları və assistlər',src)
+        self.assertIn("sumCareer(a,'assists')",src)
+        self.assertIn('data-compare-pick=',src)
+        self.assertNotIn('Ətraflı mövsüm statistikası üçün etibarlı lisenziyalı futbol məlumatı tələb olunur.',src)
+
+if __name__=='__main__':unittest.main()
+
+========== END FILE: 04_ORIGINAL_BACKEND_AND_TESTS_v0927/test_v0921_assists.py ==========
+
+
+========== BEGIN FILE: 04_ORIGINAL_BACKEND_AND_TESTS_v0927/test_v0921_browser.py ==========
+
+"""v0.9.21 deterministic desktop/mobile tests (fake football API, real browser)."""
+import unittest
+from pathlib import Path
+from playwright.sync_api import sync_playwright
+
+ROOT=Path(__file__).resolve().parent
+
+class SeasonCompareBrowser21(unittest.TestCase):
+    def test_compare_search_real_routes_and_season_assists(self):
+        js=(ROOT/'app.js').read_text(encoding='utf8').replace("const BACKEND=()=>['http:','https:'].includes(location.protocol);",'const BACKEND=()=>true;')
+        css=(ROOT/'styles.css').read_text(encoding='utf8')
+        with sync_playwright() as pw:
+            b=pw.chromium.launch(headless=True,executable_path='/usr/bin/chromium',args=['--no-sandbox','--disable-dev-shm-usage'])
+            for device,w,h in [('desktop',1400,900),('mobile',390,844)]:
+                page=b.new_page(viewport={'width':w,'height':h})
+                errors=[]
+                page.on('pageerror',lambda e:errors.append(str(e)))
+                page.set_content('<html lang="az"><head><meta charset="utf-8"></head><body><div id="app"></div></body></html>')
+                page.add_style_tag(content=css)
+                page.evaluate('''()=>{
+                  const saved={};Object.defineProperty(window,'localStorage',{configurable:true,value:{getItem:k=>saved[k]??null,setItem:(k,v)=>{saved[k]=String(v)},removeItem:k=>delete saved[k]}});
+                  window.ML_CATALOG=[
+                   {id:'Q5705',name:'Lionel Messi',kind:'players',country:'Argentina',birth:'1987-06-24'},
+                   {id:'Q11571',name:'Cristiano Ronaldo',kind:'players',country:'Portugal',birth:'1985-02-05'}];
+                  window.ML_FEATURED={};
+                  window.fetch=async input=>{
+                   let url=String(input);let data={items:[]};
+                   if(url.startsWith('/api/status'))data={ok:true,backend:true,world:{total:506207,counts:{players:437525,teams:43031,coaches:24120}},version:'0.9.21'};
+                   else if(url.startsWith('/api/search?kind=players&q=Kevin'))data={items:[{id:'rp1234567890',name:'Kevin De Bruyne',kind:'players',birth:'1991-06-28',country:'Belgium'}]};
+                   else if(url.startsWith('/api/profile?id=')){
+                     const id=new URL('https://example.com'+url).searchParams.get('id');
+                     const base=id==='rp1234567890'?{id,name:'Kevin De Bruyne',country:'Belgium',birth:'1991-06-28'}:id==='Q5705'?{id,name:'Lionel Messi',country:'Argentina',birth:'1987-06-24'}:{id,name:'Cristiano Ronaldo',country:'Portugal',birth:'1985-02-05'};
+                     data={profile:{...base,kind:'players',clubs:[{name:'Example FC',apps:100,goals:30,assists:null}]}};
+                   }
+                   else if(url.startsWith('/api/season-stats?id=')){
+                     const id=new URL('https://example.com'+url).searchParams.get('id');
+                     const as=id==='rp1234567890'?20:id==='Q5705'?8:7;
+                     data={available:true,partial:true,identityVerified:true,source:'TheSportsDB V1 Free (məhdud)',sourceUrl:'https://www.thesportsdb.com/api/v1/json/123/lookupplayerstats.php?id=1',notice:'Pulsuz mənbə natamamdır.',items:[{season:'2025-2026',competition:'La Liga',team:'Demo',appearances:31,goals:11,assists:as,minutes:2400}]};
+                   }
+                   else if(url.startsWith('/api/world/countries'))data={items:[]};
+                   return {ok:true,status:200,json:async()=>data};
+                  };
+                }''')
+                page.add_script_tag(content=js)
+                page.wait_for_function("document.querySelector('.connection')?.textContent.includes('Server işləyir')",timeout=10000)
+                # Open compare using navigation for both desktop and mobile.
+                if device=='desktop':page.locator('.sidebar [data-page="compare"]').click()
+                else:page.locator('.mobilebar [data-page="compare"]').click()
+                page.wait_for_selector('[data-compare-form="A"]',timeout=10000)
+                page.wait_for_function("document.querySelectorAll('.career-table').length >= 2",timeout=12000)
+                self.assertIn('Asist',page.locator('.page').inner_text())
+                self.assertIn('8',page.locator('.page').inner_text())
+                page.locator('[data-compare-form="A"] input').fill('Kevin')
+                page.locator('[data-compare-form="A"] button[type=submit]').click()
+                page.wait_for_selector('[data-compare-pick="A|rp1234567890"]')
+                page.locator('[data-compare-pick="A|rp1234567890"]').click()
+                page.wait_for_function("document.querySelector('.comparebox')?.textContent.includes('Kevin De Bruyne')",timeout=10000)
+                page.wait_for_function("document.querySelector('.page')?.textContent.includes('20')",timeout=12000)
+                self.assertIn('Mənbəli statistikalar',page.locator('.page').inner_text())
+                self.assertEqual(errors,[],errors)
+                page.close()
+            b.close()
+
+if __name__=='__main__':unittest.main()
+
+========== END FILE: 04_ORIGINAL_BACKEND_AND_TESTS_v0927/test_v0921_browser.py ==========
+
+
+========== BEGIN FILE: 04_ORIGINAL_BACKEND_AND_TESTS_v0927/test_v0922_browser.py ==========
+
+"""Desktop/mobile smoke test for the originally empty Guardiola profile."""
+import json, unittest
+from pathlib import Path
+from unittest.mock import patch
+from playwright.sync_api import sync_playwright
+import server
+
+ROOT=Path(__file__).resolve().parent
+
+class GuardiolaPage22(unittest.TestCase):
+    def test_pep_renders_wikipedia_biography_and_player_manager_career(self):
+        with patch.object(server,'get_json',side_effect=ConnectionError('offline')):
+            profile=server.send_data('/api/profile',{'id':['c:pep-guardiola']})['profile']
+        js=(ROOT/'app.js').read_text(encoding='utf8').replace("const BACKEND=()=>['http:','https:'].includes(location.protocol);",'const BACKEND=()=>true;')
+        css=(ROOT/'styles.css').read_text(encoding='utf8')
+        # Preserve actual local catalogue legacy IDs to exercise the user path.
+        catalog=[r for r in server.CATALOG if r['id'] in ('c:pep-guardiola','p:pep-guardiola')]
+        with sync_playwright() as pw:
+            browser=pw.chromium.launch(headless=True,executable_path='/usr/bin/chromium',args=['--no-sandbox','--disable-dev-shm-usage'])
+            for device,width,height in [('desktop',1400,950),('mobile',390,844)]:
+                page=browser.new_page(viewport={'width':width,'height':height})
+                errs=[]
+                page.on('pageerror',lambda error:errs.append(str(error)))
+                page.set_content('<html lang="az"><head><meta charset="utf-8"></head><body><div id="app"></div></body></html>')
+                page.add_style_tag(content=css)
+                page.evaluate('''({catalog,profile})=>{
+                  const local={};Object.defineProperty(window,'localStorage',{configurable:true,value:{getItem:k=>local[k]??null,setItem:(k,v)=>{local[k]=String(v)},removeItem:k=>delete local[k]}});
+                  window.ML_CATALOG=catalog;window.ML_FEATURED={};
+                  window.fetch=async input=>{
+                    const url=String(input);
+                    let data={items:[]};
+                    if(url.startsWith('/api/status'))data={ok:true,backend:true,world:{total:506207,counts:{players:437525,teams:43031,coaches:24120}},version:'0.9.22'};
+                    else if(url.startsWith('/api/profile?'))data={profile};
+                    else if(url.startsWith('/api/world/countries'))data={items:[]};
+                    else if(url.startsWith('/api/search?'))data={items:[profile]};
+                    else if(url.startsWith('/api/media-status'))data={};
+                    else if(url.startsWith('/api/sources'))data={};
+                    return {ok:true,status:200,json:async()=>data};
+                  };
+                }''',{'catalog':catalog,'profile':profile})
+                page.add_script_tag(content=js)
+                page.wait_for_function("document.querySelector('.connection')?.textContent.includes('Server işləyir')",timeout=10000)
+                # Profile is a featured home entry; use click path, not direct string rendering.
+                page.locator('[data-id="c:pep-guardiola"]').first.click(timeout=12000)
+                page.wait_for_function("document.querySelector('.page')?.textContent.includes('Josep Guardiola Sala')",timeout=12000)
+                body=page.locator('.page').inner_text()
+                for label in ('1971-01-18','Barcelona B','Bayern Munich','Brescia','Dorados','Milli komanda karyerası','Məşqçilik karyerası','Santpedor','Müdafiəyönlü yarımmüdafiəçi'):
+                    self.assertIn(label,body,(device,label))
+                self.assertNotIn('Wikipedia-da bu profil üzrə təsdiqlənmiş klub statistikası yoxdur.',body)
+                self.assertEqual(errs,[],(device,errs))
+                page.screenshot(path=str(ROOT/f'preview_v0922_pep_{device}.png'),full_page=True)
+                page.close()
+            browser.close()
+
+if __name__=='__main__': unittest.main()
+
+========== END FILE: 04_ORIGINAL_BACKEND_AND_TESTS_v0927/test_v0922_browser.py ==========
+
+
+========== BEGIN FILE: 04_ORIGINAL_BACKEND_AND_TESTS_v0927/test_v0922_profiles.py ==========
+
+"""Regression coverage for verified legacy profile routing and Wikipedia snapshots."""
+import unittest
+from unittest.mock import patch
+from pathlib import Path
+import identity_unification as identities
+import wikipedia_enrichment as wiki
+import world_db
+import server
+
+ROOT=Path(__file__).resolve().parent
+
+class Profile22(unittest.TestCase):
+    def test_pep_both_aliases_one_qid(self):
+        for old_id in ('p:pep-guardiola','c:pep-guardiola'):
+            self.assertEqual(identities.qid_of({'id':old_id}), 'Q164038')
+
+    def test_pep_all_profile_links_resolve_with_no_network(self):
+        for old_id in ('p:pep-guardiola','c:pep-guardiola','rc957d61d7a00baf','Q164038'):
+            with self.subTest(old_id=old_id):
+                with patch.object(server, 'get_json',side_effect=ConnectionError('offline')):
+                    p=server.send_data('/api/profile',{'id':[old_id]})['profile']
+                self.assertEqual(p['qid'],'Q164038')
+                self.assertEqual(p['birth'],'1971-01-18')
+                self.assertEqual(p['fullName'],'Josep Guardiola Sala')
+                self.assertEqual(p['birthPlace'],'Santpedor, Kataloniya, İspaniya')
+                self.assertIn('yarımmüdafiəçi',p['position'])
+                self.assertEqual(set(p['roles']),{'players','coaches'})
+                self.assertEqual(len(p['clubs']),8)
+                self.assertEqual(len(p['coached']),4)
+                self.assertEqual(len(p['nationalTeams']),4)
+                self.assertGreater(len(p['awards']),0)
+                self.assertTrue(p['image'].startswith('https://commons.wikimedia.org/wiki/Special:FilePath/'))
+
+    def test_pep_search_has_single_person(self):
+        for kind in ('all','players','coaches'):
+            items=server.send_data('/api/search',{'q':['Pep Guardiola'],'kind':[kind]})['items']
+            qid_items=[p for p in items if identities.qid_of(p)=='Q164038']
+            self.assertEqual(len(qid_items),1,(kind,items))
+            self.assertEqual(set(qid_items[0]['roles']),{'players','coaches'})
+
+    def test_only_unambiguous_same_country_links(self):
+        self.assertEqual(world_db.unique_verified_identity('Pep Guardiola','Spain'),'Q164038')
+        self.assertIsNone(world_db.unique_verified_identity('Pep Guardiola','Brazil'))
+        self.assertIsNone(world_db.unique_verified_identity('Nonexistent Name','Spain'))
+
+    def test_cache_missing_career_sections_can_use_verified_seed(self):
+        seed=wiki.SEED['Q164038']
+        with patch.object(wiki,'cached',return_value={'wikiKind':'coaches','wikiMatch':True,'coached':[{'name':'Barcelona','from':2008,'to':2012}]}):
+            result=wiki.enrich('Q164038',lambda *_:None,kind='coaches')
+        self.assertEqual(result['birth'],seed['birth'])
+        self.assertEqual(len(result['clubs']),8)
+        self.assertEqual(len(result['coached']),1) # live verified coaching rows take priority
+
+    def test_infobox_extended_bio_fields(self):
+        sample='{{Infobox football biography|fullname=Josep Guardiola Sala|birthplace=[[Santpedor]]|height=1.80 m|position=Defensive midfielder|years1=1990–2001|clubs1=Barcelona|caps1=263|goals1=6}}'
+        p=wiki.parse_football_infobox(sample)
+        self.assertEqual(p['fullName'],'Josep Guardiola Sala')
+        self.assertEqual(p['birthPlace'],'Santpedor')
+        self.assertEqual(p['height'],'1.80 m')
+        self.assertEqual(p['clubs'][0]['apps'],263)
+
+    def test_profile_ui_displays_club_and_national_history(self):
+        src=(ROOT/'app.js').read_text()
+        for s in ('Milli komanda karyerası','Doğum yeri','Tam adı','Boy','Məşqçi portreti','Əlavə təsdiq'):
+            self.assertIn(s,src)
+
+if __name__=='__main__':unittest.main()
+
+========== END FILE: 04_ORIGINAL_BACKEND_AND_TESTS_v0927/test_v0922_profiles.py ==========
+
+
+========== BEGIN FILE: 04_ORIGINAL_BACKEND_AND_TESTS_v0927/test_v0923_sources_duplicates.py ==========
+
+"""v0.9.23 regression: unique people, assist safety and genuine free providers."""
+import datetime as dt
+import os
+import unittest
+from unittest.mock import patch
+
+import free_football_sources as fs
+import season_stats as ss
+import server
+
+class NewFreeSources(unittest.TestCase):
+    def test_openfootball_public_domain_past_only(self):
+        date=(dt.date.today()-dt.timedelta(days=30)).isoformat()
+        u=fs.openfootball_url('eng.1',date)
+        self.assertIn('raw.githubusercontent.com/openfootball/football.json',u)
+        self.assertTrue(u.endswith('/en.1.json'))
+        self.assertEqual(fs.openfootball_url('eng.1',dt.date.today().isoformat()),'')
+        self.assertEqual(fs.openfootball_url('uefa.champions',date),'')
+
+    def test_openfootball_scores_and_unknown_kickoff(self):
+        date='2020-09-10'
+        data={'matches':[{'date':date,'team1':'A','team2':'B','score':{'ft':[1,2]}},
+                         {'date':date,'team1':'C','team2':'D','score':{}},
+                         {'date':'2020-09-11','team1':'E','team2':'F','score':{'ft':[1,0]}}]}
+        rows=fs.parse_openfootball(data,'eng.1',date)
+        self.assertEqual(len(rows),2)
+        self.assertEqual(rows[0]['state'],'final')
+        self.assertEqual(rows[0]['homeScore'],1)
+        self.assertTrue(rows[0]['kickoffUnverified'])
+        self.assertNotEqual(rows[1]['homeScore'],0)
+        self.assertNotEqual(rows[1]['state'],'live')
+
+    def test_football_data_delayed_safety(self):
+        date='2026-10-20'
+        raw={'matches':[{'id':1,'utcDate':date+'T16:00:00Z','status':'IN_PLAY',
+                         'homeTeam':{'name':'Madrid'},'awayTeam':{'name':'Barca'},
+                         'score':{'fullTime':{'home':1,'away':1}}},
+                        {'id':2,'utcDate':date+'T18:00:00Z','status':'FINISHED',
+                         'homeTeam':{'name':'Milan'},'awayTeam':{'name':'Inter'},
+                         'score':{'fullTime':{'home':2,'away':3}}}]}
+        rows=fs.parse_football_data_matches(raw,'esp.1',date)
+        self.assertEqual(rows[0]['state'],'scheduled')
+        self.assertIsNone(rows[0]['homeScore'])
+        self.assertEqual(rows[1]['state'],'final')
+        self.assertEqual(rows[1]['homeScore'],2)
+        self.assertNotIn('live',[r['state'] for r in rows])
+
+    def test_football_data_table_and_paths(self):
+        rows=fs.parse_football_data_table({'standings':[{'type':'HOME','table':[{'team':{'name':'wrong'}}]},
+                                  {'type':'TOTAL','table':[{'team':{'name':'A'},'position':1,'playedGames':20,'points':43,'won':13,'draw':4,'lost':3}]}]})
+        self.assertEqual(rows[0]['name'],'A')
+        self.assertEqual(rows[0]['points'],43)
+        self.assertIn('/v4/competitions/PL/standings',fs.football_data_path('eng.1',table=True))
+        self.assertFalse(fs.football_data_path('tur.1',table=True))
+
+    def test_token_not_exposed_and_not_required_for_core(self):
+        with patch.dict(os.environ,{'FOOTBALL_DATA_TOKEN':'private-demo-value'}):
+            r=server.send_data('/api/sources',{})
+            self.assertTrue(r['configured']['footballDataFreeToken'])
+            self.assertNotIn('private-demo-value',str(r))
+        with patch.dict(os.environ,{'FOOTBALL_DATA_TOKEN':''}):
+            self.assertFalse(server.send_data('/api/sources',{})['configured']['footballDataFreeToken'])
+
+    def test_football_data_fetch_rejects_arbitrary_urls(self):
+        with self.assertRaises(ValueError):fs.fetch_football_data('https://other.example/', 'secret')
+        with self.assertRaises(ValueError):fs.fetch_football_data('/v4/teams/123', 'secret')
+        with self.assertRaises(ValueError):fs.fetch_football_data('/v4/competitions/PL/standings', '')
+
+    def test_valid_source_callback_in_live_fallback(self):
+        # No live sources reply, historical CC0 can be returned explicitly.
+        day='2020-09-10'
+        with patch.object(server,'source_call',side_effect=lambda name,url,ttl: {'matches':[{'date':day,'team1':'A','team2':'B','score':{'ft':[2,1]}}]} if name=='OpenFootball CC0' else (_ for _ in ()).throw(ConnectionError('offline'))):
+            v=server.live_from_sources('eng.1',day)
+        self.assertTrue(v['available']);self.assertTrue(v['partial'])
+        self.assertEqual(v['items'][0]['state'],'final')
+        self.assertIn('OpenFootball',v['source'])
+
+class VerifiedDuplicates(unittest.TestCase):
+    def test_ancelotti_father_and_son_are_distinct(self):
+        r=server.send_data('/api/search',{'q':['Ancelotti'],'kind':['all']})
+        c=[x for x in r['items'] if 'carlo' in x['name'].casefold()]
+        d=[x for x in r['items'] if 'davide' in x['name'].casefold()]
+        self.assertEqual(len(c),1)
+        self.assertEqual(len(d),1)
+        self.assertEqual(c[0]['qid'],'Q174614')
+        self.assertNotEqual(d[0].get('qid'),c[0].get('qid'))
+
+    def test_known_dual_role_names_single_profile(self):
+        for name in ['Pep Guardiola','Xabi Alonso','Mikel Arteta','Jürgen Klopp','Carlo Ancelotti']:
+            with self.subTest(name=name):
+                rows=server.send_data('/api/search',{'q':[name],'kind':['all']})['items']
+                qids=[x['qid'] for x in rows if x.get('qid')]
+                self.assertEqual(len(qids),len(set(qids)))
+
+class AssistStrictFallback(unittest.TestCase):
+    def test_without_dob_needs_name_nation_and_club(self):
+        profile={'kind':'players','name':'Example Striker','country':'Spain',
+                 'clubs':[{'name':'Real Madrid'}]}
+        player={'idPlayer':'12345','strPlayer':'Example Striker','strSport':'Soccer',
+                'strNationality':'Spanish','strTeam':'Real Madrid'}
+        self.assertEqual(ss.verified_provider_id(profile,[player])[0],'12345')
+        for bad in [dict(player,strPlayer='Example Striker Junior'),dict(player,strTeam='Sevilla'),dict(player,strNationality='Italian')]:
+            self.assertIsNone(ss.verified_provider_id(profile,[bad])[0])
+
+    def test_without_dob_identical_candidates_rejected(self):
+        profile={'kind':'players','name':'Example Striker','country':'Spain','clubs':['Real Madrid']}
+        players=[{'idPlayer':str(i),'strPlayer':'Example Striker','strSport':'Soccer','strNationality':'Spain','strTeam':'Real Madrid'} for i in [1,2]]
+        self.assertIsNone(ss.verified_provider_id(profile,players)[0])
+
+if __name__=='__main__':unittest.main()
+
+========== END FILE: 04_ORIGINAL_BACKEND_AND_TESTS_v0927/test_v0923_sources_duplicates.py ==========
+
+
+========== BEGIN FILE: 04_ORIGINAL_BACKEND_AND_TESTS_v0927/test_v0924_more_careers.py ==========
+
+"""MediaWiki/Wikidata safe supplemental careers; unified player-manager identities."""
+import unittest
+from unittest.mock import patch
+import identity_unification as ids
+import wikipedia_enrichment as wiki
+import server
+
+Q='Q987654321'
+A='Q10011'
+B='Q10012'
+
+def statement(value, qualifiers=None, rank='normal'):
+    return {'rank':rank,'mainsnak':{'datavalue':{'value':value}},'qualifiers':qualifiers or {}}
+
+def timequal(year):
+    return {'datavalue':{'value':{'time':f'+{year}-01-01T00:00:00Z','precision':9}}}
+
+def input_source(article='{{Infobox person|name=Person Example}}', verified=True, with_teams=True):
+    claims={'P54':[
+      statement({'id':A},{'P580':[timequal(2003)],'P582':[timequal(2007)]}),
+      statement({'id':B},{'P580':[timequal(2008)]}),
+      statement({'id':A},{'P580':[timequal(2012)],'P582':[timequal(2014)]},rank='deprecated'),
+      statement({'id':'not-QID'}),
+    ]} if with_teams else {}
+    entity={'sitelinks':{'enwiki':{'title':'Person Example'}},'claims':claims}
+    def get_json(url,ttl):
+        if 'www.wikidata.org' in url and 'props=labels' in url:
+            return {'entities':{A:{'labels':{'en':{'value':'Club A'}}},B:{'labels':{'en':{'value':'Club B'}}}}}
+        if 'www.wikidata.org' in url:return {'entities':{Q:entity}}
+        if 'prop=pageprops' in url:return {'query':{'pages':[{'ns':0,'pageprops':{'wikibase_item':Q if verified else 'Q555'},'extract':'An article excerpt'}]}}
+        if '/w/rest.php/' in url:return {'source':article}
+        raise AssertionError(url)
+    return get_json
+
+class VerifiedExpandedCareers(unittest.TestCase):
+    def test_team_fallback_years_and_no_invented_statistics(self):
+        v=wiki.remote_enrich(Q,input_source())
+        self.assertEqual([c['name'] for c in v['clubs']],['Club A','Club B'])
+        self.assertEqual((v['clubs'][0]['from'],v['clubs'][0]['to']),(2003,2007))
+        self.assertEqual(v['clubs'][1]['from'],2008)
+        self.assertNotIn('to',v['clubs'][1])
+        self.assertNotIn('apps',v['clubs'][0]);self.assertNotIn('goals',v['clubs'][0]);self.assertNotIn('assists',v['clubs'][0])
+        self.assertIn('P54',v['careerSource'])
+        self.assertEqual(v['statsScope'],'unspecified_membership')
+        self.assertIn('komanda',v['statNotice'].casefold())
+
+    def test_wikipedia_infobox_has_priority_over_wikidata_membership(self):
+        text='{{Infobox football biography|clubs1=[[A Verified FC]]|years1=2010–2013|caps1=88|goals1=13}}'
+        v=wiki.remote_enrich(Q,input_source(article=text))
+        self.assertEqual(len(v['clubs']),1)
+        self.assertEqual(v['clubs'][0]['apps'],88)
+        self.assertIn('Wikipedia',v['careerSource'])
+
+    def test_bad_wikipedia_qid_does_not_leak_infobox(self):
+        text='{{Infobox football biography|clubs1=Wrong Club|years1=2010–2013|caps1=999}}'
+        v=wiki.remote_enrich(Q,input_source(article=text,verified=False))
+        self.assertNotIn('Wrong Club',[c['name'] for c in v['clubs']])
+        self.assertIn('Wikidata',v['careerSource'])
+        self.assertFalse(v['wikiMatch'])
+
+    def test_no_wikidata_affiliations_no_unsupported_career(self):
+        v=wiki.remote_enrich(Q,input_source(with_teams=False))
+        self.assertFalse(v.get('clubs'))
+
+    def test_mikel_arteta_appears_once_with_both_careers(self):
+        rows=server.send_data('/api/search',{'q':['Mikel Arteta'],'kind':['all']})['items']
+        matched=[r for r in rows if ids.qid_of(r)=='Q185572']
+        self.assertEqual(len(matched),1)
+        self.assertEqual(set(matched[0]['roles']),{'players','coaches'})
+        with patch.object(server,'get_json',side_effect=ConnectionError('offline')):
+            p=server.send_data('/api/profile',{'id':[matched[0]['id']]})['profile']
+        self.assertGreaterEqual(len(p.get('clubs') or []),6)
+        self.assertGreaterEqual(len(p.get('coached') or []),2)
+
+    def test_wikidata_qid_without_wikipedia_article_can_show_team_membership(self):
+        def only_wikidata(url,ttl):
+            if 'props=labels' in url:
+                return {'entities':{A:{'labels':{'en':{'value':'Verified United'}}}}}
+            if 'www.wikidata.org' in url:
+                return {'entities':{Q:{'sitelinks':{},'claims':{'P54':[
+                    statement({'id':A},{'P580':[timequal(2011)]})]}}}}
+            raise AssertionError('No Wikipedia API call expected')
+        v=wiki.remote_enrich(Q,only_wikidata)
+        self.assertEqual(v['clubs'][0]['name'],'Verified United')
+        self.assertIn('Wikidata',v['careerSource'])
+        self.assertFalse(v['wikiMatch'])
+        self.assertNotIn('apps',v['clubs'][0])
+
+    def test_no_article_no_team_history_remains_unavailable(self):
+        def only_wikidata(url,ttl):return {'entities':{Q:{'sitelinks':{},'claims':{}}}}
+        self.assertIsNone(wiki.remote_enrich(Q,only_wikidata))
+
+    def test_homonyms_with_different_qids_must_remain_distinct(self):
+        r=ids.unify([{'id':'p1','name':'A Test','kind':'players','qid':'Q111'},
+                     {'id':'c1','name':'A Test','kind':'coaches','qid':'Q222'}])
+        self.assertEqual(len(r),2)
+
+if __name__=='__main__':unittest.main()
+
+========== END FILE: 04_ORIGINAL_BACKEND_AND_TESTS_v0927/test_v0924_more_careers.py ==========
+
+
+========== BEGIN FILE: 04_ORIGINAL_BACKEND_AND_TESTS_v0927/test_v0925_wikipedia_links.py ==========
+
+"""Regression: restored Wikipedia links never disappear due to empty summaries or v0.9.24 cache."""
+import unittest
+from unittest.mock import patch
+from pathlib import Path
+from playwright.sync_api import sync_playwright
+import wikipedia_enrichment as wiki
+import server
+
+ROOT=Path(__file__).resolve().parent
+
+class WikiLinks25(unittest.TestCase):
+    def test_cached_wikidata_language_links_recovered_by_exact_qid(self):
+        qid='Q185572'
+        old={'wikiKind':'coaches','wikiMatch':True,'careerUrl':'https://en.wikipedia.org/wiki/Mikel_Arteta',
+             'clubs':[{'name':'Everton','from':2005,'to':2011}]}
+        calls=[]
+        def source(url,ttl):
+            calls.append(url)
+            self.assertIn('ids=Q185572',url)
+            self.assertIn('props=sitelinks',url)
+            return {'entities':{qid:{'sitelinks':{
+                'enwiki':{'title':'Mikel Arteta'},'trwiki':{'title':'Mikel Arteta'},
+                'azwiki':{'title':'Mikel Arteta'}}}}}
+        with patch.object(wiki,'cached',return_value=old),patch.object(wiki,'store'):
+            result=wiki.enrich(qid,source,kind='coaches')
+        self.assertIn('az.wikipedia.org',result['wikiPageLinks']['az'])
+        self.assertIn('tr.wikipedia.org',result['wikiPageLinks']['tr'])
+        self.assertEqual(result['clubs'][0]['name'],'Everton')
+        self.assertEqual(len(calls),1)
+
+    def test_offline_cache_preserves_old_article_link(self):
+        qid='Q12345678'
+        old={'wikiKind':'teams','clubDataVersion':2,'wikiUrl':'https://en.wikipedia.org/wiki/Example_FC','wikiMatch':True}
+        with patch.object(wiki,'cached',return_value=old):
+            info=wiki.enrich(qid,lambda *_: (_ for _ in ()).throw(ConnectionError('offline')),kind='teams')
+        self.assertEqual(info['wikiPageLinks']['en'],old['wikiUrl'])
+        self.assertTrue(info['wikiMatch'])
+
+    def test_invalid_and_ambiguous_urls_not_trusted(self):
+        data=wiki.restore_cached_article_links('Q185572',
+            {'wikiUrl':'https://evil.example/wiki/Fake','careerUrl':'javascript:alert(1)'},
+            lambda *_:{'entities':{'Q185572':{'sitelinks':{}}}})
+        self.assertFalse(data.get('wikiPageLinks'))
+
+    def test_arteta_profile_still_one_identity(self):
+        from identity_unification import qid_of
+        result=server.send_data('/api/search',{'q':['Mikel Arteta'],'kind':['all']})['items']
+        self.assertEqual(len([x for x in result if qid_of(x)=='Q185572']),1)
+
+    def test_desktop_and_mobile_restored_wikipedia_panel(self):
+        js=(ROOT/'app.js').read_text(encoding='utf-8').replace(
+            "const BACKEND=()=>['http:','https:'].includes(location.protocol);",'const BACKEND=()=>true;')
+        css=(ROOT/'styles.css').read_text(encoding='utf-8')
+        examples=[
+            {'id':'Q185572','name':'Mikel Arteta','kind':'coaches',
+             'wikiUrl':'https://en.wikipedia.org/wiki/Mikel_Arteta','wikidataId':'Q185572',
+             'clubs':[{'name':'Everton','from':2005,'to':2011}]},
+            {'id':'Q8682','name':'Example FC','kind':'teams',
+             'wikiPageLinks':{'az':'https://az.wikipedia.org/wiki/Nümunə','en':'https://en.wikipedia.org/wiki/Example_FC'},
+             'wikidataId':'Q8682'},
+            {'id':'Q12345','name':'Unlinked Person','kind':'players','wikidataId':'Q12345'}]
+        with sync_playwright() as pw:
+            browser=pw.chromium.launch(headless=True,executable_path='/usr/bin/chromium',args=['--no-sandbox','--disable-dev-shm-usage'])
+            for label,width in (('desktop',1360),('mobile',390)):
+                page=browser.new_page(viewport={'width':width,'height':850})
+                errors=[]
+                page.on('pageerror',lambda error:errors.append(str(error)))
+                page.set_content('<html><head><meta charset="utf-8"></head><body><div id="app"></div></body></html>')
+                page.add_style_tag(content=css)
+                page.evaluate('''(profiles)=>{
+                  window.ML_CATALOG=profiles;window.ML_FEATURED={};
+                  let stored={};Object.defineProperty(window,'localStorage',{configurable:true,value:{getItem:k=>stored[k]??null,setItem:(k,v)=>stored[k]=String(v),removeItem:k=>delete stored[k]}});
+                  window.fetch=async input=>{
+                    const path=String(input);let result={items:[]};
+                    if(path.startsWith('/api/status'))result={ok:true,backend:true,publicHosting:true,world:{total:506207,counts:{players:437525,teams:43031,coaches:24120}}};
+                    else if(path.startsWith('/api/profile'))result={profile:profiles.find(p=>path.includes(encodeURIComponent(p.id)))};
+                    else if(path.startsWith('/api/search'))result={items:profiles};
+                    return {ok:true,status:200,json:async()=>result};
+                  };
+                }''',examples)
+                page.add_script_tag(content=js)
+                page.wait_for_function("document.querySelector('.connection')?.textContent.includes('Server işləyir')",timeout=12000)
+                page.locator(('.mobilebar ' if label=='mobile' else '.sidebar ')+'[data-page="search"]').first.click()
+                for p in examples:
+                    page.locator(f'[data-id="{p["id"]}"]').first.click()
+                    page.wait_for_function("document.querySelector('#profile-wikipedia') !== null")
+                    panel=page.locator('#profile-wikipedia')
+                    self.assertIn('Wikipedia və mənbələr',panel.inner_text())
+                    self.assertEqual(panel.locator(f'a[href="https://www.wikidata.org/wiki/{p["id"]}"]').count(),1)
+                    self.assertEqual(panel.locator('a[href*="w/index.php?search="]').count(),1)
+                    if p['id']=='Q185572':
+                        self.assertEqual(panel.locator('a[href="https://en.wikipedia.org/wiki/Mikel_Arteta"]').count(),1)
+                    if p['id']=='Q8682':
+                        self.assertEqual(panel.locator('a[href^="https://az.wikipedia.org/wiki/"]').count(),1)
+                    if p['id']=='Q12345':
+                        self.assertEqual(panel.locator('a[href*="wikipedia.org/wiki/"]').count(),0)
+                        self.assertIn('təsdiqlənməyib',panel.inner_text())
+                    page.locator(('.mobilebar ' if label=='mobile' else '.sidebar ')+'[data-page="search"]').first.click()
+                self.assertEqual(errors,[],(label,errors))
+                page.close()
+            browser.close()
+
+if __name__=='__main__':unittest.main(verbosity=2)
+
+========== END FILE: 04_ORIGINAL_BACKEND_AND_TESTS_v0927/test_v0925_wikipedia_links.py ==========
+
+
+========== BEGIN FILE: 04_ORIGINAL_BACKEND_AND_TESTS_v0927/test_v0926_browser.py ==========
+
+"""MATCHLAB AZ v0.9.26: desktop/mobile end-to-end UI interactions against mocked sources."""
+import unittest
+from pathlib import Path
+from playwright.sync_api import sync_playwright
+
+ROOT=Path(__file__).resolve().parent
+
+JS_BOOT='''() => {
+  window.ML_CATALOG=[]; window.ML_FEATURED={};
+  const store={};Object.defineProperty(window,'localStorage',{configurable:true,value:{getItem:k=>store[k]??null,setItem:(k,v)=>{store[k]=String(v)},removeItem:k=>delete store[k]}});
+  window.__testLiveScore=0;
+  window.fetch=async (input)=>{
+    const p=String(input);let data={items:[]};
+    if(p.startsWith('/api/status'))data={ok:true,backend:true,publicHosting:true,world:{total:506207,counts:{players:437525,teams:43031,coaches:24120}},version:'0.9.27'};
+    else if(p.startsWith('/api/standings')){
+      if(p.includes('jpn.1'))data={available:true,source:'ESPN (test fixture)',items:[{name:'Tokyo Test',rank:1,played:12,win:8,draw:2,loss:2,gf:28,ga:11,gd:17,points:26,form:'WWDLW',group:'East'}]};
+      else data={available:false,source:'Sınaq məlumatı yoxdur',items:[]};
+    }
+    else if(p.startsWith('/api/live?'))data={available:true,stale:false,source:'Test mocked live',items:[
+      {id:'espn:eng.1:123',eventId:'123',league:'eng.1',date:'2026-11-01',state:'live',minute:"44th",
+       home:{name:'Arsenal',id:'100',image:''},away:{name:'Chelsea',id:'200',image:''},homeScore:window.__testLiveScore,awayScore:0,source:'ESPN (fixture)'}]};
+    else if(p.startsWith('/api/world/countries'))data={items:[]};
+    return {ok:true,status:200,json:async()=>data};
+  };
+}'''
+
+class Browser26(unittest.TestCase):
+    def test_coach_studio_and_standings_and_notification_settings(self):
+        js=(ROOT/'app.js').read_text(encoding='utf-8').replace("const BACKEND=()=>['http:','https:'].includes(location.protocol);",'const BACKEND=()=>true;')
+        css=(ROOT/'styles.css').read_text(encoding='utf-8')
+        coach=(ROOT/'coach_tactics.js').read_text(encoding='utf-8')
+        with sync_playwright() as pw:
+            b=pw.chromium.launch(headless=True,executable_path='/usr/bin/chromium',args=['--no-sandbox','--disable-dev-shm-usage'])
+            for device,w in (('desktop',1366),('mobile',390)):
+                with self.subTest(device=device):
+                    page=b.new_page(viewport={'width':w,'height':880},accept_downloads=True)
+                    errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
+                    page.set_content('<html lang="az"><head><meta charset="utf-8"></head><body><div id="app"></div></body></html>')
+                    page.add_style_tag(content=css)
+                    page.evaluate(JS_BOOT)
+                    page.add_script_tag(content=coach)
+                    page.add_script_tag(content=js)
+                    page.wait_for_function("document.querySelector('.connection')?.textContent.includes('Server işləyir')",timeout=12000)
+                    nav=('.mobilebar ' if device=='mobile' else '.sidebar ')
+                    page.locator(nav+'[data-page="tactics"]').first.click()
+                    self.assertEqual(page.locator('#coach-preset option').count(),6)
+                    page.locator('#coach-preset').select_option('guardiola-city-2223')
+                    page.locator('[data-tactic="coach-apply"]').click()
+                    self.assertEqual(page.locator('#formation').input_value(),'3-2-4-1')
+                    self.assertEqual(page.locator('#pitch .player-dot').count(),11)
+                    page.locator('#tactic-opponent').check()
+                    self.assertEqual(page.locator('#pitch .tactic-rival').count(),11)
+                    page.locator('[data-tactic="corner"]').click()
+                    self.assertIn('Künc zərbəsi',page.locator('#tactic-notes').input_value())
+                    page.locator('[data-tactic="scene-add"]').click()
+                    page.locator('[data-tactic="freekick"]').click()
+                    page.locator('[data-tactic="scene-add"]').click()
+                    self.assertIn('2/2',page.locator('#scene-status').inner_text())
+                    page.locator('[data-tactic="scene-play"]').click()
+                    page.locator('[data-tactic="scene-stop"]').click()
+                    with page.expect_download(timeout=7000) as down:
+                        page.locator('[data-tactic="export"]').click()
+                    self.assertEqual(down.value.suggested_filename,'MATCHLAB_taktika.json')
+                    page.screenshot(path=str(ROOT/f'preview_v0926_tactics_{device}.png'),full_page=True)
+                    page.locator(nav+'[data-page="standings"]').first.click()
+                    self.assertEqual(page.locator('#standings-league option').count(),68)
+                    page.locator('#standings-league').select_option('jpn.1')
+                    page.wait_for_function("document.querySelector('.standings-table')?.textContent.includes('Tokyo Test')")
+                    self.assertIn('WWDLW',page.locator('.standings-table').inner_text())
+                    self.assertIn('28',page.locator('.standings-table').inner_text())
+                    page.screenshot(path=str(ROOT/f'preview_v0926_standings_{device}.png'),full_page=True)
+                    page.locator('#standings-league').select_option('caf.champions')
+                    page.wait_for_function("document.querySelector('.page')?.textContent.includes('təsdiqlənmiş cədvəli mövcud deyil')")
+                    page.locator(nav+'[data-page="settings"]').first.click()
+                    self.assertEqual(page.locator('[data-notify-pref]').count(),9)
+                    self.assertEqual(page.locator('[data-sound-preview]').count(),7)
+                    self.assertEqual(page.locator('.notify-panel details').count(),0)
+                    page.locator('#notify-scope').select_option('all')
+                    page.locator('[data-notify-pref="sound"]').check()
+                    self.assertFalse(page.locator('#notify-volume').is_disabled())
+                    page.locator('#notify-volume').evaluate('(el)=>{el.value="70";el.dispatchEvent(new Event("change",{bubbles:true}))}')
+                    self.assertEqual(page.locator('#notify-volume').input_value(),'70')
+                    page.locator('[data-action="notify-test"]').click()
+                    self.assertIn('Sınaq qol bildirişi',page.locator('.notify-panel').inner_text())
+                    self.assertFalse(page.locator('[data-notify-pref="enabled"]').is_checked())
+                    page.locator('[data-notify-pref="enabled"]').check()
+                    # Actual score transitions generate exactly one alert and do not repeat.
+                    page.locator(nav+'[data-page="matches"]').first.click()
+                    page.wait_for_function("document.querySelector('.page')?.textContent.includes('Arsenal')")
+                    page.evaluate('window.__testLiveScore=1')
+                    page.locator('[data-action="refresh-live"]').first.click()
+                    page.wait_for_timeout(350)
+                    page.locator('[data-action="refresh-live"]').first.click()
+                    page.wait_for_timeout(350)
+                    page.locator(nav+'[data-page="settings"]').first.click()
+                    self.assertEqual(page.locator('.notify-panel details').count(),0)
+                    self.assertNotIn('Bildiriş tarixçəsi',page.locator('.notify-panel').inner_text())
+                    self.assertEqual(errors,[],(device,errors))
+                    page.screenshot(path=str(ROOT/f'preview_v0926_settings_{device}.png'),full_page=True)
+                    page.close()
+            b.close()
+
+if __name__=='__main__':unittest.main()
+
+========== END FILE: 04_ORIGINAL_BACKEND_AND_TESTS_v0927/test_v0926_browser.py ==========
+
+
+========== BEGIN FILE: 04_ORIGINAL_BACKEND_AND_TESTS_v0927/test_v0926_features.py ==========
+
+"""MATCHLAB AZ 0.9.27 source-aware league, coach, assists and fixture tests."""
+import json
+import re
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+import server
+import league_catalog
+import live_center
+import match_sources
+import free_match_details
+
+ROOT=Path(__file__).resolve().parent
+
+class LeagueCatalog26(unittest.TestCase):
+    def test_68_unique_source_codes_but_core_poll_is_bounded(self):
+        self.assertEqual(len(league_catalog.CORE_LEAGUES),12)
+        self.assertEqual(len(league_catalog.EXTRA_LEAGUES),56)
+        self.assertEqual(len(league_catalog.ALL_LEAGUES),68)
+        self.assertTrue(all(re.fullmatch(r'[a-z0-9._]+',slug) for slug in league_catalog.ALL_LEAGUES))
+        self.assertEqual(server.LEAGUES,set(league_catalog.ALL_LEAGUES))
+        self.assertTrue(set(league_catalog.EXTRA_LEAGUES).issubset(live_center.LEAGUE_NAMES))
+
+    def test_api_leagues_reports_real_scope_not_promised_availability(self):
+        x=server.send_data('/api/leagues',{})
+        self.assertEqual(x['count'],68)
+        self.assertEqual(sum(row['automatic'] for row in x['items']),12)
+        self.assertIn('demək deyil',x['note'])
+
+    def test_expanded_league_request_queries_single_league_not_68(self):
+        expected='jpn.1'; day='2026-10-11'; observed=[]
+        def fake(name,date):
+            observed.append((name,date))
+            return {'available':True,'items':[{'id':'espn:111','home':{'name':'A'},'away':{'name':'B'},'state':'final'}]}
+        with patch.object(live_center,'_CACHE',{}):
+            r=live_center.view(expected,day,fake)
+        self.assertEqual(observed,[(expected,day)])
+        self.assertTrue(r['available'])
+        self.assertEqual(r['items'][0]['league'],expected)
+
+    def test_all_view_remains_12_not_68(self):
+        observed=[]
+        def fake(name,date):
+            observed.append(name)
+            return {'available':True,'items':[]}
+        with patch.object(live_center,'_CACHE',{}):
+            r=live_center.view('all','2026-09-12',fake)
+        self.assertEqual(set(observed),set(league_catalog.CORE_LEAGUES))
+        self.assertEqual(len(observed),12)
+        self.assertTrue(r['available'])
+
+    def test_espn_actual_goals_form_and_groups_are_preserved(self):
+        row=lambda n,more: {'team':{'displayName':n,'logos':[{'href':'https://example.com/logo.png'}]},'stats':[{'name':k,'value':v} for k,v in more.items()]}
+        response={'children':[{'name':'Group A','standings':{'entries':[
+            row('Club A',{'rank':1,'gamesPlayed':10,'wins':7,'ties':2,'losses':1,'points':23,
+                          'pointsFor':20,'pointsAgainst':8,'pointDifferential':12,'lastFive':'WWDLW'})]}},
+            {'name':'Group B','standings':{'entries':[row('Club B',{'points':5})]}}]}
+        with patch.object(server,'source_call',return_value=response):
+            rows=server.espn_standings('uefa.champions')
+        self.assertEqual(len(rows),2)
+        self.assertEqual((rows[0]['gf'],rows[0]['ga'],rows[0]['gd'],rows[0]['points']), (20,8,12,23))
+        self.assertEqual(rows[0]['form'],'WWDLW')
+        self.assertEqual(rows[0]['group'],'Group A')
+        self.assertIsNone(rows[1]['gf'])
+        self.assertIsNone(rows[1]['ga'])
+        self.assertEqual(rows[1]['group'],'Group B')
+
+    def test_sportsdb_missing_goals_and_assists_do_not_become_zero(self):
+        rows=match_sources.sportsdb_table({'table':[{'strTeam':'Sample','intRank':'1','intPoints':'2'}]})
+        self.assertIsNone(rows[0]['gf']); self.assertIsNone(rows[0]['ga'])
+        self.assertEqual(rows[0]['points'],2)
+
+    def test_event_assist_only_when_explicitly_provided(self):
+        timeline={'timeline':[{'intTime':'52','strTimeline':'Goal','strPlayer':'One','strAssist':'Two','strHome':'Yes'},
+                               {'intTime':'81','strTimeline':'Goal','strPlayer':'Three','strAssist':None,'strHome':'No'}]}
+        x=free_match_details.sportsdb_details({}, {},timeline)
+        self.assertEqual(len(x['events']),2)
+        self.assertIn('Asist: Two',x['events'][0]['text'])
+        self.assertNotIn('Asist',x['events'][1]['text'])
+
+class CoachPresets26(unittest.TestCase):
+    def test_six_dated_sourced_coaches_for_correct_formations(self):
+        data=json.loads((ROOT/'coach_tactics.json').read_text(encoding='utf-8'))
+        js=(ROOT/'coach_tactics.js').read_text(encoding='utf-8').strip()
+        self.assertEqual(len(data),6)
+        self.assertEqual(json.loads(js.removeprefix('window.ML_COACH_TACTICS=').removesuffix(';')),data)
+        self.assertEqual(len({x['id'] for x in data}),6)
+        self.assertEqual({x['coach'] for x in data},{'Pep Guardiola','Mikel Arteta','Jürgen Klopp','Carlo Ancelotti','José Mourinho','Xabi Alonso'})
+        for p in data:
+            with self.subTest(p=p['id']):
+                self.assertEqual(sum(int(n) for n in p['formation'].split('-')),10)
+                self.assertIn('learning.coachesvoice.com',p['source'])
+                self.assertIn('20',p['season'])
+                self.assertLessEqual(p['press'],90)
+
+    def test_old_wikipedia_sources_preserved_and_versions_incremented(self):
+        html=(ROOT/'index.html').read_text(encoding='utf-8')
+        self.assertIn('coach_tactics.js?v=0927',html)
+        self.assertIn('app.js?v=0927',html)
+        self.assertIn('styles.css?v=0927',html)
+        self.assertIn('0.9.27',(ROOT/'hosting_server.py').read_text(encoding='utf-8'))
+        js=(ROOT/'app.js').read_text(encoding='utf-8')
+        self.assertIn('Wikipedia və mənbələr',js)
+        self.assertIn('Asist',js)
+        self.assertIn('Ayarlar',js)
+
+if __name__=='__main__':unittest.main()
+
+========== END FILE: 04_ORIGINAL_BACKEND_AND_TESTS_v0927/test_v0926_features.py ==========
+
+
+========== BEGIN FILE: 04_ORIGINAL_BACKEND_AND_TESTS_v0927/test_v0927_notifications.py ==========
+
+"""MATCHLAB AZ v0.9.27: seven original audio signatures, previews, no visible history."""
+import re
+import unittest
+from pathlib import Path
+from playwright.sync_api import sync_playwright
+
+ROOT=Path(__file__).resolve().parent
+SOUND_MOCK=r'''() => {
+  window.__soundTrace=[];
+  class MockAC {
+    constructor(){this.currentTime=0;this.state='running';this.destination={};}
+    createOscillator(){
+      const item={wave:null,hz:null,glide:null,duration:null};
+      window.__soundTrace.push(item);
+      return {
+        get type(){return item.wave},set type(x){item.wave=x},
+        frequency:{setValueAtTime:(x)=>{item.hz=x},exponentialRampToValueAtTime:(x)=>{item.glide=x}},
+        connect:()=>{},start:()=>{},stop:(x)=>{item.duration=x},disconnect:()=>{}
+      };
+    }
+    createGain(){return {gain:{setValueAtTime:()=>{},linearRampToValueAtTime:()=>{},exponentialRampToValueAtTime:()=>{}},connect:()=>{},disconnect:()=>{}}}
+    resume(){this.state='running';return Promise.resolve()}
+  }
+  window.AudioContext=MockAC;
+  window.ML_CATALOG=[];window.ML_FEATURED={};
+  let storage={matchlab_v08_alerts:JSON.stringify([{text:'legacy private history'}])};
+  Object.defineProperty(window,'localStorage',{configurable:true,value:{getItem:k=>storage[k]??null,setItem:(k,v)=>storage[k]=String(v),removeItem:k=>delete storage[k]}});
+  window.fetch=async p=>({ok:true,status:200,json:async()=>{
+   if(String(p).startsWith('/api/status'))return {ok:true,backend:true,publicHosting:true,world:{total:506207},version:'0.9.27'};
+   if(String(p).startsWith('/api/world/countries'))return {items:[]};
+   return {items:[],available:false};
+  }});
+}'''
+
+class Notifications27(unittest.TestCase):
+    def test_no_notification_history_in_source_and_7_individual_categories(self):
+        js=(ROOT/'app.js').read_text('utf8')
+        self.assertNotIn('notify-clear',js)
+        self.assertNotIn('st.alerts',js)
+        self.assertNotIn("save('alerts'",js)
+        self.assertIn("localStorage.removeItem(KEY+'alerts')",js)
+        self.assertIn('NOTIFY_SOUND_PATTERNS=Object.freeze',js)
+        self.assertEqual(len(re.findall(r"\['(?:goal|kickoff|final|red|yellow|sub|var)','",js.split('const NOTIFY_SOUND_LABELS=')[1].split('const NOTIFY_SOUND_PATTERNS=')[0])),7)
+        for category in ('goal','kickoff','final','red','yellow','sub','var'):
+            self.assertIn(f"m,'{category}')",js) if category in ('goal','kickoff','final') else self.assertIn('m,category)',js)
+        self.assertIn("'/coach_tactics.js'",(ROOT/'server.py').read_text('utf8'))
+
+    def test_7_audio_signatures_are_distinct_and_previewable_on_mobile_desktop(self):
+        app=(ROOT/'app.js').read_text('utf8').replace("const BACKEND=()=>['http:','https:'].includes(location.protocol);","const BACKEND=()=>true;")
+        css=(ROOT/'styles.css').read_text('utf8')
+        cats=['goal','kickoff','final','yellow','red','sub','var']
+        with sync_playwright() as pw:
+            browser=pw.chromium.launch(headless=True,executable_path='/usr/bin/chromium',args=['--no-sandbox','--disable-dev-shm-usage'])
+            for device,width in [('desktop',1350),('mobile',390)]:
+                with self.subTest(device=device):
+                    page=browser.new_page(viewport={'width':width,'height':850})
+                    errs=[];page.on('pageerror',lambda e:errs.append(str(e)))
+                    page.set_content('<!doctype html><html lang="az"><body><div id="app"></div></body></html>')
+                    page.add_style_tag(content=css)
+                    page.evaluate(SOUND_MOCK)
+                    page.add_script_tag(content=app)
+                    page.wait_for_function("document.querySelector('.connection')?.textContent.includes('Server işləyir')",timeout=12000)
+                    nav='.mobilebar ' if device=='mobile' else '.sidebar '
+                    page.locator(nav+'[data-page="settings"]').first.click()
+                    self.assertEqual(page.locator('[data-notify-pref]').count(),9)
+                    self.assertEqual(page.locator('[data-sound-preview]').count(),7)
+                    self.assertEqual(page.locator('.notify-panel details').count(),0)
+                    self.assertEqual(page.locator('[data-action="notify-clear"]').count(),0)
+                    self.assertNotIn('tarixç',page.locator('.notify-panel').inner_text().lower())
+                    self.assertIsNone(page.evaluate("localStorage.getItem('matchlab_v08_alerts')"))
+                    sounds={}
+                    for k in cats:
+                        before=page.evaluate('window.__soundTrace.length')
+                        page.locator(f'[data-sound-preview="{k}"]').click()
+                        trace=page.evaluate(f'window.__soundTrace.slice({before})')
+                        self.assertGreater(len(trace),1,k)
+                        self.assertTrue(all(i['hz'] and i['wave'] for i in trace),k)
+                        sounds[k]=tuple((i['hz'],i['wave']) for i in trace)
+                    self.assertEqual(len(set(sounds.values())),7)
+                    self.assertGreater(len(sounds['goal']),len(sounds['yellow']))
+                    self.assertLess(max(x[0] for x in sounds['red']),min(x[0] for x in sounds['kickoff']))
+                    self.assertEqual(errs,[])
+                    page.screenshot(path=str(ROOT/f'preview_v0927_notification_sounds_{device}.png'),full_page=True)
+                    page.close()
+            browser.close()
+
+if __name__=='__main__':unittest.main()
+
+========== END FILE: 04_ORIGINAL_BACKEND_AND_TESTS_v0927/test_v0927_notifications.py ==========
+
+
+========== BEGIN FILE: 04_ORIGINAL_BACKEND_AND_TESTS_v0927/verified_profiles.json ==========
+
+{
+  "Q11571": {
+    "id": "Q11571",
+    "name": "Cristiano Ronaldo",
+    "birth": "1985-02-05",
+    "death": "",
+    "image": "https://commons.wikimedia.org/wiki/Special:FilePath/Cristiano%20Ronaldo%202018%20%28cropped%29.jpg?width=360",
+    "clubs": [
+      {
+        "name": "Sporting CP B",
+        "from": 2002,
+        "to": 2003,
+        "apps": 2,
+        "goals": 0,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Sporting CP",
+        "from": 2002,
+        "to": 2003,
+        "apps": 25,
+        "goals": 3,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Manchester United",
+        "from": 2003,
+        "to": 2009,
+        "apps": 196,
+        "goals": 84,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Real Madrid",
+        "from": 2009,
+        "to": 2018,
+        "apps": 292,
+        "goals": 311,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Juventus",
+        "from": 2018,
+        "to": 2021,
+        "apps": 98,
+        "goals": 81,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Manchester United",
+        "from": 2021,
+        "to": 2022,
+        "apps": 40,
+        "goals": 19,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Al-Nassr",
+        "from": 2023,
+        "to": null,
+        "apps": 117,
+        "goals": 109,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      }
+    ],
+    "coached": [],
+    "national": {
+      "name": "Portuqaliya",
+      "apps": 234,
+      "goals": 146
+    },
+    "awards": [],
+    "careerSource": "Wikipedia (ingiliscə) — senior liqa göstəriciləri",
+    "careerUrl": "https://en.wikipedia.org/wiki/Cristiano_Ronaldo",
+    "statsChecked": "2026-10-31",
+    "statsAsOf": "2026-10-29",
+    "statsScope": "domestic_league",
+    "statNotice": "Burada yalnız daxili liqa matçları və qolları göstərilir; kubok/avrokubok və milli komanda matçları bu toplama daxil deyil. Asist məlumatı bu mənbədə mövcud deyil.",
+    "verifiedSnapshot": true
+  },
+  "Q5705": {
+    "id": "Q5705",
+    "name": "Lionel Messi",
+    "birth": "1987-06-24",
+    "death": "",
+    "image": "https://commons.wikimedia.org/wiki/Special:FilePath/Lionel%20Messi%20WC2022.jpg?width=360",
+    "clubs": [
+      {
+        "name": "Barcelona C",
+        "from": 2003,
+        "to": 2004,
+        "apps": 10,
+        "goals": 5,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Barcelona B",
+        "from": 2004,
+        "to": 2005,
+        "apps": 22,
+        "goals": 6,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Barcelona",
+        "from": 2004,
+        "to": 2021,
+        "apps": 520,
+        "goals": 474,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Paris Saint-Germain",
+        "from": 2021,
+        "to": 2023,
+        "apps": 58,
+        "goals": 22,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Inter Miami",
+        "from": 2023,
+        "to": null,
+        "apps": 82,
+        "goals": 75,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      }
+    ],
+    "coached": [],
+    "national": {
+      "name": "Argentina",
+      "apps": 208,
+      "goals": 126
+    },
+    "awards": [],
+    "careerSource": "Wikipedia (ingiliscə) — senior liqa göstəriciləri",
+    "careerUrl": "https://en.wikipedia.org/wiki/Lionel_Messi",
+    "statsChecked": "2026-10-31",
+    "statsAsOf": "2026-10-29",
+    "statsScope": "domestic_league",
+    "statNotice": "Burada yalnız daxili liqa matçları və qolları göstərilir; kubok/avrokubok və milli komanda matçları bu toplama daxil deyil. Asist məlumatı bu mənbədə mövcud deyil.",
+    "verifiedSnapshot": true
+  },
+  "Q1835": {
+    "id": "Q1835",
+    "name": "Zinedine Zidane",
+    "birth": "1972-06-23",
+    "death": "",
+    "image": "https://commons.wikimedia.org/wiki/Special:FilePath/Zinedine%20Zidane%20%28cropped%29.JPG?width=360",
+    "clubs": [
+      {
+        "name": "Cannes",
+        "from": 1989,
+        "to": 1992,
+        "apps": 61,
+        "goals": 6,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Bordeaux",
+        "from": 1992,
+        "to": 1996,
+        "apps": 139,
+        "goals": 28,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Juventus",
+        "from": 1996,
+        "to": 2001,
+        "apps": 151,
+        "goals": 24,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Real Madrid",
+        "from": 2001,
+        "to": 2006,
+        "apps": 155,
+        "goals": 37,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      }
+    ],
+    "coached": [
+      {
+        "name": "Real Madrid Castilla",
+        "from": 2014,
+        "to": 2016
+      },
+      {
+        "name": "Real Madrid",
+        "from": 2016,
+        "to": 2018
+      },
+      {
+        "name": "Real Madrid",
+        "from": 2019,
+        "to": 2021
+      }
+    ],
+    "national": {
+      "name": "Fransa",
+      "apps": 108,
+      "goals": 31
+    },
+    "awards": [],
+    "careerSource": "Wikipedia (ingiliscə) — senior liqa göstəriciləri",
+    "careerUrl": "https://en.wikipedia.org/wiki/Zinedine_Zidane",
+    "statsChecked": "2026-10-31",
+    "statsAsOf": "2006-05-07",
+    "statsScope": "domestic_league",
+    "statNotice": "Burada yalnız daxili liqa matçları və qolları göstərilir; kubok/avrokubok və milli komanda matçları bu toplama daxil deyil. Asist məlumatı bu mənbədə mövcud deyil.",
+    "verifiedSnapshot": true
+  },
+  "p:pel": {
+    "id": "p:pel",
+    "name": "Pelé",
+    "birth": "1940-10-23",
+    "death": "2022-12-29",
+    "image": "https://commons.wikimedia.org/wiki/Special:FilePath/Pele.jpg?width=360",
+    "clubs": [
+      {
+        "name": "Santos",
+        "from": 1956,
+        "to": 1974,
+        "apps": 583,
+        "goals": 569,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "New York Cosmos",
+        "from": 1975,
+        "to": 1977,
+        "apps": 64,
+        "goals": 37,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      }
+    ],
+    "coached": [],
+    "national": {
+      "name": "Braziliya",
+      "apps": 92,
+      "goals": 77
+    },
+    "awards": [],
+    "careerSource": "Wikipedia (ingiliscə) — senior liqa göstəriciləri",
+    "careerUrl": "https://en.wikipedia.org/wiki/Pel%C3%A9",
+    "statsChecked": "2026-10-31",
+    "statsAsOf": "1977-10-01",
+    "statsScope": "domestic_league",
+    "statNotice": "Burada yalnız daxili liqa matçları və qolları göstərilir; kubok/avrokubok və milli komanda matçları bu toplama daxil deyil. Asist məlumatı bu mənbədə mövcud deyil.",
+    "verifiedSnapshot": true
+  },
+  "p:diego-maradona": {
+    "id": "p:diego-maradona",
+    "name": "Diego Maradona",
+    "birth": "1960-10-30",
+    "death": "2020-11-25",
+    "image": "https://commons.wikimedia.org/wiki/Special:FilePath/DiegoMaradona.jpg?width=360",
+    "clubs": [
+      {
+        "name": "Argentinos Juniors",
+        "from": 1976,
+        "to": 1981,
+        "apps": 166,
+        "goals": 116,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Boca Juniors",
+        "from": 1981,
+        "to": 1982,
+        "apps": 40,
+        "goals": 28,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Barcelona",
+        "from": 1982,
+        "to": 1984,
+        "apps": 36,
+        "goals": 22,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Napoli",
+        "from": 1984,
+        "to": 1991,
+        "apps": 188,
+        "goals": 81,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Sevilla",
+        "from": 1992,
+        "to": 1993,
+        "apps": 26,
+        "goals": 5,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Newell's Old Boys",
+        "from": 1993,
+        "to": 1994,
+        "apps": 5,
+        "goals": 0,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Boca Juniors",
+        "from": 1995,
+        "to": 1997,
+        "apps": 30,
+        "goals": 7,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      }
+    ],
+    "coached": [
+      {
+        "name": "Deportivo Mandiyú",
+        "from": 1994,
+        "to": 1994
+      },
+      {
+        "name": "Racing Club",
+        "from": 1995,
+        "to": 1995
+      },
+      {
+        "name": "Argentina",
+        "from": 2008,
+        "to": 2010
+      },
+      {
+        "name": "Al-Wasl",
+        "from": 2011,
+        "to": 2012
+      },
+      {
+        "name": "Fujairah",
+        "from": 2017,
+        "to": 2018
+      },
+      {
+        "name": "Dorados de Sinaloa",
+        "from": 2018,
+        "to": 2019
+      },
+      {
+        "name": "Gimnasia de La Plata",
+        "from": 2019,
+        "to": 2020
+      }
+    ],
+    "national": {
+      "name": "Argentina",
+      "apps": 91,
+      "goals": 34
+    },
+    "awards": [],
+    "careerSource": "Wikipedia (ingiliscə) — senior liqa göstəriciləri",
+    "careerUrl": "https://en.wikipedia.org/wiki/Diego_Maradona",
+    "statsChecked": "2026-10-31",
+    "statsAsOf": "1997-10-25",
+    "statsScope": "domestic_league",
+    "statNotice": "Burada yalnız daxili liqa matçları və qolları göstərilir; kubok/avrokubok və milli komanda matçları bu toplama daxil deyil. Asist məlumatı bu mənbədə mövcud deyil.",
+    "verifiedSnapshot": true
+  },
+  "Q21621995": {
+    "id": "Q21621995",
+    "name": "Kylian Mbappé",
+    "birth": "1998-12-20",
+    "death": "",
+    "image": "",
+    "clubs": [
+      {
+        "name": "Monaco II",
+        "from": 2015,
+        "to": 2016,
+        "apps": 12,
+        "goals": 4,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Monaco",
+        "from": 2015,
+        "to": 2018,
+        "apps": 41,
+        "goals": 16,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Paris Saint-Germain (icarə)",
+        "from": 2017,
+        "to": 2018,
+        "apps": 27,
+        "goals": 13,
+        "assists": null,
+        "loan": true,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Paris Saint-Germain",
+        "from": 2018,
+        "to": 2024,
+        "apps": 178,
+        "goals": 162,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Real Madrid",
+        "from": 2024,
+        "to": null,
+        "apps": 75,
+        "goals": 67,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      }
+    ],
+    "coached": [],
+    "national": {
+      "name": "Fransa",
+      "apps": 107,
+      "goals": 67
+    },
+    "awards": [],
+    "careerSource": "Wikipedia (ingiliscə) — senior liqa göstəriciləri",
+    "careerUrl": "https://en.wikipedia.org/wiki/Kylian_Mbapp%C3%A9",
+    "statsChecked": "2026-10-31",
+    "statsAsOf": "2026-10-25",
+    "statsScope": "domestic_league",
+    "statNotice": "Burada yalnız daxili liqa matçları və qolları göstərilir; kubok/avrokubok və milli komanda matçları bu toplama daxil deyil. Asist məlumatı bu mənbədə mövcud deyil.",
+    "verifiedSnapshot": true
+  },
+  "Q28967995": {
+    "id": "Q28967995",
+    "name": "Erling Haaland",
+    "birth": "2000-07-21",
+    "death": "",
+    "image": "",
+    "clubs": [
+      {
+        "name": "Bryne 2",
+        "from": 2015,
+        "to": 2016,
+        "apps": 18,
+        "goals": 18,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Bryne",
+        "from": 2016,
+        "to": 2017,
+        "apps": 16,
+        "goals": 0,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Molde 2",
+        "from": 2017,
+        "to": 2018,
+        "apps": 4,
+        "goals": 2,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Molde",
+        "from": 2017,
+        "to": 2019,
+        "apps": 39,
+        "goals": 14,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Red Bull Salzburg",
+        "from": 2019,
+        "to": 2020,
+        "apps": 16,
+        "goals": 17,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Borussia Dortmund",
+        "from": 2020,
+        "to": 2022,
+        "apps": 67,
+        "goals": 62,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Manchester City",
+        "from": 2022,
+        "to": null,
+        "apps": 140,
+        "goals": 121,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      }
+    ],
+    "coached": [],
+    "national": {
+      "name": "Norveç",
+      "apps": 59,
+      "goals": 65
+    },
+    "awards": [],
+    "careerSource": "Wikipedia (ingiliscə) — senior liqa göstəriciləri",
+    "careerUrl": "https://en.wikipedia.org/wiki/Erling_Haaland",
+    "statsChecked": "2026-10-31",
+    "statsAsOf": "2026-10-24",
+    "statsScope": "domestic_league",
+    "statNotice": "Burada yalnız daxili liqa matçları və qolları göstərilir; kubok/avrokubok və milli komanda matçları bu toplama daxil deyil. Asist məlumatı bu mənbədə mövcud deyil.",
+    "verifiedSnapshot": true
+  },
+  "p:neymar": {
+    "id": "p:neymar",
+    "name": "Neymar",
+    "birth": "1992-02-05",
+    "death": "",
+    "image": "",
+    "clubs": [
+      {
+        "name": "Santos",
+        "from": 2009,
+        "to": 2013,
+        "apps": 179,
+        "goals": 107,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Barcelona",
+        "from": 2013,
+        "to": 2017,
+        "apps": 123,
+        "goals": 68,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Paris Saint-Germain",
+        "from": 2017,
+        "to": 2023,
+        "apps": 112,
+        "goals": 82,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Al-Hilal",
+        "from": 2023,
+        "to": 2025,
+        "apps": 3,
+        "goals": 0,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Santos",
+        "from": 2025,
+        "to": null,
+        "apps": 44,
+        "goals": 19,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      }
+    ],
+    "coached": [],
+    "national": {
+      "name": "Braziliya",
+      "apps": 130,
+      "goals": 80
+    },
+    "awards": [],
+    "careerSource": "Wikipedia (ingiliscə) — senior liqa göstəriciləri",
+    "careerUrl": "https://en.wikipedia.org/wiki/Neymar",
+    "statsChecked": "2026-10-31",
+    "statsAsOf": "2026-10-25",
+    "statsScope": "domestic_league",
+    "statNotice": "Burada yalnız daxili liqa matçları və qolları göstərilir; kubok/avrokubok və milli komanda matçları bu toplama daxil deyil. Asist məlumatı bu mənbədə mövcud deyil.",
+    "verifiedSnapshot": true
+  },
+  "p:mohamed-salah": {
+    "id": "p:mohamed-salah",
+    "name": "Mohamed Salah",
+    "birth": "1992-06-15",
+    "death": "",
+    "image": "",
+    "clubs": [
+      {
+        "name": "Al-Mokawloon",
+        "from": 2010,
+        "to": 2012,
+        "apps": 40,
+        "goals": 11,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Basel",
+        "from": 2012,
+        "to": 2014,
+        "apps": 47,
+        "goals": 9,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Chelsea",
+        "from": 2014,
+        "to": 2016,
+        "apps": 13,
+        "goals": 2,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Fiorentina (icarə)",
+        "from": 2015,
+        "to": 2015,
+        "apps": 16,
+        "goals": 6,
+        "assists": null,
+        "loan": true,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Roma (icarə)",
+        "from": 2015,
+        "to": 2016,
+        "apps": 34,
+        "goals": 14,
+        "assists": null,
+        "loan": true,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Roma",
+        "from": 2016,
+        "to": 2017,
+        "apps": 31,
+        "goals": 15,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Liverpool",
+        "from": 2017,
+        "to": 2026,
+        "apps": 315,
+        "goals": 191,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Trabzonspor",
+        "from": 2026,
+        "to": null,
+        "apps": 9,
+        "goals": 8,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      }
+    ],
+    "coached": [],
+    "national": {
+      "name": "Misir",
+      "apps": 122,
+      "goals": 68
+    },
+    "awards": [],
+    "careerSource": "Wikipedia (ingiliscə) — senior liqa göstəriciləri",
+    "careerUrl": "https://en.wikipedia.org/wiki/Mohamed_Salah",
+    "statsChecked": "2026-10-31",
+    "statsAsOf": "2026-10-26",
+    "statsScope": "domestic_league",
+    "statNotice": "Burada yalnız daxili liqa matçları və qolları göstərilir; kubok/avrokubok və milli komanda matçları bu toplama daxil deyil. Asist məlumatı bu mənbədə mövcud deyil.",
+    "verifiedSnapshot": true
+  },
+  "Q185572": {
+    "id": "Q185572",
+    "name": "Mikel Arteta Amatriain",
+    "birth": "1982-03-26",
+    "death": "",
+    "clubs": [
+      {
+        "name": "Barcelona B",
+        "from": 1999,
+        "to": 2002,
+        "apps": null,
+        "goals": null,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Paris Saint-Germain",
+        "from": 2001,
+        "to": 2002,
+        "apps": null,
+        "goals": null,
+        "assists": null,
+        "loan": true,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Rangers",
+        "from": 2002,
+        "to": 2004,
+        "apps": null,
+        "goals": null,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Real Sociedad",
+        "from": 2004,
+        "to": 2005,
+        "apps": null,
+        "goals": null,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Everton",
+        "from": 2005,
+        "to": 2005,
+        "apps": null,
+        "goals": null,
+        "assists": null,
+        "loan": true,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Everton",
+        "from": 2005,
+        "to": 2011,
+        "apps": null,
+        "goals": null,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Arsenal",
+        "from": 2011,
+        "to": 2016,
+        "apps": null,
+        "goals": null,
+        "assists": null,
+        "loan": false,
+        "statScope": "domestic_league"
+      }
+    ],
+    "coached": [
+      {
+        "name": "Manchester City (köməkçi məşqçi)",
+        "from": 2016,
+        "to": 2019
+      },
+      {
+        "name": "Arsenal (baş məşqçi)",
+        "from": 2019,
+        "to": null
+      }
+    ],
+    "careerSource": "Wikipedia (en) · təsdiqlənmiş tarixi karyera ardıcıllığı",
+    "careerUrl": "https://en.wikipedia.org/wiki/Mikel_Arteta",
+    "wikiUrl": "https://en.wikipedia.org/wiki/Mikel_Arteta",
+    "wikiLanguage": "en",
+    "wikiPageLinks": {
+      "en": "https://en.wikipedia.org/wiki/Mikel_Arteta"
+    },
+    "statNotice": "Tarixi klub və məşqçilik dövrləri. Matç, qol və asist rəqəmləri burada təsdiqlənməyib; buna görə boş saxlanılır.",
+    "statsScope": "domestic_league",
+    "wikiMatch": true,
+    "verifiedSnapshot": true,
+    "wikiLicense": "CC BY-SA 4.0 (məqalə mətni); media ayrıca lisenziyalıdır",
+    "wikiLicenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "position": "Mərkəz yarımmüdafiəçi"
+  },
+  "Q164038": {
+    "id": "Q164038",
+    "name": "Pep Guardiola",
+    "fullName": "Josep Guardiola Sala",
+    "birth": "1971-01-18",
+    "birthPlace": "Santpedor, Kataloniya, İspaniya",
+    "height": "1,80 m",
+    "position": "Müdafiəyönlü yarımmüdafiəçi",
+    "country": "İspaniya",
+    "death": "",
+    "image": "https://commons.wikimedia.org/wiki/Special:FilePath/Josep%20Guardiola%202023-10-04%20Fu%C3%9Fball%2C%20M%C3%A4nner%2C%20UEFA%20Champions%20League%2C%20RB%20Leipzig%20-%20Manchester%20City%20FC%201DX%202797%20%28cropped%29.jpg?width=360",
+    "imagePage": "https://commons.wikimedia.org/wiki/File:Josep_Guardiola_2023-10-04_Fu%C3%9Fball%2C_M%C3%A4nner%2C_UEFA_Champions_League%2C_RB_Leipzig_-_Manchester_City_FC_1DX_2797_(cropped).jpg",
+    "clubs": [
+      {
+        "name": "Barcelona C",
+        "from": 1988,
+        "to": 1989,
+        "apps": 8,
+        "goals": 1,
+        "assists": null,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Barcelona B",
+        "from": 1990,
+        "to": 1992,
+        "apps": 53,
+        "goals": 5,
+        "assists": null,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Barcelona",
+        "from": 1990,
+        "to": 2001,
+        "apps": 263,
+        "goals": 6,
+        "assists": null,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Brescia",
+        "from": 2001,
+        "to": 2002,
+        "apps": 11,
+        "goals": 2,
+        "assists": null,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Roma",
+        "from": 2002,
+        "to": 2003,
+        "apps": 4,
+        "goals": 0,
+        "assists": null,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Brescia",
+        "from": 2003,
+        "to": 2003,
+        "apps": 13,
+        "goals": 1,
+        "assists": null,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Al-Ahli",
+        "from": 2003,
+        "to": 2005,
+        "apps": 36,
+        "goals": 5,
+        "assists": null,
+        "statScope": "domestic_league"
+      },
+      {
+        "name": "Dorados",
+        "from": 2005,
+        "to": 2006,
+        "apps": 10,
+        "goals": 1,
+        "assists": null,
+        "statScope": "domestic_league"
+      }
+    ],
+    "coached": [
+      {
+        "name": "Barcelona B",
+        "from": 2007,
+        "to": 2008
+      },
+      {
+        "name": "Barcelona",
+        "from": 2008,
+        "to": 2012
+      },
+      {
+        "name": "Bayern Munich",
+        "from": 2013,
+        "to": 2016
+      },
+      {
+        "name": "Manchester City",
+        "from": 2016,
+        "to": 2026
+      }
+    ],
+    "nationalTeams": [
+      {
+        "name": "İspaniya U21",
+        "from": 1991,
+        "to": 1991,
+        "apps": 2,
+        "goals": 0
+      },
+      {
+        "name": "İspaniya U23",
+        "from": 1991,
+        "to": 1992,
+        "apps": 12,
+        "goals": 2
+      },
+      {
+        "name": "İspaniya",
+        "from": 1992,
+        "to": 2001,
+        "apps": 47,
+        "goals": 5
+      },
+      {
+        "name": "Kataloniya",
+        "from": 1995,
+        "to": 2005,
+        "apps": 7,
+        "goals": 0
+      }
+    ],
+    "national": {
+      "name": "İspaniya",
+      "apps": 47,
+      "goals": 5
+    },
+    "awards": [
+      "UEFA Çempionlar Liqası — baş məşqçi: Barcelona 2009, 2011; Manchester City 2023",
+      "1992 Yay Olimpiya Oyunları — İspaniya ilə qızıl medal"
+    ],
+    "careerSource": "Wikipedia (EN) · tarixli karyera məlumatları; UEFA · təsdiqlənmiş titullar",
+    "careerUrl": "https://en.wikipedia.org/wiki/Pep_Guardiola",
+    "otherSources": [
+      "https://www.uefa.com/uefachampionsleague/news/0275-15407684c988-5b733e851bf5-1000/",
+      "https://www.olympedia.org/athletes/24895"
+    ],
+    "statsChecked": "2026-11-01",
+    "statsAsOf": "2026-11-01",
+    "statsScope": "domestic_league",
+    "statNotice": "Klub oyunları/qolları Wikipedia-nın senior daxili liqa məlumatlarından götürülüb. Asistlər həmin mənbədə verilmədiyi üçün hesablanmır. Baş məşqçi karyerası 1 noyabr 2026 tarixli görüntüdür.",
+    "verifiedSnapshot": true,
+    "wikiKind": "coaches",
+    "wikiMatch": true,
+    "wikiSummary": "Pep Guardiola (Josep Guardiola Sala) — keçmiş ispan futbolçu və məşqçidir. Futbolçu kimi əsasən müdafiəyönlü yarımmüdafiəçi mövqeyində çıxış edib; Barcelona, Brescia, Roma, Al-Ahli və Dorados klublarında oynayıb. Sonradan Barcelona B, Barcelona, Bayern Munich və Manchester City komandalarını çalışdırıb.",
+    "wikiUrl": "https://en.wikipedia.org/wiki/Pep_Guardiola",
+    "wikiLanguage": "en",
+    "wikiPageLinks": {
+      "en": "https://en.wikipedia.org/wiki/Pep_Guardiola"
+    },
+    "wikiLicense": "CC BY-SA 4.0 (xülasə, Wikipedia mənbəli); şəkil ayrıca lisenziyalıdır",
+    "wikiLicenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+  }
+}
+
+========== END FILE: 04_ORIGINAL_BACKEND_AND_TESTS_v0927/verified_profiles.json ==========
+
+
+========== BEGIN FILE: 04_ORIGINAL_BACKEND_AND_TESTS_v0927/wikipedia_enrichment.py ==========
+
+"""Wikipedia/Wikidata verified football biography and club enrichment with a disk cache.
+
+No bulk scraping at startup. Only follow Wikidata-verified sitelinks: never
+associate an arbitrary name with a similarly named person. Stats extracted
+from the football biography infobox are SENIOR DOMESTIC LEAGUE apps/goals, not
+all-competition totals. Missing values stay null (never zero). No mass scraping.
+"""
+import datetime as dt
+import json
+import re
+import sqlite3
+import threading
+import unicodedata
+import urllib.parse
+from pathlib import Path
+
+BASE=Path(__file__).resolve().parent
+CACHE_DB=BASE/'wikipedia_profiles.sqlite'
+SEED=json.loads((BASE/'verified_profiles.json').read_text(encoding='utf-8')) if (BASE/'verified_profiles.json').exists() else {}
+VALID_QID=re.compile(r'^Q[1-9][0-9]{0,11}$')
+WRITE_LOCK=threading.Lock()
+_CACHE_SETUP=False
+
+
+def clean_text(text):
+    """Remove common Wikipedia markup without relying on a full wiki parser."""
+    text=str(text or '')
+    text=re.sub(r'<!--.*?-->','',text,flags=re.S)
+    text=re.sub(r'<br\s*/?>','; ',text,flags=re.I)
+    text=re.sub(r'\{\{\s*(?:hlist|ubl|ubt|unbulleted list|flatlist)\s*\|([^{}]*)\}\}',lambda m:'; '.join(x for x in (clean_text(v) for v in m.group(1).split('|')) if x),text,flags=re.I)
+    text=re.sub(r'\{\{\s*plainlist\s*\|','',text,flags=re.I)
+    text=text.replace('{{endplainlist}}','').replace('{{Endplainlist}}','')
+    text=text.replace('*','; ')
+    text=re.sub(r'<ref\b[^>]*>.*?</ref\s*>|<ref\b[^>]*/>', '',text,flags=re.S|re.I)
+    text=re.sub(r'<[^>]+>','',text)
+    text=re.sub(r'\{\{(?:nowrap|small|flagicon|flag|flagcountry|nobold)\|([^{}|]*)\}\}',r'\1',text,flags=re.I)
+    text=re.sub(r'\[\[(?:[^\]|]*\|)?([^\]|]+)\]\]',r'\1',text)
+    text=re.sub(r'\[(?:https?://\S+)(?:\s+([^\]]*))?\]',lambda m:m.group(1) or '',text)
+    text=re.sub(r"'{2,}", '',text)
+    text=re.sub(r'\{\{[^{}]*\}\}', '',text)
+    text=re.sub(r'\s*;\s*','; ',text)
+    text=re.sub(r'\s+', ' ',text).strip(' \n\t|;')
+    return text[:250]
+
+
+def split_values(raw,limit=12):
+    text=clean_text(raw)
+    if not text:return []
+    text=text.replace(' / ','; ').replace(' • ','; ').replace(' · ','; ')
+    parts=[x.strip(' ,') for x in re.split(r';|\u2022|\u00b7|\s{2,}|(?<!\d),(?!\d)',text) if x.strip(' ,')]
+    out=[]
+    for part in parts:
+        if part not in out:
+            out.append(part)
+        if len(out)>=limit:break
+    return out
+
+def extract_infobox(wikitext):
+    """Extract the first {{Infobox football biography}} or equivalent, balanced."""
+    if not isinstance(wikitext,str):return ''
+    match=re.search(r'\{\{\s*Infobox\s+(?:football\s+(?:biography|player|manager)|soccer\s+(?:player|biography))\b',wikitext,re.I)
+    if not match:return ''
+    start=match.start();stack=0;i=start
+    while i<len(wikitext) and i<start+240_000:
+        chunk=wikitext[i:i+2]
+        if chunk=='{{':stack+=1;i+=2;continue
+        if chunk=='}}':
+            stack-=1;i+=2
+            if stack==0:return wikitext[start:i]
+            continue
+        i+=1
+    return ''
+
+
+def extract_club_infobox(wikitext):
+    """Only football club templates, never unrelated encyclopedic templates."""
+    if not isinstance(wikitext,str):return ''
+    match=re.search(r'\{\{\s*Infobox\s+(?:football\s+(?:club|team)|soccer\s+club)\b',wikitext,re.I)
+    if not match:return ''
+    start=match.start();depth=0;i=start
+    while i<len(wikitext) and i<start+180_000:
+        token=wikitext[i:i+2]
+        if token=='{{':depth+=1;i+=2;continue
+        if token=='}}':
+            depth-=1;i+=2
+            if depth==0:return wikitext[start:i]
+            continue
+        i+=1
+    return ''
+
+
+def split_params(template):
+    """Split template fields on top-level | only, allowing nested templates."""
+    template=template[2:-2] if template.startswith('{{') and template.endswith('}}') else template
+    depth=0;links=0;parts=[];start=0;i=0
+    while i<len(template):
+        c=template[i:i+2]
+        if c=='{{':depth+=1;i+=2;continue
+        if c=='}}':depth=max(depth-1,0);i+=2;continue
+        if c=='[[':links+=1;i+=2;continue
+        if c==']]':links=max(links-1,0);i+=2;continue
+        if template[i]=='|' and depth==0 and links==0:
+            parts.append(template[start:i]);start=i+1
+        i+=1
+    parts.append(template[start:])
+    fields={}
+    for part in parts[1:]:
+        if '=' not in part:continue
+        k,v=part.split('=',1)
+        k=k.strip().lower().replace('_','').replace('-','')
+        if k and len(k)<85:fields[k]=v.strip()
+    return fields
+
+
+def numeric(raw):
+    if raw is None:return None
+    val=clean_text(raw).replace(',','').replace(' ','')
+    if not re.fullmatch(r'\d{1,6}',val):return None
+    n=int(val)
+    return n if n<=99999 else None
+
+
+def first_year(raw):
+    match=re.search(r'\b(?:18|19|20)\d{2}\b',clean_text(raw))
+    return int(match.group()) if match else None
+
+
+def years(raw):
+    val=clean_text(raw)
+    nums=[int(x) for x in re.findall(r'\b(?:18|19|20)\d{2}\b',val)]
+    if not nums:return None,None
+    start=nums[0]
+    # dash-ended intervals (e.g. 2023–) mean an ongoing season, not a missing historic year
+    end=nums[-1] if len(nums)>1 else (None if re.search(r'[–—-]\s*$',val) else start)
+    return start,end
+
+
+def wikipedia_date(raw):
+    # Wikidata is preferred, because infobox dates often use templates.
+    x=re.search(r'\{\{(?:birth date(?: and age)?|death date(?: and age)?)\s*\|\s*(\d{4})\s*\|\s*(\d{1,2})\s*\|\s*(\d{1,2})',raw or '',re.I)
+    if x:
+        try:return dt.date(*[int(i) for i in x.groups()]).isoformat()
+        except ValueError:pass
+    return ''
+
+
+def parse_football_infobox(source):
+    box=extract_infobox(source)
+    if not box:return {}
+    f=split_params(box)
+    player_rows=[];coach_rows=[];national_rows=[]
+    # Senior career indexed as years1/clubs1/caps1/goals1. No junior/youth rows.
+    indexes=sorted({int(m.group(1)) for key in f if (m:=re.fullmatch(r'(?:years|clubs|caps|goals|assists)(\d+)',key))})
+    for n in indexes[:90]:
+        team=clean_text(f.get(f'clubs{n}',''))
+        if not team:continue
+        y0,y1=years(f.get(f'years{n}',''))
+        player_rows.append({'name':team,'from':y0,'to':y1,'apps':numeric(f.get(f'caps{n}')),'goals':numeric(f.get(f'goals{n}')),'assists':numeric(f.get(f'assists{n}')),'statScope':'domestic_league'})
+    manager_idx=sorted({int(m.group(1)) for key in f if (m:=re.fullmatch(r'(?:manageryears|managerclubs)(\d+)',key))})
+    for n in manager_idx[:60]:
+        team=clean_text(f.get(f'managerclubs{n}',''))
+        if not team:continue
+        y0,y1=years(f.get(f'manageryears{n}',''))
+        coach_rows.append({'name':team,'from':y0,'to':y1})
+    national_idx=sorted({int(m.group(1)) for key in f if (m:=re.fullmatch(r'(?:nationalyears|nationalteam|nationalcaps|nationalgoals)(\d+)',key))})
+    for n in national_idx[:45]:
+        team=clean_text(f.get(f'nationalteam{n}',''))
+        if not team:continue
+        y0,y1=years(f.get(f'nationalyears{n}',''))
+        national_rows.append({'name':team,'from':y0,'to':y1,'apps':numeric(f.get(f'nationalcaps{n}')),'goals':numeric(f.get(f'nationalgoals{n}'))})
+    out={'clubs':player_rows,'coached':coach_rows,'nationalTeams':national_rows}
+    if (birth:=wikipedia_date(f.get('birthdate',''))):out['birth']=birth
+    if (death:=wikipedia_date(f.get('deathdate',''))):out['death']=death
+    if (position:=clean_text(f.get('position',''))):out['position']=position
+    for field,key in (('fullName','fullname'),('birthPlace','birthplace'),('height','height')):
+        if (value:=clean_text(f.get(key,''))):out[field]=value
+    # These template values are biographical context, not verified career statistics.
+    return out
+
+
+def parse_club_infobox(source):
+    """Conservative Wikipedia club facts; no invented current roster."""
+    box=extract_club_infobox(source)
+    if not box:return {}
+    f=split_params(box)
+    out={}
+    founded=f.get('founded','')
+    date=re.search(r'\{\{\s*(?:start\s*date(?:\s*and\s*age)?|birth\s*date(?:\s*and\s*age)?)\s*\|\s*(\d{4})',founded,re.I)
+    if not date:date=re.search(r'\b(?:18|19|20)\d{2}\b',clean_text(founded))
+    if date:
+        yr=date.group(1) if date.lastindex else date.group(0)
+        if 1800<=int(yr)<=dt.date.today().year:out['foundedYear']=int(yr)
+    field_map=(
+        ('fullName',('fullname','clubname','fullclubname')),
+        ('shortName',('shortname','nicknameabbrev')),
+        ('stadium',('ground','stadium','arena','homeground')),
+        ('city',('city','location','headquarters','basedin')),
+        ('country',('country',)),
+        ('manager',('manager','headcoach','coach')),
+        ('league',('league','competition')),
+        ('chairman',('chairman','chairperson','president')),
+        ('owner',('owner','owners')),
+        ('colors',('colours','colors','colour','color')),
+    )
+    for target,fields in field_map:
+        for field in fields:
+            value=clean_text(f.get(field,''))
+            if value and len(value)<=180:
+                out[target]=value
+                break
+    nick_raw=''
+    for field in ('nickname','nicknames','nickname(s)'):
+        nick_raw=f.get(field,'')
+        if nick_raw:break
+    nicknames=split_values(nick_raw,limit=10)
+    if nicknames:
+        out['nicknames']=nicknames
+        out['nickname']=' · '.join(nicknames[:6])
+    raw=f.get('capacity') or f.get('groundcapacity') or ''
+    m=re.search(r'(?<!\d)(\d{1,3}(?:[,. ]\d{3})+|\d{4,6})(?!\d)',clean_text(raw))
+    if m:
+        n=int(re.sub(r'[^\d]','',m.group(1)))
+        if 1000<=n<=300000:out['stadiumCapacity']=n
+    return out
+
+def article_details(lang,title,qid,get_json):
+    """Get a short intro only if pageprops.wikibase_item matches the profile QID."""
+    params={'action':'query','format':'json','formatversion':2,'prop':'pageprops|extracts|pageimages',
+            'titles':title,'redirects':1,'exintro':1,'explaintext':1,'exchars':800,'piprop':'thumbnail',
+            'pithumbsize':360,'pilicense':'free','ppprop':'wikibase_item|disambiguation'}
+    url='https://'+lang+'.wikipedia.org/w/api.php?'+urllib.parse.urlencode(params)
+    pages=get_json(url,86400).get('query',{}).get('pages',[])
+    if not pages or len(pages)!=1:return {}
+    page=pages[0];props=page.get('pageprops') or {}
+    if page.get('ns')!=0 or 'missing' in page or props.get('wikibase_item')!=qid or 'disambiguation' in props:return {}
+    excerpt=re.sub(r'\s+',' ',re.sub(r'[\x00-\x1f\x7f]+',' ',str(page.get('extract') or ''))).strip()[:800]
+    thumb=(page.get('thumbnail') or {}).get('source','')
+    if not thumb.startswith('https://upload.wikimedia.org/'):thumb=''
+    return {'wikiSummary':excerpt,'wikiThumbnail':thumb,'articleVerified':True}
+
+
+def _init():
+    global _CACHE_SETUP
+    if _CACHE_SETUP:return
+    with WRITE_LOCK:
+        if _CACHE_SETUP:return
+        with sqlite3.connect(CACHE_DB,timeout=10) as con:
+            con.execute('PRAGMA journal_mode=WAL')
+            con.execute('''CREATE TABLE IF NOT EXISTS enriched (qid TEXT PRIMARY KEY, fetched_utc TEXT NOT NULL, payload TEXT NOT NULL, success INTEGER NOT NULL)''')
+        _CACHE_SETUP=True
+
+
+def cached(qid,refresh_days=14):
+    if not VALID_QID.fullmatch(qid or ''):return None
+    # The cache is an optimization, never an authority: a corrupt/locked SQLite
+    # row must not prevent an otherwise valid player or club profile loading.
+    try:
+        _init()
+        with sqlite3.connect(CACHE_DB,timeout=5) as con:
+            row=con.execute('SELECT fetched_utc,payload,success FROM enriched WHERE qid=?',(qid,)).fetchone()
+        if not row:return None
+        when=dt.datetime.fromisoformat(row[0])
+        age=dt.datetime.now(dt.timezone.utc)-when.replace(tzinfo=dt.timezone.utc)
+        if age>dt.timedelta(days=refresh_days if row[2] else 1):return None
+        return json.loads(row[1])
+    except (sqlite3.Error, OSError, ValueError, TypeError, KeyError, json.JSONDecodeError):
+        return None
+
+
+def store(qid,payload,success):
+    if not VALID_QID.fullmatch(qid or ''):return
+    _init()
+    with sqlite3.connect(CACHE_DB,timeout=10) as con:
+        con.execute('INSERT OR REPLACE INTO enriched VALUES(?,?,?,?)',(qid,dt.datetime.now(dt.timezone.utc).replace(tzinfo=None).isoformat(timespec='seconds'),json.dumps(payload,ensure_ascii=False),int(success)))
+
+
+def wiki_title(wikidata_entity):
+    links=wikidata_entity.get('sitelinks',{})
+    for site in ('enwiki','trwiki','azwiki','eswiki','dewiki','frwiki','itwiki','ptwiki','ruwiki','nlwiki','plwiki'):
+        page=links.get(site,{}).get('title')
+        if page and not any(part in page.lower() for part in ('list of ','category:','template:')):
+            return site[:2],page
+    return None,None
+
+
+def verified_language_links(wikidata_entity):
+    result={}
+    for lang in ('az','tr','en','es','de','fr','it','pt','ru','nl','pl'):
+        title=(wikidata_entity.get('sitelinks') or {}).get(lang+'wiki',{}).get('title','')
+        if isinstance(title,str) and title and not any(x in title.casefold() for x in ('category:','template:','list of ')):
+            result[lang]='https://'+lang+'.wikipedia.org/wiki/'+urllib.parse.quote(title.replace(' ','_'),safe='()_')
+    return result
+
+
+
+def restore_cached_article_links(qid,info,get_json):
+    """Rehydrate 0.9.14-0.9.24 cache rows that lack Wikipedia language links.
+
+    Request Wikidata sitelinks by *exact* QID, not by a person's ambiguous name.
+    Keep the old cached biography if the remote source is unavailable.
+    """
+    if not isinstance(info,dict) or not VALID_QID.fullmatch(qid or ''):
+        return info
+    existing=info.get('wikiPageLinks') if isinstance(info.get('wikiPageLinks'),dict) else {}
+    if info.get('wikiLinksChecked') or len(existing)>=3:
+        return info
+    recovered=dict(existing)
+    for field in ('wikiUrl','careerUrl'):
+        candidate=info.get(field)
+        if not isinstance(candidate,str):continue
+        match=re.fullmatch(r'https://(az|tr|en|es|de|fr|it|pt|ru|nl|pl)\.wikipedia\.org/wiki/[^\s?#]+',candidate)
+        if match:
+            recovered[match.group(1)]=candidate
+    try:
+        query=urllib.parse.urlencode({'action':'wbgetentities','format':'json','ids':qid,'props':'sitelinks'})
+        entity=get_json('https://www.wikidata.org/w/api.php?'+query,86400)
+        verified=(entity or {}).get('entities',{}).get(qid,{})
+        if isinstance(verified,dict) and verified.get('missing') is None and verified:
+            recovered.update(verified_language_links(verified))
+            if recovered!=existing or not info.get('wikiLinksChecked'):
+                # The HTTP request adapter caches this QID lookup for 24 hours.
+                # Do not mutate profile disk storage solely to add navigation links.
+                return {**info,'wikiPageLinks':recovered,'wikiLinksChecked':True}
+    except (OSError,TypeError,ValueError,KeyError,AttributeError):
+        pass
+    except Exception:
+        # Network exceptions vary with the request adapter; never break a profile.
+        pass
+    return {**info,'wikiPageLinks':recovered} if recovered else info
+
+
+def entity_value(entity,prop):
+    for s in entity.get('claims',{}).get(prop,[]):
+        if s.get('rank')=='deprecated':continue
+        raw=s.get('mainsnak',{}).get('datavalue',{}).get('value')
+        if raw is not None:return raw
+    return None
+
+
+def entity_values(entity,prop):
+    out=[]
+    for s in entity.get('claims',{}).get(prop,[]):
+        if s.get('rank')=='deprecated':
+            continue
+        raw=s.get('mainsnak',{}).get('datavalue',{}).get('value')
+        if raw is not None:
+            out.append(raw)
+    return out
+
+
+def entity_labels(ids,get_json):
+    ids=[x for x in dict.fromkeys(ids) if VALID_QID.fullmatch(str(x))]
+    if not ids:return {}
+    url='https://www.wikidata.org/w/api.php?'+urllib.parse.urlencode({'action':'wbgetentities','format':'json','ids':'|'.join(ids),'props':'labels','languages':'az|tr|en','languagefallback':'1'})
+    payload=get_json(url,86400).get('entities',{})
+    out={}
+    for qid,entity in payload.items():
+        label=''
+        for lang in ('az','tr','en'):
+            value=((entity.get('labels') or {}).get(lang) or {}).get('value')
+            if value:
+                label=value
+                break
+        out[qid]=label or qid
+    return out
+
+
+def first_labeled(entity,prop,labels):
+    for raw in entity_values(entity,prop):
+        if isinstance(raw,dict) and raw.get('id') in labels:
+            return labels[raw['id']]
+        if isinstance(raw,dict) and raw.get('id'):
+            return raw['id']
+        if isinstance(raw,str) and raw.strip():
+            return raw.strip()
+    return ''
+
+def wikidata_date(value):
+    """Respect Wikidata precision: year/month-only dates are NOT January 1.
+
+    Wikidata time values represent unknown components using 01 internally;
+    precision 9 means only the year is known, 10 the month, and 11 the day.
+    """
+    if not isinstance(value,dict):return ''
+    raw=str(value.get('time') or '')
+    match=re.match(r'^\+?(\d{4})-(\d{2})-(\d{2})T',raw)
+    if not match:return ''
+    yyyy,mm,dd=match.groups()
+    try:precision=int(value.get('precision',11))
+    except (ValueError,TypeError):return ''
+    if precision<9:return ''
+    if not 1<=int(mm)<=12:return ''
+    if precision==9:return yyyy
+    if precision==10:return f'{yyyy}-{mm}'
+    try:dt.date(int(yyyy),int(mm),int(dd))
+    except ValueError:return ''
+    return f'{yyyy}-{mm}-{dd}'
+
+
+
+def verified_wikidata_team_history(entity, get_json):
+    """Conservative P54 team affiliations with qualifiers; no fabricated senior stats.
+
+    Wikidata P54 may include national/youth teams, and an absent end date does
+    not establish a current affiliation. Such rows are labelled as affiliations,
+    not senior league statistics, and carry no invented caps/goals/assists.
+    """
+    statements=(entity.get('claims') or {}).get('P54') or []
+    raw=[]
+    for statement in statements[:90]:
+        if not isinstance(statement,dict) or statement.get('rank')=='deprecated':continue
+        team=((statement.get('mainsnak') or {}).get('datavalue') or {}).get('value') or {}
+        qid=team.get('id') if isinstance(team,dict) else None
+        if not qid or not VALID_QID.fullmatch(str(qid)):continue
+        qualifiers=statement.get('qualifiers') or {}
+        sport_ids=[((x.get('datavalue') or {}).get('value') or {}).get('id')
+                   for x in qualifiers.get('P641',[]) if isinstance(x,dict) and isinstance((x.get('datavalue') or {}).get('value'),dict)]
+        if sport_ids and 'Q2736' not in sport_ids:continue
+        def qualifying_year(prop):
+            for claim in qualifiers.get(prop,[])[:5]:
+                if not isinstance(claim,dict):continue
+                raw_time=(claim.get('datavalue') or {}).get('value')
+                date=wikidata_date(raw_time)
+                if date:return int(date[:4])
+                # Year-precision qualifiers can encode unknown month/day as 00.
+                # Parse only the year, never make up a month or day.
+                if isinstance(raw_time,dict):
+                    match=re.match(r'^\+?(\d{4})-',str(raw_time.get('time') or ''))
+                    try:precision=int(raw_time.get('precision',0))
+                    except (ValueError,TypeError):precision=0
+                    if match and precision>=9:
+                        return int(match.group(1))
+            return None
+        start,end=qualifying_year('P580'),qualifying_year('P582')
+        if start and end and start>end:continue
+        raw.append((qid,start,end))
+    if not raw:return []
+    ids=list(dict.fromkeys(team for team,_,_ in raw))[:80]
+    # No guessed labels: a networking failure must not turn QIDs into club names.
+    labels={}
+    # Wikidata wbgetentities supports bounded ID batches; preserve successful
+    # chunks if one API request fails instead of dropping the whole history.
+    for i in range(0,len(ids),40):
+        try:labels.update(entity_labels(ids[i:i+40],get_json))
+        except (OSError,ValueError,KeyError,TypeError):continue
+    rows=[]
+    for qid,start,end in raw:
+        name=labels.get(qid,'')
+        if not name or name==qid:continue
+        row={'name':name,'statScope':'unspecified_membership','source':'Wikidata P54'}
+        if start is not None:row['from']=start
+        if end is not None:row['to']=end
+        rows.append(row)
+        if len(rows)>=60:break
+    return rows
+
+
+def remote_enrich(qid,get_json,kind='players'):
+    """Pass a request adapter get_json(url,ttl). Failures are handled upstream."""
+    url='https://www.wikidata.org/w/api.php?'+urllib.parse.urlencode({'action':'wbgetentities','format':'json','ids':qid,'props':'sitelinks|claims|labels','languages':'az|en|tr'})
+    e=get_json(url,86400).get('entities',{}).get(qid,{})
+    if not e or e.get('missing') is not None:return None
+    lang,title=wiki_title(e)
+    if not title:
+        # Many QID-linked people have no Wikipedia article at all. A trusted
+        # Wikidata entity can still offer P54 team memberships; distinguish
+        # this from an encyclopedia career table and from league statistics.
+        if kind not in ('players','coaches'):return None
+        affiliations=verified_wikidata_team_history(e,get_json)
+        if not affiliations:return None
+        return {'clubs':affiliations,'coached':[],'wikiKind':kind,'wikiMatch':False,
+                'verifiedSnapshot':False,'careerSource':'Wikidata P54 · mənbəli komanda üzvlüyü',
+                'careerUrl':'https://www.wikidata.org/wiki/'+qid,
+                'statsScope':'unspecified_membership',
+                'statNotice':'Wikipedia məqaləsi yoxdur; Wikidata komanda üzvlüyü göstərilir. Bunlar təsdiqlənmiş senior liqa matçları və ya qol/asist statistikası deyil.'}
+    page_url='https://'+lang+'.wikipedia.org/wiki/'+urllib.parse.quote(title.replace(' ','_'),safe='()_')
+    details={}
+    try:details=article_details(lang,title,qid,get_json)
+    except Exception:pass
+    # Never parse a Wikipedia infobox unless the actual page's Wikidata QID
+    # matches the football identity. A sitelink alone is not confirmation of
+    # the current page after redirects or page replacements.
+    verified=bool(details.get('articleVerified'))
+    if not verified:details={}
+    wikitext=''
+    if verified:
+        rest='https://'+lang+'.wikipedia.org/w/rest.php/v1/page/'+urllib.parse.quote(title.replace(' ','_'),safe='()_')
+        try:wikitext=get_json(rest,86400).get('source','')
+        except Exception:wikitext=''
+        if not wikitext:
+            api='https://'+lang+'.wikipedia.org/w/api.php?'+urllib.parse.urlencode({'action':'query','prop':'revisions','titles':title,'rvprop':'content','rvslots':'main','formatversion':2,'format':'json'})
+            try:
+                response=get_json(api,86400)
+                pages=response.get('query',{}).get('pages',[])
+                if pages:
+                    slot=(pages[0].get('revisions') or [{}])[0].get('slots',{}).get('main',{})
+                    wikitext=slot.get('content') or slot.get('*') or ''
+            except Exception:pass
+    data=(parse_club_infobox(wikitext) if kind=='teams' else parse_football_infobox(wikitext)) if verified else {}
+    data.update({k:v for k,v in details.items() if k not in ('wikiThumbnail','articleVerified') and v})
+    history_fallback=False
+    if kind in ('players','coaches') and not data.get('clubs'):
+        # Wikipedia article verified, but no machine-readable football career
+        # infobox: use QID-linked Wikidata team memberships as a labelled fallback.
+        affiliations=verified_wikidata_team_history(e,get_json)
+        if affiliations:
+            data['clubs']=affiliations
+            history_fallback=True
+    if kind=='teams':
+        from club_history import parse_honours, parse_squad, colors_from_text, stadium_media
+        if verified:
+            honours=parse_honours(wikitext)
+            squad=parse_squad(wikitext)
+            if honours:data['honours']=honours
+            if squad:
+                data['squadSnapshot']=squad
+                data['squadSource']='Wikipedia ('+lang+') · Current squad (tarixə bağlı görüntü)'
+                data['squadChecked']=dt.datetime.now(dt.timezone.utc).date().isoformat()
+            # Capture hex values only when declared in the matched infobox.
+            color_match=re.search(r'(?im)^\s*\|\s*(?:colors|colours|colour|color)\s*=\s*([^\n]+)',wikitext)
+            if color_match:
+                swatches=colors_from_text(color_match.group(1))
+                if swatches:data['colorHexes']=swatches
+        # Stadium P115 -> P18 is a stadium photograph, never a club crest.
+        try:
+            stadium=stadium_media(e,get_json)
+            if stadium:data.update(stadium)
+        except Exception:
+            pass
+        data['clubDataVersion']=2
+    if kind=='teams':
+        founded=entity_value(e,'P571')
+        if not data.get('foundedYear') and isinstance(founded,dict) and founded.get('time'):
+            match=re.search(r'(?:18|19|20)\d{2}',founded['time'])
+            if match:data['foundedYear']=int(match.group())
+        related_ids=[]
+        for prop in ('P17','P118','P115','P159','P286','P488','P127'):
+            for raw in entity_values(e,prop):
+                if isinstance(raw,dict) and VALID_QID.fullmatch(str(raw.get('id') or '')):
+                    related_ids.append(raw['id'])
+        labels=entity_labels(related_ids,get_json) if related_ids else {}
+        if not data.get('country'):
+            vals=[labels.get(x.get('id'),x.get('id')) for x in entity_values(e,'P17') if isinstance(x,dict) and x.get('id')]
+            vals=[x for x in vals if x]
+            if vals:data['country']=', '.join(dict.fromkeys(vals))
+        if not data.get('league'):
+            value=first_labeled(e,'P118',labels)
+            if value:data['league']=value
+        if not data.get('stadium'):
+            value=first_labeled(e,'P115',labels)
+            if value:data['stadium']=value
+        if not data.get('city'):
+            value=first_labeled(e,'P159',labels)
+            if value:data['city']=value
+        if not data.get('manager'):
+            value=first_labeled(e,'P286',labels)
+            if value:data['manager']=value
+        if not data.get('chairman'):
+            value=first_labeled(e,'P488',labels)
+            if value:data['chairman']=value
+        if not data.get('owner'):
+            owners=[labels.get(x.get('id'),x.get('id')) for x in entity_values(e,'P127') if isinstance(x,dict) and x.get('id')]
+            owners=[x for x in owners if x]
+            if owners:data['owner']=', '.join(list(dict.fromkeys(owners))[:3])
+        site=entity_value(e,'P856')
+        if not data.get('website') and isinstance(site,str) and site.startswith('http'):
+            data['website']=site
+    birth=entity_value(e,'P569');death=entity_value(e,'P570')
+    if kind!='teams':
+        if (value:=wikidata_date(birth)):data['birth']=value
+        if (value:=wikidata_date(death)):data['death']=value
+    photo=entity_value(e,'P154' if kind=='teams' else 'P18')
+    # P154 is a club crest, NEVER a fallback portrait for footballers/coaches.
+    if isinstance(photo,str) and len(photo)<240:
+        data['image']='https://commons.wikimedia.org/wiki/Special:FilePath/'+urllib.parse.quote(photo,safe='')+'?width=360'
+        data['imagePage']='https://commons.wikimedia.org/wiki/File:'+urllib.parse.quote(photo.replace(' ','_'),safe='()_')
+    elif kind!='teams' and details.get('wikiThumbnail'):
+        data['image']=details['wikiThumbnail']
+        data['imagePage']=page_url
+    has_career=bool(data.get('clubs') or data.get('coached'))
+    data['careerSource']=('Wikipedia ('+lang+') · '+('klub məlumatları' if kind=='teams' else 'karyera cədvəli')) if verified and has_career else ('Wikipedia ('+lang+') · xülasə; klub tarixi: Wikidata' if verified else 'Wikidata · təsdiqlənmiş struktur faktları')
+    if history_fallback:
+        data['careerSource']='Wikidata P54 · təsdiqlənmiş komanda üzvlüyü (senior liqa statistikası deyil)'
+    data['careerUrl']=page_url if verified else 'https://www.wikidata.org/wiki/'+qid
+    data['wikiUrl']=page_url
+    data['wikiLanguage']=lang
+    data['wikiPageLinks']=verified_language_links(e)
+    data['wikiLicense']='CC BY-SA 4.0 (məqalə mətni); media ayrıca lisenziyalıdır'
+    data['wikiLicenseUrl']='https://creativecommons.org/licenses/by-sa/4.0/'
+    data['wikiKind']=kind
+    data['statsChecked']=dt.datetime.now(dt.timezone.utc).date().isoformat()
+    if kind!='teams':
+        data['statsScope']='unspecified_membership' if history_fallback else 'domestic_league'
+        data['statNotice']=('Komanda üzvlüyü Wikidata P54 məlumatıdır; klub, gənclər və milli komanda ola bilər. Matç, qol və assist statistikaları burada təsdiqlənmir.' if history_fallback else 'Matç və qollar əsasən daxili liqa üçündür; bütün yarışların cəmi deyil. Asist məlum deyilsə, 0 sayılmır.')
+    data['wikiMatch']=verified
+    data['verifiedSnapshot']=False
+    return data
+
+def enrich(qid,get_json,refresh=False,kind='players'):
+    """Return cached or on-demand Wikipedia data; offline seed for curated stars."""
+    if not VALID_QID.fullmatch(qid or ''):return None
+    if not refresh:
+        found=cached(qid)
+        if found is not None and found.get('wikiKind')==kind and (kind!='teams' or found.get('clubDataVersion')==2):
+            if qid in SEED and isinstance(found,dict):
+                seeded=SEED[qid]
+                resolved={**seeded,**{k:v for k,v in found.items() if v not in ('',None) and v != []}}
+            else:
+                resolved=found or SEED.get(qid)
+            return restore_cached_article_links(qid,resolved,get_json)
+    try:
+        info=remote_enrich(qid,get_json,kind=kind)
+        if info:
+            # Disk cache failure cannot discard valid, freshly fetched source data.
+            try:store(qid,info,bool(info.get('wikiMatch'))) # Retry unverified pages after 1 day
+            except (sqlite3.Error,OSError,ValueError):pass
+            # Wikidata-verified article facts take precedence. Curated snapshots fill
+            # *missing sections*, not overwrite a verified live career table.
+            if qid in SEED:
+                seeded=SEED[qid]
+                merged={**seeded,**{k:v for k,v in info.items() if v not in ('',None) and v != []}}
+                for field in ('clubs','coached','nationalTeams','national','awards','fullName','birthPlace','height','position','birth','image','imagePage'):
+                    if not info.get(field) and seeded.get(field):merged[field]=seeded[field]
+                return merged
+            return info
+        try:store(qid,{},False)
+        except (sqlite3.Error,OSError,ValueError):pass
+    except Exception:
+        # Cache miss rather than an empty authoritative profile if requests fail.
+        pass
+    return SEED.get(qid)
+
+
+def with_wikipedia(profile,info):
+    if not info:return profile
+    p=dict(profile)
+    for field in ('birth','death','image','position','fullName','birthPlace','height','country','foundedYear','stadium','stadiumCapacity',
+                  'city','manager','league','nickname','nicknames','fullName','shortName','chairman','owner','website','colors','wikiSummary','wikiUrl','wikiLanguage',
+                  'wikiPageLinks','wikiLicense','wikiLicenseUrl','wikiKind','imagePage'):
+        if info.get(field):p[field]=info[field]
+    for field in ('honours','squadSnapshot','colorHexes'):
+        if info.get(field):p[field]=info[field]
+    for field in ('squadSource','squadChecked','clubDataVersion','stadiumPhoto','stadiumPhotoPage','stadiumPhotoLicense','stadiumPhotoLicenseUrl','stadiumPhotoCredit','stadiumQid','stadiumImageName'):
+        if info.get(field):p[field]=info[field]
+    for field in ('clubs','coached','nationalTeams','awards'):
+        if info.get(field):p[field]=info[field]
+    for field in ('careerSource','careerUrl','statsChecked','statsAsOf','statsScope','statNotice','wikiMatch','verifiedSnapshot','national','otherSources'):
+        if field in info:p[field]=info[field]
+    if p.get('death'):p['lifeStatus']='deceased'
+    if p.get('clubs') and p.get('coached'):
+        p['roles']=list(dict.fromkeys((p.get('roles') or [])+['players','coaches']))
+    if info.get('clubs') or info.get('coached') or p.get('kind')=='teams' or info.get('wikiSummary'):
+        if info.get('wikiMatch'):
+            p['source']=(p.get('source','').split(' + Wikipedia')[0] or 'Wikidata')+' + Wikipedia'
+        p['statsAvailable']=any(c.get('apps') is not None or c.get('goals') is not None for c in info.get('clubs',[]))
+    return p
+
+def seed_by_profile(profile):
+    qid=profile.get('wikidataId') or profile.get('qid') or (profile['id'] if VALID_QID.fullmatch(profile.get('id','')) else '')
+    if qid and qid in SEED:return SEED[qid]
+    # Seed catalogue IDs such as p:pel have been explicitly curated, unlike fuzzy matching.
+    return SEED.get(profile.get('id'))
+
+========== END FILE: 04_ORIGINAL_BACKEND_AND_TESTS_v0927/wikipedia_enrichment.py ==========
+
+
+========== BEGIN FILE: 04_ORIGINAL_BACKEND_AND_TESTS_v0927/world_db.py ==========
+
+"""SQLite search index for Reep's public-domain football identity register.
+Only identity facts are indexed; never invents stats, photos, rosters or fixture results.
+"""
+import json, re, sqlite3, unicodedata
+from functools import lru_cache
+from pathlib import Path
+
+BASE=Path(__file__).resolve().parent
+DB=BASE/'world_football.sqlite'
+KINDS={'player':'players','team':'teams','coach':'coaches','competition':'competitions'}
+
+def normal(text):
+ text=str(text or '').casefold().replace('ə','e').replace('ı','i').replace('ß','ss').replace('ø','o').replace('ł','l')
+ text=''.join(c for c in unicodedata.normalize('NFKD',text) if not unicodedata.combining(c))
+ return ' '.join(re.findall(r'[^\W_]+',text,flags=re.UNICODE))
+
+def connect():
+ if not DB.is_file():return None
+ try:
+  con=sqlite3.connect(f'file:{DB.as_posix()}?mode=ro',uri=True,timeout=2)
+  con.row_factory=sqlite3.Row
+  con.execute('SELECT 1 FROM identities LIMIT 1')
+  return con
+ except sqlite3.Error:
+  try:con.close()
+  except Exception:pass
+  return None
+
+def counts():
+ con=connect()
+ if not con:return None
+ try:
+  items=dict(con.execute('SELECT kind, COUNT(*) FROM identities GROUP BY kind').fetchall())
+  release=con.execute('SELECT value FROM metadata WHERE key=?',('release',)).fetchone()
+  return {'counts':items,'total':sum(items.values()),'release':release[0] if release else 'unknown'}
+ finally:con.close()
+
+@lru_cache(maxsize=1)
+def qid_coverage():
+ """Exact counts of source-linked identities; never counts unnamed photo assets."""
+ con=connect()
+ if not con:return {}
+ try:
+  return {kind:{'total':total,'linked':linked} for kind,total,linked in con.execute(
+   "SELECT kind, COUNT(*), SUM(CASE WHEN qid IS NOT NULL AND qid!='' THEN 1 ELSE 0 END) FROM identities GROUP BY kind")}
+ except sqlite3.Error:return {}
+ finally:con.close()
+
+def result(row):
+ return {'id':row['id'],'name':row['name'],'kind':row['kind'],'country':row['country'] or '', 'description':row['country'] or '', 'image':'','source':'Reep CC0 · dünya reyestri','verified':True,'qid':row['qid'] or ''}
+
+def search(query,kind='all',limit=75,offset=0,country=''):
+ con=connect()
+ if not con:return [],False
+ try:
+  tokens=normal(query).split()[:8]
+  filters=[];args=[]
+  if kind!='all':filters.append('identities.kind=?');args.append(kind)
+  if country.strip():filters.append('identities.country=?');args.append(country.strip())
+  if tokens:
+   expr=' AND '.join('"'+t.replace('"','')+'"*' for t in tokens)
+   filters.insert(0,'lookup MATCH ?');args.insert(0,expr)
+   sql='SELECT identities.id,name,kind,country,qid FROM lookup JOIN identities ON identities.id=lookup.id WHERE '+' AND '.join(filters)+' ORDER BY CASE WHEN lookup.search_name=? THEN 0 WHEN instr(" "||lookup.search_name||" "," "||?||" ")>0 THEN 1 WHEN lookup.search_name LIKE ? THEN 2 ELSE 3 END, bm25(lookup),length(name),name LIMIT ? OFFSET ?'
+   args.extend([' '.join(tokens),' '.join(tokens),' '.join(tokens)+'%'])
+  else:
+   where=' WHERE '+' AND '.join(filters) if filters else ''
+   sql='SELECT id,name,kind,country,qid FROM identities'+where+' ORDER BY name LIMIT ? OFFSET ?'
+  args.extend([max(1,min(100,int(limit))),max(0,min(3_500_000,int(offset)))])
+  return [result(r) for r in con.execute(sql,args)],True
+ except sqlite3.Error:return [],False
+ finally:con.close()
+
+def profile(identifier):
+ if not re.fullmatch(r'rp[a-z0-9]{8,30}|rc[a-z0-9]{8,30}|rt[a-z0-9]{8,30}|reep_[a-z][a-f0-9]{8,30}',identifier or ''):return None
+ con=connect()
+ if not con:return None
+ try:
+  r=con.execute('SELECT * FROM identities WHERE id=?',(identifier,)).fetchone()
+  if r is None:return None
+  p=result(r)
+  p['gender']=r['gender'];p['confidence']=r['grade'];p['source']='Reep CC0 / '+(con.execute('SELECT value FROM metadata WHERE key=?',('release',)).fetchone() or [''])[0]
+  p['url']='https://www.reep.football/'
+  p['clubs']=[];p['coached']=[];p['awards']=[]
+  p['lifeStatus']='unknown';p['careerStatus']='unverified'
+  p['roles']=[r['kind'] for r in con.execute('SELECT DISTINCT kind FROM identities WHERE qid=? AND qid!=""',(r['qid'],))] if r['qid'] else [r['kind']]
+  p['otherRoles']=[dict(x) for x in con.execute('SELECT id,name,kind FROM identities WHERE qid=? AND id!=? AND qid!=""',(r['qid'],identifier))] if r['qid'] else []
+  if r['qid']:
+   p['wikidataId']=r['qid']
+   p['url']='https://www.wikidata.org/wiki/'+r['qid']
+  return p
+ finally:con.close()
+
+
+@lru_cache(maxsize=8192)
+def preferred_person_id(qid):
+ """Canonical verified registry ID for a legacy link, with no fuzzy name matching."""
+ if not re.fullmatch(r'Q[1-9][0-9]{0,11}',qid or ''):return None
+ con=connect()
+ if not con:return None
+ try:
+  row=con.execute("SELECT id FROM identities WHERE qid=? AND kind IN ('players','coaches') ORDER BY CASE WHEN kind='coaches' THEN 0 ELSE 1 END,id LIMIT 1",(qid,)).fetchone()
+  return row[0] if row else None
+ except sqlite3.Error:return None
+ finally:con.close()
+
+
+def countries(limit=240):
+ con=connect()
+ if not con:return []
+ try:
+  return [{'country':r[0],'count':r[1]} for r in con.execute('SELECT country,COUNT(*) FROM identities WHERE country!="" GROUP BY country ORDER BY COUNT(*) DESC,country LIMIT ?',(limit,))]
+ finally:con.close()
+
+
+@lru_cache(maxsize=2048)
+def unique_verified_identity(name,country):
+ """Return a QID only for one unambiguous, full-name, country-matched register identity.
+
+ The fuzzy search is used to locate candidates, NOT as proof of identity.
+ Any conflicting/unlinked same-name record makes the association ambiguous.
+ """
+ name_key=normal(name)
+ country_key=normal(country)
+ if not name_key or not country_key or len(name_key)<7:return None
+ hits,ready=search(name,'all',limit=100)
+ if not ready:return None
+ matches=[r for r in hits if normal(r['name'])==name_key and normal(r.get('country'))==country_key]
+ if not matches or any(not r.get('qid') for r in matches):return None
+ qids={r['qid'] for r in matches}
+ return next(iter(qids)) if len(qids)==1 else None
+
+========== END FILE: 04_ORIGINAL_BACKEND_AND_TESTS_v0927/world_db.py ==========
