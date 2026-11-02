@@ -172,7 +172,12 @@ jobs:
             bytes="$(unzip -p "$APK" "assets/web/$f" | wc -c)"
             test "$bytes" -gt 40
           done
-          echo "PASS Android APK includes production HTML"
+          # Verify manifest advertises a real installed application and icon.
+          AAPT="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          "$AAPT" dump badging "$APK" | tee native/android/apk_badging.txt
+          grep -q "application-label:'MATCHLAB AZ'" native/android/apk_badging.txt
+          grep -q "launchable-activity: name='az.matchlab.mobile.MainActivity'" native/android/apk_badging.txt
+          echo "PASS Android APK includes production HTML, installed app label and launcher activity"
       - name: Enable KVM
         run: |
           if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; fi
@@ -190,7 +195,14 @@ jobs:
             adb install -r native/android/app/build/outputs/apk/debug/app-debug.apk
             adb shell am start -W -n az.matchlab.mobile/.MainActivity
             sleep 15
+            adb shell pm path az.matchlab.mobile
             adb shell pidof az.matchlab.mobile
+            # Top-right native overflow menu: app info, refresh, pin shortcut.
+            adb shell input tap 1015 120
+            sleep 2
+            adb shell screencap -p /sdcard/matchlab_native_menu.png
+            adb pull /sdcard/matchlab_native_menu.png native/android/matchlab_native_menu.png
+            adb shell input keyevent KEYCODE_BACK
             adb shell screencap -p /sdcard/matchlab_screen.png
             adb pull /sdcard/matchlab_screen.png native/android/matchlab_emulator.png
             adb shell input tap 985 2200
@@ -203,16 +215,17 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: MATCHLAB_AZ_v0942_Android_Emulator_Screenshot
+          name: MATCHLAB_AZ_v0944_Android_Emulator_Screenshot
           path: |
             native/android/matchlab_emulator.png
             native/android/matchlab_more.png
+            native/android/matchlab_native_menu.png
           if-no-files-found: warn
           retention-days: 14
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: MATCHLAB_AZ_HTML_Android_v0942
+          name: MATCHLAB_AZ_Android_Installed_App_v0944
           path: native/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: warn
           retention-days: 30

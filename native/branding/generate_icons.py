@@ -70,3 +70,26 @@ inset=100
 mask.paste(im.resize((1024-2*inset,1024-2*inset),Image.Resampling.LANCZOS),(inset,inset),im.resize((1024-2*inset,1024-2*inset),Image.Resampling.LANCZOS))
 mask.resize((512,512),Image.Resampling.LANCZOS).save(pwa_dir/"pwa-512-maskable.png",optimize=True)
 print("Generated installable PWA icons: 192, 512, 512 maskable")
+
+
+# Android 8+ adaptive home-screen and launcher icons.
+adaptive = android/"mipmap-anydpi-v26"
+adaptive.mkdir(parents=True,exist_ok=True)
+for icon in ("ic_launcher","ic_launcher_round"):
+    (adaptive/f"{icon}.xml").write_text(
+        '<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">'
+        '<background android:drawable="@color/launcher_background"/>'
+        '<foreground android:drawable="@mipmap/ic_launcher_foreground"/>'
+        '</adaptive-icon>',encoding="utf-8")
+values = android/"values"
+values.mkdir(parents=True,exist_ok=True)
+(values/"launcher_colors.xml").write_text(
+    '<resources><color name="launcher_background">#071019</color></resources>',encoding="utf-8")
+for density, base_size in [("mdpi",48),("hdpi",72),("xhdpi",96),("xxhdpi",144),("xxxhdpi",192)]:
+    large=int(base_size*108/48)
+    layer=Image.new("RGBA",(large,large),(0,0,0,0))
+    inner=int(large*0.70)
+    image=im.resize((inner,inner),Image.Resampling.LANCZOS)
+    layer.paste(image,((large-inner)//2,(large-inner)//2),image)
+    layer.save(android/("mipmap-"+density)/"ic_launcher_foreground.png")
+print("Generated Android adaptive launcher icon layers and resources.")

@@ -3,11 +3,17 @@ import android.app.Activity;
 import android.os.Bundle;
 import android.os.Build;
 import android.content.Intent;
+import android.content.pm.ShortcutManager;
+import android.content.pm.ShortcutInfo;
+import android.graphics.drawable.Icon;
+import android.provider.Settings;
 import android.graphics.Color;
+import android.graphics.Typeface;
 import android.net.Uri;
 import android.view.Gravity;
 import android.view.View;
 import android.view.WindowInsets;
+import android.view.View;
 import android.webkit.*;
 import android.widget.*;
 import java.io.*;
@@ -21,6 +27,7 @@ public final class MainActivity extends Activity {
     WebView web;
     ProgressBar loading;
     TextView failure;
+    TextView menuButton;
     int dp(int n){return Math.round(n*getResources().getDisplayMetrics().density);}
     @Override public void onCreate(Bundle state){
         super.onCreate(state);
@@ -36,7 +43,7 @@ public final class MainActivity extends Activity {
         settings.setAllowContentAccess(false);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         settings.setMediaPlaybackRequiresUserGesture(false);
-        settings.setUserAgentString(settings.getUserAgentString()+" MATCHLABAZ/0.9.42");
+        settings.setUserAgentString(settings.getUserAgentString()+" MATCHLABAZ/0.9.44");
         web.setOverScrollMode(View.OVER_SCROLL_NEVER);
         web.setWebChromeClient(new WebChromeClient());
         web.setWebViewClient(new WebViewClient(){
@@ -64,7 +71,46 @@ public final class MainActivity extends Activity {
                 }
             }
         });
-        root.addView(web,new FrameLayout.LayoutParams(-1,-1));
+        // Native Android application frame around the real packaged HTML interface.
+        LinearLayout shell = new LinearLayout(this);
+        shell.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout toolbar = new LinearLayout(this);
+        toolbar.setBackgroundColor(Color.rgb(13,27,43));
+        toolbar.setGravity(Gravity.CENTER_VERTICAL);
+        toolbar.setPadding(dp(12),dp(2),dp(8),dp(2));
+        ImageView logo = new ImageView(this);
+        logo.setImageResource(R.mipmap.ic_launcher);
+        logo.setContentDescription("MATCHLAB AZ loqosu");
+        LinearLayout.LayoutParams logoParams=new LinearLayout.LayoutParams(dp(38),dp(38));
+        logoParams.rightMargin=dp(10);
+        toolbar.addView(logo,logoParams);
+        LinearLayout titleColumn=new LinearLayout(this);
+        titleColumn.setOrientation(LinearLayout.VERTICAL);
+        TextView title=new TextView(this);
+        title.setText("MATCHLAB AZ");
+        title.setTextSize(16);
+        title.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
+        title.setTextColor(Color.WHITE);
+        titleColumn.addView(title);
+        TextView subtitle=new TextView(this);
+        subtitle.setText("Futbol mərkəzi");
+        subtitle.setTextSize(11);
+        subtitle.setTextColor(Color.rgb(151,180,194));
+        titleColumn.addView(subtitle);
+        toolbar.addView(titleColumn,new LinearLayout.LayoutParams(0,-2,1));
+        menuButton=new TextView(this);
+        menuButton.setText("⋮");
+        menuButton.setTextSize(26);
+        menuButton.setTextColor(Color.WHITE);
+        menuButton.setGravity(Gravity.CENTER);
+        menuButton.setContentDescription("Tətbiq menyusu");
+        menuButton.setClickable(true);
+        menuButton.setFocusable(true);
+        menuButton.setOnClickListener(v->showAppMenu());
+        toolbar.addView(menuButton,new LinearLayout.LayoutParams(dp(48),dp(48)));
+        shell.addView(toolbar,new LinearLayout.LayoutParams(-1,dp(52)));
+        shell.addView(web,new LinearLayout.LayoutParams(-1,0,1));
+        root.addView(shell,new FrameLayout.LayoutParams(-1,-1));
         loading=new ProgressBar(this);
         root.addView(loading,new FrameLayout.LayoutParams(dp(40),dp(40),Gravity.CENTER));
         failure=new TextView(this);
@@ -86,6 +132,65 @@ public final class MainActivity extends Activity {
         if(Build.VERSION.SDK_INT>=30)root.requestApplyInsets();
         web.loadUrl(ORIGIN+"/index.html");
     }
+
+    private void showAppMenu(){
+        PopupMenu popup=new PopupMenu(this,menuButton);
+        popup.getMenu().add(0,1,0,"Ana ekrana qısayol əlavə et");
+        popup.getMenu().add(0,2,1,"Yenilə");
+        popup.getMenu().add(0,3,2,"Android tətbiq məlumatları");
+        popup.getMenu().add(0,4,3,"MATCHLAB AZ haqqında");
+        popup.setOnMenuItemClickListener(item->{
+            switch(item.getItemId()){
+                case 1: requestHomeShortcut();return true;
+                case 2:
+                    if(web!=null){loading.setVisibility(View.VISIBLE);web.reload();}
+                    return true;
+                case 3:
+                    Intent details=new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                    details.setData(Uri.parse("package:"+getPackageName()));
+                    try{startActivity(details);}
+                    catch(Exception ex){Toast.makeText(this,"Android tətbiq ayarları açıla bilmədi",Toast.LENGTH_SHORT).show();}
+                    return true;
+                case 4:
+                    new android.app.AlertDialog.Builder(this)
+                        .setTitle("MATCHLAB AZ")
+                        .setMessage("Versiya 0.9.44 · Futbol mərkəzi\n\nHTML interfeysi APK daxilindədir. Canlı məlumatlar internet tələb edir.\n\nTətbiqi silmək üçün Android Ayarlar → Tətbiqlər → MATCHLAB AZ.")
+                        .setPositiveButton("Bağla",(dialog,which)->dialog.dismiss()).show();
+                    return true;
+            }
+            return false;
+        });
+        popup.show();
+    }
+    private void requestHomeShortcut(){
+        // Launcher/user approval is required. Never claim the icon was added
+        // until Android itself completes the pin request.
+        final ShortcutManager manager=(ShortcutManager)getSystemService(SHORTCUT_SERVICE);
+        if(manager==null||!manager.isRequestPinShortcutSupported()){
+            Toast.makeText(this,"Başlatma ekranı qısayol əlavə etməyi dəstəkləmir",Toast.LENGTH_LONG).show();
+            return;
+        }
+        Intent launch=new Intent(this,MainActivity.class);
+        launch.setAction(Intent.ACTION_MAIN);
+        launch.addCategory(Intent.CATEGORY_LAUNCHER);
+        launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        ShortcutInfo shortcut=new ShortcutInfo.Builder(this,"matchlab-home")
+            .setShortLabel("MATCHLAB AZ")
+            .setLongLabel("MATCHLAB AZ — Futbol mərkəzi")
+            .setIcon(Icon.createWithResource(this,R.mipmap.ic_launcher))
+            .setIntent(launch)
+            .build();
+        new Thread(()->{
+            boolean accepted=false;
+            try{accepted=manager.requestPinShortcut(shortcut,null);}catch(Exception ignored){}
+            final boolean requested=accepted;
+            runOnUiThread(()->Toast.makeText(this,requested
+                ?"Ana ekran qısayolunu əlavə etmə sorğusunu təsdiqlə"
+                :"Qısayol sorğusu bu başlatma ekranında qəbul edilmədi",
+                Toast.LENGTH_LONG).show());
+        }).start();
+    }
+
     static final Map<String,String> MIME=new HashMap<>();
     static{
         MIME.put("/index.html","text/html");MIME.put("/styles.css","text/css");
@@ -126,7 +231,7 @@ public final class MainActivity extends Activity {
                 (uri.getEncodedQuery()==null?"":"?"+uri.getEncodedQuery())).openConnection();
             c.setConnectTimeout(17000);c.setReadTimeout(50000);
             c.setRequestProperty("Accept","application/json");
-            c.setRequestProperty("User-Agent","MATCHLABAZ-HTML/0.9.42");
+            c.setRequestProperty("User-Agent","MATCHLABAZ-HTML/0.9.44");
             int code=c.getResponseCode();
             InputStream stream=code>=400?c.getErrorStream():c.getInputStream();
             if(stream==null)return unavailable();

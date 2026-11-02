@@ -15,3 +15,6 @@ The full HTML website can also be installed as a standalone PWA using `manifest.
 
 ## Windows installer v0.9.43
 See `native/packed-windows/INSTALLER.md` for installed-app integration, shortcuts, uninstall and SmartScreen limitations.
+
+## Android installed-app release v0.9.44
+The APK installs under `az.matchlab.mobile`, appears in the app drawer as **MATCHLAB AZ**, has an adaptive launcher icon and Android app-settings/uninstall entry. A native top toolbar provides refresh, Android app info, about and a **request home-screen shortcut** action; user/launcher confirmation is required. No separate Windows-style installer is needed on Android. This build is debug-signed via CI; a persistent secure release signing key is required for future in-place updates. Do not delete the currently installed app without first saving locally stored favourites/settings. See Android app documentation for test scope.
