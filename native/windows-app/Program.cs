@@ -522,7 +522,7 @@ public sealed class MatchlabForm : Form
     }
     private async Task ShowSettings(){
         Heading("Proqram məlumatı");
-        Message("MATCHLAB AZ Native v0.9.30 · Windows Forms. Brauzer və WebView işlətmir.");
+        Message("MATCHLAB AZ Native v0.9.45 · Windows Forms. Brauzer və WebView işlətmir.");
         Message("Canlı nəticələr və profillər Render serverindən HTTPS API vasitəsilə gəlir. İnternet olmayanda uydurma statistika göstərilmir.");
         try{
             var d=await Get("/api/status");

@@ -1,51 +1,92 @@
-name: MATCHLAB AZ - Native Windows and Android
-
+name: MATCHLAB AZ - Native Windows and Android v0.9.45
 on:
   workflow_dispatch:
   push:
     branches:
-      - main
       - 'fix/**'
-      - 'improve/**'
     paths:
-      - 'native/**'
+      - 'native/windows-app/**'
+      - 'native/android/**'
+      - 'native/branding/**'
       - '.github/workflows/matchlab_build_native.yml'
-
 permissions:
   contents: read
-
 jobs:
   windows-native:
-    name: Windows x64 native app
+    name: Windows WinForms native UI and installer
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Generate branded Windows icon
+      - name: Generate native launcher icon
+        shell: pwsh
         run: |
           python -m pip install pillow
           python native/branding/generate_icons.py
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
-      - name: Publish standalone Windows Forms app
+      - name: Publish real native Windows UI
         shell: pwsh
         run: |
           dotnet publish native/windows-app/MATCHLABAZ.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o native/windows-app/out
+          if ($LASTEXITCODE -ne 0) { throw "Build failed" }
+      - name: Smoke test maximized start, splash and native navigation
+        shell: pwsh
+        run: |
+          $exe=Join-Path (Get-Location) 'native/windows-app/out/MATCHLAB_AZ.exe'
+          $p=Start-Process -FilePath $exe -ArgumentList '--ui-smoke-test' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "Native Windows UI smoke failed: $($p.ExitCode)" }
+          Write-Host 'PASS Windows WinForms startup, splash and native page navigation'
+      - name: Compile native Windows desktop installer
+        shell: pwsh
+        run: |
+          $iscc=Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) 'Inno Setup 6\ISCC.exe'
+          if (!(Test-Path $iscc)) {
+            choco install innosetup --yes --no-progress --limit-output
+            if ($LASTEXITCODE -ne 0) { throw "Inno Setup install failed" }
+          }
+          & $iscc "native\windows-app\installer.iss"
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup build failed" }
+          if (!(Test-Path 'native/windows-app/installer-out/MATCHLAB_AZ_Setup_v0945.exe')) {throw 'Setup missing'}
+      - name: Test installer, Start shortcut, Desktop shortcut, uninstall
+        shell: pwsh
+        run: |
+          $setup=Join-Path (Get-Location) 'native/windows-app/installer-out/MATCHLAB_AZ_Setup_v0945.exe'
+          $i=Start-Process $setup -ArgumentList '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /TASKS=desktopicon' -Wait -PassThru
+          if($i.ExitCode -ne 0){throw "Setup exit $($i.ExitCode)"}
+          $exe=Join-Path $env:LOCALAPPDATA 'Programs\MATCHLAB AZ\MATCHLAB_AZ.exe'
+          if(!(Test-Path $exe)){throw 'Installed exe missing'}
+          $start=Join-Path ([Environment]::GetFolderPath('Programs')) 'MATCHLAB AZ.lnk'
+          $desktop=Join-Path ([Environment]::GetFolderPath('DesktopDirectory')) 'MATCHLAB AZ.lnk'
+          if(!(Test-Path $start) -or !(Test-Path $desktop)){throw 'Shortcuts missing'}
+          $entry=@(Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*' -ErrorAction SilentlyContinue | Where-Object {$_.DisplayName -like 'MATCHLAB AZ*'})
+          if($entry.Count -ne 1){throw 'Installed Apps entry missing'}
+          $uninstall=Join-Path (Split-Path $exe) 'unins000.exe'
+          $u=Start-Process $uninstall -ArgumentList '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART' -Wait -PassThru
+          if($u.ExitCode -ne 0){throw "Uninstall exit $($u.ExitCode)"}
+          Start-Sleep -Seconds 2
+          if(Test-Path $exe){throw 'Uninstall incomplete'}
+          Write-Host 'PASS native Windows app installation and uninstall'
       - uses: actions/upload-artifact@v4
         with:
-          name: MATCHLAB_AZ_Native_Windows_v0933_Navigation
+          name: MATCHLAB_AZ_Native_Windows_Setup_v0945
+          path: native/windows-app/installer-out/MATCHLAB_AZ_Setup_v0945.exe
+          if-no-files-found: error
+          retention-days: 30
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MATCHLAB_AZ_Native_Windows_EXE_v0945
           path: native/windows-app/out/MATCHLAB_AZ.exe
           if-no-files-found: error
           retention-days: 30
-
   android-native:
-    name: Android native Java APK
+    name: Android native Java APK and emulator
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -61,19 +102,60 @@ jobs:
           java-version: '17'
       - name: Install Android SDK
         run: |
-          set -euo pipefail
           SDK_MANAGER="$(find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | head -n 1)"
           test -n "$SDK_MANAGER"
           "$SDK_MANAGER" --install 'platforms;android-35' 'build-tools;35.0.0'
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - name: Compile native Android UI
+      - name: Compile Java-native Android app
         working-directory: native/android
         run: gradle --no-daemon --stacktrace :app:assembleDebug
+      - name: Validate APK is native, not a web package
+        run: |
+          set -eu
+          APK="native/android/app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$APK"
+          test -z "$(unzip -Z1 "$APK" | grep -E '^assets/web/|assets/index.html' || true)"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee /tmp/badging.txt
+          grep -q "application-label:'MATCHLAB AZ'" /tmp/badging.txt
+          grep -q "launchable-activity: name='az.matchlab.mobile.MainActivity'" /tmp/badging.txt
+          echo 'PASS native Android package label, launcher and no HTML bundle'
+      - name: Enable emulator acceleration
+        run: |
+          if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; fi
+      - name: Test native Android launch, intro and navigation
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          profile: pixel_5
+          disable-animations: true
+          emulator-boot-timeout: 600
+          script: |
+            set -eu
+            adb install -r native/android/app/build/outputs/apk/debug/app-debug.apk
+            adb shell am start -W -n az.matchlab.mobile/.MainActivity
+            sleep 3
+            adb shell pidof az.matchlab.mobile
+            adb shell uiautomator dump /sdcard/ui.xml >/dev/null
+            adb pull /sdcard/ui.xml native/android/native_ui.xml >/dev/null
+            python -c 'import xml.etree.ElementTree as E; r=E.parse("native/android/native_ui.xml"); assert any("Tətbiq menyusu" in x.attrib.get("content-desc","") for x in r.iter()), "native toolbar missing"; assert any("Matçlar" in x.attrib.get("content-desc","") for x in r.iter()), "native tabs missing"'
+            adb shell screencap -p /sdcard/native_app.png
+            adb pull /sdcard/native_app.png native/android/native_app.png
+            adb shell dumpsys activity activities | grep -E 'mResumedActivity|topResumedActivity' | grep 'az.matchlab.mobile'
+            echo 'PASS native Android app foreground and native controls'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: MATCHLAB_AZ_Native_Android_Screenshot_v0945
+          path: native/android/native_app.png
+          if-no-files-found: warn
+          retention-days: 14
       - uses: actions/upload-artifact@v4
         with:
-          name: MATCHLAB_AZ_Native_Android_v0933_Navigation
-          path: native/android/app/build/outputs/apk/debug/*.apk
+          name: MATCHLAB_AZ_Native_Android_APK_v0945
+          path: native/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
