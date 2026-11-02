@@ -1,6 +1,7 @@
 package az.matchlab.mobile;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -45,7 +46,7 @@ public final class MainActivity extends Activity {
     private int searchOffset=0;
     private JSONArray searchRows=new JSONArray();
     private boolean standingsExpanded=false;
-    private final String[] formations={"4-3-3","4-2-3-1","4-4-2","3-5-2"};
+    private final String[] formations={"4-3-3","4-2-3-1","4-4-2","3-5-2","3-4-3","4-1-4-1","5-3-2","4-2-2-2"};
     private JSONArray matches=new JSONArray();
     private LinearLayout searchResults;
     private Runnable searchPending;
@@ -872,11 +873,43 @@ public final class MainActivity extends Activity {
         if(count==0)info("Seçilmiş matç yoxdur. ☆ düyməsinə toxun.",false);
     }
     private void showTactics(){
-        section("Taktika studiyası");
-        Spinner s=spinner(formations,formation,i->{formation=i;navigate("tactics");});card(s);
+        section("TAKTİKA STUDİYASI");
+        banner("İnteraktiv məşq lövhəsi · 11 mövqe · Yerli yaddaş",ACCENT);
+        LinearLayout presets=row();
+        TextView label=single("Düzülüş",12,MUTED,true);presets.addView(label,new LinearLayout.LayoutParams(0,dp(44),1));
+        Button choose=button(formations[formation]+"   ⌄");
+        choose.setOnClickListener(v->{
+            new AlertDialog.Builder(this).setTitle("Taktiki düzülüş")
+                .setSingleChoiceItems(formations,formation,(dialog,index)->{
+                    formation=index;prefs.edit().putInt("tactic_formation",formation).apply();
+                    dialog.dismiss();navigate("tactics");
+                }).setNegativeButton("Bağla",null).show();
+        });presets.addView(choose);
+        card(presets);
         PitchView pitch=new PitchView(this,formations[formation]);
-        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(395));lp.bottomMargin=dp(12);page.addView(pitch,lp);
-        info("Düzülüş yerli olaraq çəkilir. Təsdiqlənməmiş oyunçu adları göstərilmir.",false);
+        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,dp(460));
+        p.bottomMargin=dp(9);page.addView(pitch,p);
+        LinearLayout actions=row();
+        Button reset=button("↺ Sıfırla");
+        reset.setOnClickListener(v->{
+            new AlertDialog.Builder(this).setTitle("Düzülüşü sıfırla?")
+                .setMessage("Bu düzülüşdə etdiyin mövqe və ad dəyişiklikləri silinəcək.")
+                .setNegativeButton("Ləğv et",null)
+                .setPositiveButton("Sıfırla",(d,w)->pitch.reset()).show();
+        });
+        actions.addView(reset,new LinearLayout.LayoutParams(0,dp(46),1));
+        Button share=button("📋 Mətn kimi paylaş");
+        LinearLayout.LayoutParams space=new LinearLayout.LayoutParams(0,dp(46),1);space.leftMargin=dp(8);
+        share.setOnClickListener(v->{
+            Intent intent=new Intent(Intent.ACTION_SEND);
+            intent.setType("text/plain");
+            intent.putExtra(Intent.EXTRA_TEXT,pitch.exportText());
+            startActivity(Intent.createChooser(intent,"Taktikanı paylaş"));
+        });
+        actions.addView(share,space);page.addView(actions);
+        gap(page,9);
+        info("Oyunçunu sürüşdürərək mövqeyini dəyiş. Ad və nömrəni dəyişmək üçün oyunçuya qısa toxun. Dəyişikliklər avtomatik saxlanılır.",false);
+        info("Bu plan sənin öz taktiki layihəndir. Real matç heyəti və təsdiqlənmiş formasiya kimi təqdim edilmir.",false);
     }
     private void showSettings(){
         section("MATCHLAB AZ Native 0.9.47");
