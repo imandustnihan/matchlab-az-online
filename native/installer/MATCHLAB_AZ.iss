@@ -1,8 +1,8 @@
-; MATCHLAB AZ Desktop Installer 0.9.53 (offline, native, per-user).
+; MATCHLAB AZ Desktop Installer 0.9.54 (offline, native, per-user).
 ; Built only from the signed/unsigned published EXE; signing for Microsoft Store
 ; is a separate release step with a CA-trusted Authenticode certificate.
 #define MyAppName "MATCHLAB AZ"
-#define MyAppVersion "0.9.53"
+#define MyAppVersion "0.9.54"
 #define MyAppExeName "MATCHLAB_AZ.exe"
 
 [Setup]
@@ -17,7 +17,7 @@ DefaultDirName={localappdata}\Programs\MATCHLAB AZ
 DefaultGroupName=MATCHLAB AZ
 UninstallDisplayIcon={app}\{#MyAppExeName}
 OutputDir=..\windows-app\installer-out
-OutputBaseFilename=MATCHLAB_AZ_Setup_0.9.53_x64
+OutputBaseFilename=MATCHLAB_AZ_Setup_0.9.54_x64
 SetupIconFile=..\branding\matchlab_icon.ico
 Compression=lzma2
 SolidCompression=yes
@@ -28,14 +28,14 @@ DisableProgramGroupPage=yes
 WizardStyle=modern
 CloseApplications=yes
 RestartApplications=no
-VersionInfoVersion=0.9.53.0
+VersionInfoVersion=0.9.54.0
 VersionInfoProductName=MATCHLAB AZ
-VersionInfoProductVersion=0.9.53
+VersionInfoProductVersion=0.9.54
 VersionInfoDescription=MATCHLAB AZ native Windows installer
 AllowNoIcons=yes
 MinVersion=10.0.19041
 ChangesAssociations=no
-AppMutex=MATCHLAB_AZ_v0953
+AppMutex=MATCHLAB_AZ_v0954
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
