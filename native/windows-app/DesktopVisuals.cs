@@ -87,7 +87,7 @@ public sealed class SplashForm : Form
         g.DrawString("MATCHLAB",title,white,174,79);
         g.DrawString("AZ",title,lime,445,79);
         g.DrawString("FUTBOL MƏRKƏZİ",sub,muted,180,140);
-        g.DrawString("Windows · Native · v0.9.55",tiny,muted,180,181);
+        g.DrawString("Windows · Native · v0.9.56",tiny,muted,180,181);
         g.DrawString("Tətbiq açılır",sub,white,36,243);
         using var track = new SolidBrush(Color.FromArgb(48,76,88));
         using var progress = new SolidBrush(Color.FromArgb(154,239,117));
