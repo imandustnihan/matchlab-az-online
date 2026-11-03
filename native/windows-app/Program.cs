@@ -84,6 +84,12 @@ public sealed class MatchlabForm : Form
     private readonly Panel nav = new() { Dock=DockStyle.Fill, BackColor=Sidebar };
     private readonly List<Button> navButtons = new();
     private string page="matches";
+    private string historyLeague="eng.1";
+    private string historySeason="2025-26";
+    private int historyOffset=0;
+    private string historyTeam="";
+    private bool hasLiveBaseline;
+    private readonly Dictionary<string,(int home,int away,string state)> scoreBaseline=new();
     private string matchFilter="all";
     private string? comparisonFirstId;
     private string? comparisonSecondId;
@@ -137,6 +143,7 @@ public sealed class MatchlabForm : Form
         Text="MATCHLAB AZ — Futbol mərkəzi";
         try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { /* icon optional in IDE */ }
         StartPosition=FormStartPosition.CenterScreen;
+        WindowState=FormWindowState.Maximized;
         MinimumSize=new Size(940,640);
         Size=new Size(1280,830);
         BackColor=Bg;
@@ -181,7 +188,8 @@ public sealed class MatchlabForm : Form
             foreach(Control c in content.Controls)
                 if(c is Panel || c is FlowLayoutPanel) c.Width=Math.Max(380,content.ClientSize.Width-36);
         };
-        refreshTimer.Tick+=(_,_)=>{ if(page=="matches"&&WindowState!=FormWindowState.Minimized) _=ReloadMatches(false); };
+        refreshTimer.Tick+=(_,_)=>{ if(page=="matches"&&WindowState!=FormWindowState.Minimized&&Option("auto_refresh","true")=="true") _=ReloadMatches(false); };
+        refreshTimer.Interval=Option("refresh_seconds","30") switch {"60"=>60000,"45"=>45000,"15"=>15000,_=>30000};
         refreshTimer.Start();
         Render();
     }
@@ -203,11 +211,11 @@ public sealed class MatchlabForm : Form
         brand.SetBounds(80,24,140,30);nav.Controls.Add(brand);
         var sub=Txt("FUTBOL MƏRKƏZİ",8,false,Muted);
         sub.SetBounds(80,53,138,19);nav.Controls.Add(sub);
-        var build=Txt("NATIVE · 0.9.54",8,false,Muted);
+        var build=Txt("NATIVE · 0.9.55",8,false,Muted);
         build.SetBounds(20,91,190,22);nav.Controls.Add(build);
         var items=new(string key,string label)[]{
             ("matches","⚽  Matçlar"),("standings","▤   Cədvəl"),("search","⌕   Axtarış"),
-            ("tactics","▦   Taktika"),("favorites","☆   Seçilmişlər"),("settings","⚙   Tənzimləmələr")
+            ("tactics","▦   Taktika"),("history","◷   Tarix arxivi"),("favorites","☆   Seçilmişlər"),("settings","⚙   Tənzimləmələr")
         };
         int y=149;
         foreach(var item in items){
@@ -263,7 +271,7 @@ public sealed class MatchlabForm : Form
         title.Text=page switch {
             "matches"=>"Canlı matçlar","standings"=>"Turnir cədvəli","search"=>"Futbol arxivi",
             "tactics"=>"Taktika studiyası","favorites"=>"Seçilmiş matçlar","settings"=>"Tənzimləmələr",
-            "details"=>"Matç mərkəzi","profile"=>"Futbol profili","comparison"=>"Futbolçu müqayisəsi",_=>"MATCHLAB AZ"
+            "details"=>"Matç mərkəzi","profile"=>"Futbol profili","comparison"=>"Futbolçu müqayisəsi","history"=>"Tarixi matç arxivi",_=>"MATCHLAB AZ"
         };
     }
     private Panel CardPanel(int height=80) {
@@ -342,6 +350,7 @@ public sealed class MatchlabForm : Form
             case "details":if(hasOpenedMatch)_=ShowDetails(token);break;
             case "profile": break;
             case "comparison": _ = ShowComparison(token); break;
+            case "history": ShowHistory(); break;
         }
     }
     private static string BakuDate(DateTime x)=>x.ToString("yyyy-MM-dd",CultureInfo.InvariantCulture);
@@ -382,6 +391,7 @@ public sealed class MatchlabForm : Form
             var data=await Get("/api/live?league="+Uri.EscapeDataString(league)+"&date="+BakuDate(selectedDate));
             if(page!="matches"||token!=viewVersion)return;
             latestMatches=Array(data,"items").Select(x=>x.Clone()).ToList();
+            CheckScoreAlerts(data);
             StoreMatches(data);
             SetConnection(Yes(data,"available"));
             content.SuspendLayout();content.Controls.Clear();DashboardHero();DateFilter();
@@ -405,6 +415,34 @@ public sealed class MatchlabForm : Form
                 EmptyState("Serverə qoşulmaq mümkün olmadı",e.Message);
             }else Message("Serverlə əlaqə alınmadı: "+e.Message+" · saxlanmış nəticələr CANLI DEYİL.",true);
         }
+    }
+    private void CheckScoreAlerts(JsonElement payload){
+        // Never notify from stale snapshots or on the first load.
+        if(!Yes(payload,"available")||Yes(payload,"stale")||Yes(payload,"partial"))return;
+        var now=new Dictionary<string,(int home,int away,string state)>();
+        foreach(var m in latestMatches){
+            string id=Val(m,"id"),state=Val(m,"state");
+            if(id.Length==0||Yes(m,"stale")||state=="scheduled")continue;
+            if(!int.TryParse(Val(m,"homeScore"),out int home)||!int.TryParse(Val(m,"awayScore"),out int away))continue;
+            now[id]=(home,away,state);
+            if(!hasLiveBaseline||!scoreBaseline.TryGetValue(id,out var previous))continue;
+            bool favoritesOnly=Option("favorites_only","false")=="true";
+            if(favoritesOnly&&!favoriteSnapshots.ContainsKey(id))continue;
+            if(home>previous.home||away>previous.away)PlayEvent("goals");
+            else if(state=="final"&&previous.state!="final")PlayEvent("final");
+            else if(state=="live"&&previous.state=="scheduled")PlayEvent("kickoff");
+        }
+        if(now.Count==0)return;
+        scoreBaseline.Clear();
+        foreach(var pair in now)scoreBaseline[pair.Key]=pair.Value;
+        hasLiveBaseline=true;
+    }
+    private void PlayEvent(string id){
+        if(Option("sound_enabled","true")!="true")return;
+        if(Option("alert_"+id,"true")!="true")return;
+        if(!int.TryParse(Option("tone_"+id,"1"),out var tone)||tone==0)return;
+        int.TryParse(Option("volume","90"),out var level);
+        MatchlabAudio.Play(id,Math.Clamp(level,0,100));
     }
     private void MatchFilterBar(bool stale){
         var bar=CardPanel(67);
@@ -745,6 +783,65 @@ public sealed class MatchlabForm : Form
             }
         }catch(Exception e){if(page=="details"&&token==viewVersion)Message("Matç detalları alınmadı: "+e.Message,true);}
     }
+    private void ShowHistory(){
+        Heading("FOOTBALL HERITAGE  /  OPENFOOTBALL CC0");
+        Message("Tarixi nəticələr: canlı oyun DEYİL. Sənədli CC0 arxivi; hesab yalnız mənbədə varsa göstərilir.");
+        var filters=CardPanel(133);
+        var leagueList=new ComboBox{DropDownStyle=ComboBoxStyle.DropDownList,BackColor=Raised,ForeColor=Ink,Font=new Font("Segoe UI",11)};
+        string[] keys={"eng.1","esp.1","ger.1","ita.1","fra.1","tur.1","por.1","ned.1","sco.1","eng.2","bel.1","aut.1","gre.1"};
+        string[] names={"Premier League","La Liga","Bundesliga","Serie A","Ligue 1","Süper Lig","Primeira Liga","Eredivisie","Scottish Premiership","Championship","Belgian Pro League","Austrian Bundesliga","Super League Greece"};
+        leagueList.Items.AddRange(names);
+        leagueList.SelectedIndex=Math.Max(0,System.Array.IndexOf(keys,historyLeague));
+        leagueList.SetBounds(15,12,235,37);filters.Controls.Add(leagueList);
+        var seasonBox=new ComboBox{DropDownStyle=ComboBoxStyle.DropDownList,BackColor=Raised,ForeColor=Ink,Font=new Font("Segoe UI",11)};
+        for(int y=2026;y>=2010;y--)seasonBox.Items.Add(y+"-"+((y+1)%100).ToString("00"));
+        seasonBox.SelectedItem=historySeason;
+        seasonBox.SetBounds(262,12,156,37);filters.Controls.Add(seasonBox);
+        var input=new TextBox{Text=historyTeam,PlaceholderText="Komanda adına görə filtr",BackColor=Raised,ForeColor=Ink,BorderStyle=BorderStyle.FixedSingle,Font=new Font("Segoe UI",11)};
+        input.SetBounds(15,64,340,35);filters.Controls.Add(input);
+        var button=NewButton("⌕  Arxivdə axtar",Accent,Bg,175);button.SetBounds(369,62,175,40);filters.Controls.Add(button);
+        button.Click+=(_,_)=>{
+            historyLeague=keys[Math.Max(0,leagueList.SelectedIndex)];
+            historySeason=seasonBox.SelectedItem?.ToString()??"2025-26";
+            historyTeam=input.Text.Trim();historyOffset=0;Render();
+        };
+        _=LoadHistory(viewVersion);
+    }
+    private async Task LoadHistory(int token){
+        Message("Tarixi matçlar mənbədən yoxlanılır…");
+        try{
+            string query="/api/history?league="+Uri.EscapeDataString(historyLeague)+
+                "&season="+Uri.EscapeDataString(historySeason)+
+                "&offset="+historyOffset+"&limit=60&team="+Uri.EscapeDataString(historyTeam);
+            var result=await Get(query);
+            if(page!="history"||token!=viewVersion)return;
+            if(!Yes(result,"available")){
+                EmptyState("Bu mövsüm arxivdə mövcud deyil",Val(result,"message","Başqa mövsüm və ya liqa seç."));return;
+            }
+            Heading(Val(result,"leagueName","Tarixi matçlar")+" · "+historySeason+" · "+Val(result,"count")+" qeyd");
+            var items=Array(result,"items").ToList();
+            if(items.Count==0){EmptyState("Nəticə tapılmadı","Mövsüm, liqa və ya komanda filtrini dəyiş.",false);return;}
+            foreach(var m in items){
+                var row=CardPanel(82);
+                var round=Txt(Val(m,"round")+"  ·  "+Val(m,"date")+"  "+Val(m,"time"),9,false,Muted);
+                round.SetBounds(18,3,650,25);row.Controls.Add(round);
+                var names=Txt(Val(m,"home")+"   —   "+Val(m,"away"),12,true,Ink);
+                names.SetBounds(18,29,Math.Max(300,row.Width-200),41);names.Anchor=AnchorStyles.Left|AnchorStyles.Top;
+                row.Controls.Add(names);
+                var score=Txt(Yes(m,"resultRecorded")?Val(m,"homeScore")+" : "+Val(m,"awayScore"):"— : —",15,true,Accent);
+                score.SetBounds(row.Width-145,27,130,42);score.Anchor=AnchorStyles.Right|AnchorStyles.Top;
+                row.Controls.Add(score);
+            }
+            string next=Val(result,"nextOffset");
+            if(!string.IsNullOrEmpty(next)){
+                var more=CardPanel(65);
+                var button=NewButton("Daha 60 matç",Accent,Bg,160);button.SetBounds(15,10,160,42);
+                button.Click+=(_,_)=>{if(int.TryParse(next,out int v)){historyOffset=v;Render();}};
+                more.Controls.Add(button);
+            }
+            Message("Mənbə: OpenFootball football.json · CC0. Yalnız tarixi nəticələr və təqvim.");
+        }catch(Exception ex){if(page=="history"&&token==viewVersion)EmptyState("Arxiv mənbəsinə çıxış yoxdur",ex.Message);}
+    }
     private void ShowFavorites(){
         Heading("Yadda saxlanmış matçlar");
         Message("Bu siyahı əvvəlki qeydləri göstərir. Köhnə hesab canlı nəticə kimi təqdim edilmir.");
@@ -835,39 +932,69 @@ public sealed class MatchlabForm : Form
         Message("Meydanda 11 oyunçunu sürüşdür, iki dəfə kliklə ad/nömrəni dəyiş. Hərəkət oxlarını animasiyada oynat və PNG saxla. Şəxsi plan avtomatik yadda qalır.");
     }
     private async Task ShowSettings(){
-        Heading("Bildiriş və səs mərkəzi · kateqoriyalar");
-        string[] toneNames={"Səssiz","Qısa siqnal","Təsdiq","Xəbərdarlıq","İkili siqnal"};
+        Heading("MATCHLAB  /  İDARƏETMƏ PANELİ");
+        var panel=CardPanel(154);panel.BackColor=Color.FromArgb(18,48,48);
+        var h=Txt("Futbol mərkəzin sənin nəzarətindədir",16,true,Ink);h.SetBounds(18,13,720,43);panel.Controls.Add(h);
+        var sub=Txt("Matç səsləri, server yenilənməsi və bildiriş seçimləri",11,false,Muted);
+        sub.SetBounds(18,62,760,30);panel.Controls.Add(sub);
+        Heading("Bildiriş səviyyəsi");
+        var volume=CardPanel(95);
+        var volumeLabel=Txt("Səs gücü  ·  "+Option("volume","90")+"%",12,true,Ink);
+        volumeLabel.SetBounds(15,7,270,37);volume.Controls.Add(volumeLabel);
+        var slider=new TrackBar{Minimum=0,Maximum=100,TickFrequency=10,Value=int.TryParse(Option("volume","90"),out var level)?Math.Clamp(level,0,100):90};
+        slider.SetBounds(16,41,430,45);
+        slider.ValueChanged+=(_,_)=>{volumeLabel.Text="Səs gücü  ·  "+slider.Value+"%";SaveOption("volume",slider.Value.ToString());};
+        volume.Controls.Add(slider);
+        var soundSwitch=new CheckBox{Text="Səslər aktiv",ForeColor=Ink,Checked=Option("sound_enabled","true")=="true"};
+        soundSwitch.SetBounds(480,25,190,43);
+        soundSwitch.CheckedChanged+=(_,_)=>SaveOption("sound_enabled",soundSwitch.Checked?"true":"false");
+        volume.Controls.Add(soundSwitch);
+        Heading("Avtomatik yenilənmə");
+        var update=CardPanel(80);
+        var automatic=new CheckBox{Text="Avtomatik matç yoxlaması",ForeColor=Ink,Checked=Option("auto_refresh","true")=="true"};
+        automatic.SetBounds(15,13,280,43);
+        automatic.CheckedChanged+=(_,_)=>SaveOption("auto_refresh",automatic.Checked?"true":"false");
+        update.Controls.Add(automatic);
+        var frequency=new ComboBox{DropDownStyle=ComboBoxStyle.DropDownList,BackColor=Raised,ForeColor=Ink,Font=new Font("Segoe UI",11)};
+        frequency.Items.AddRange(new object[]{"15 saniyə","30 saniyə","45 saniyə","60 saniyə"});
+        string[] values={"15","30","45","60"};
+        frequency.SelectedIndex=Math.Max(0,System.Array.IndexOf(values,Option("refresh_seconds","30")));
+        frequency.SetBounds(308,20,170,37);
+        frequency.SelectedIndexChanged+=(_,_)=>{
+            string value=values[Math.Max(0,frequency.SelectedIndex)];
+            SaveOption("refresh_seconds",value);refreshTimer.Interval=int.Parse(value)*1000;
+        };
+        update.Controls.Add(frequency);
+        Heading("Hadisə səsləri · orijinal melodiyalar");
+        var favCard=CardPanel(62);
+        var favoritesOnly=new CheckBox{Text="Yalnız sevimli oyunlarda səs",ForeColor=Ink,Checked=Option("favorites_only","false")=="true"};
+        favoritesOnly.SetBounds(13,8,350,43);
+        favoritesOnly.CheckedChanged+=(_,_)=>SaveOption("favorites_only",favoritesOnly.Checked?"true":"false");
+        favCard.Controls.Add(favoritesOnly);
+        string[] toneNames={"Səssiz","Orijinal MATCHLAB melodiyası"};
         for(int i=0;i<alertIds.Length;i++){
             string id=alertIds[i];
-            var card=CardPanel(77);
-            var label=Txt(alertNames[i],11,true);label.SetBounds(12,12,185,42);card.Controls.Add(label);
-            var tone=new ComboBox{DropDownStyle=ComboBoxStyle.DropDownList,BackColor=Raised,ForeColor=Ink};
-            tone.Items.AddRange(toneNames.Cast<object>().ToArray());
-            tone.SelectedIndex=int.TryParse(Option("tone_"+id,"1"),out var chosen)?Math.Clamp(chosen,0,4):1;
-            tone.SetBounds(199,15,170,37);card.Controls.Add(tone);
-            tone.SelectedIndexChanged+=(_,_)=>SaveOption("tone_"+id,tone.SelectedIndex.ToString());
-            var vibrate=new CheckBox{Text="Vibrasiya",ForeColor=Ink,Checked=Option("vibrate_"+id,"false")=="true"};
-            vibrate.SetBounds(383,16,120,38);
-            vibrate.CheckedChanged+=(_,_)=>SaveOption("vibrate_"+id,vibrate.Checked?"true":"false");
-            card.Controls.Add(vibrate);
-            var preview=NewButton("♪ Sına",Raised,Accent,100);preview.SetBounds(510,13,100,42);
-            preview.Click+=(_,_)=>{
-                int n=tone.SelectedIndex;
-                if(n>0)System.Media.SystemSounds.Beep.Play();
-                if(vibrate.Checked)MessageBox.Show("Windows masaüstündə vibrasiya cihazı aşkarlanması tətbiq olunmayıb.","MATCHLAB AZ");
-            };
+            var card=CardPanel(76);
+            var label=Txt(alertNames[i],11,true);label.SetBounds(12,12,205,43);card.Controls.Add(label);
+            var enabled=new CheckBox{Text="Aktiv",ForeColor=Ink,Checked=Option("alert_"+id,"true")=="true"};
+            enabled.SetBounds(225,14,95,38);
+            enabled.CheckedChanged+=(_,_)=>SaveOption("alert_"+id,enabled.Checked?"true":"false");
+            card.Controls.Add(enabled);
+            var preview=NewButton("♪  Səsi dinlə",Raised,Accent,156);
+            preview.Anchor=AnchorStyles.Right|AnchorStyles.Top;preview.SetBounds(card.Width-178,14,155,43);
+            preview.Click+=(_,_)=>MatchlabAudio.Play(id,slider.Value);
+            card.SizeChanged+=(_,_)=>preview.Left=card.Width-178;
             card.Controls.Add(preview);
         }
-        Heading("Proqram məlumatı");
-        Message("MATCHLAB AZ Native v0.9.54 · Windows Forms. Brauzer və WebView işlətmir.");
-        Message("Bildiriş seçimləri və səs sınaqları lokaldır; avtomatik canlı push bildirişləri hələ aktiv deyil.");
-        Message("Canlı nəticələr və profillər Render serverindən HTTPS API vasitəsilə gəlir. İnternet olmayanda uydurma statistika göstərilmir.");
+        Heading("Bağlantı və məlumatın doğruluğu");
+        Message("Mənbə: Render HTTPS API (Enzonic hələ yoxlanmayıb). Keş məlumatı CANLI DEYİL. Səslər yalnız real hesab dəyişikliyi aşkar olunanda, proqram açıq ikən işləyir.");
+        Message("Serveri pulsuz planda oyatmaq gecikmə yarada bilər. İnternet olmadan canlı hesab və dəqiq statistikalar uydurulmur.");
         try{
             var d=await Get("/api/status");
             if(page!="settings")return;
             SetConnection(Yes(d,"ok"));
-            Message("Server: "+Val(d,"version")+"  ·  Arxiv: "+Val(Prop(d,"world"),"total","yüklənməyib"));
-        }catch(Exception e){if(page=="settings"){SetConnection(false);Message("Server vəziyyəti: "+e.Message,true);}}
+            Message("Server: "+Val(d,"version")+"  ·  Arxiv: "+Val(Prop(d,"world"),"total","məlum deyil"));
+        }catch(Exception e){if(page=="settings"){SetConnection(false);Message("Server: "+e.Message,true);}}
     }
     protected override void OnFormClosed(FormClosedEventArgs e){refreshTimer.Stop();Api.Dispose();base.OnFormClosed(e);}
 }
