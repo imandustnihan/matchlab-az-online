@@ -71,8 +71,18 @@ def tap(query,by="text",scroll=False):
                 time.sleep(.8)
                 return
         if scroll:
-            adb("shell","input","swipe","240","770","240","300","390")
-            time.sleep(.6)
+            # Scale touch coordinates to actual emulator pixels, not Android dp.
+            # Scroll near the right edge, away from draggable players on the pitch.
+            width,height=1080,1920
+            try:
+                size=adb("shell","wm","size")
+                match=re.search(r"(\\d+)x(\\d+)",size)
+                if match:width,height=map(int,match.groups())
+            except Exception:pass
+            x=int(width*.94)
+            adb("shell","input","swipe",str(x),str(int(height*.84)),
+                str(x),str(int(height*.30)),"360")
+            time.sleep(.7)
     raise AssertionError("Cannot tap element: "+query)
 
 def capture(name):
@@ -84,10 +94,9 @@ def capture(name):
     return nodes
 
 def main():
-    adb("shell","settings","put","global","window_animation_scale","0")
-    adb("shell","settings","put","global","transition_animation_scale","0")
-    adb("shell","settings","put","global","animator_duration_scale","0")
-    adb("shell","am","start","-n",ACTIVITY,timeout=35)
+    # Changing emulator system settings can fail before the Android system
+    # services finish booting. Do not require these nonessential commands.
+    adb("shell","am","start","-n",ACTIVITY,timeout=50)
     wait_for("Canlı matçlar")
     wait_for("MATCHLAB AZ")
     capture("01_home")
