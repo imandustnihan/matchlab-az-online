@@ -28,12 +28,12 @@
 
 ## 🏟️ Windows + Android Premium — v0.9.56
 
-- **Tarixi futbol arxivi:** OpenFootball CC0 liqa/mövsüm/komanda filtri; tarixi nəticələr heç vaxt canlı hesab kimi təqdim edilmir.
-- **Windows:** maksimum pəncərə ilə açılış, kateqoriyalara görə orijinal səs melodiyaları və güc ayarı, real hesab dəyişikliklərinin səs ilə bildirilməsi.
-- **Android:** orijinal M loqolu başlıq, tarixi oyunlar ekranı, səs gücü nəzarəti və vibrasiya seçimlərinin ləğvi.
+- **Tarixi futbol arxivi:** Mövsüm bir dəfə yüklənir və yerli yaddaşda saxlanılır; komanda axtarışı sonrakı dəfə server gözləmədən açılır. Məlumat OpenFootball CC0-dandır, canlı deyil.
+- **Windows:** kəsilməyən 'Bu gün futbol' başlığı, orijinal M loqosu, maksimum pəncərə, yeni görünüş/keş tənzimləmələri və kateqoriyalara görə səs.
+- **Android:** orijinal M loqolu başlıq, tarixi oyunlar ekranı, səs gücü, keş/avtoyeniləmə tənzimləmələri, vibrasiyasız hadisə siqnalları.
 - **Futbol bazası:** 506207 Reep CC0 kimlik qeydi; bu tam statistika bazası deyil. Hazırda yalnız mənbədə həqiqətən mövcud olan statistikalar göstərilir.
 
-[Buraxılış qeydləri](native/RELEASE_NOTES_v0956.md)
+[Buraxılış qeydləri](native/RELEASE_NOTES_v0956.md) · APK fayl adı artıq **TEST** etiketi daşımır, lakin hələ **debug imzalı** inkişaf paketidir.
 
 ### Mövcud Windows imkanları
 
@@ -49,7 +49,7 @@
 
 ## 📱 Android
 
-Android native Java TEST v0.9.56, WebView yoxdur. Köhnə M loqosu qorunub, yeni tarixi futbol ekranı, səs tənzimləmələri və canlı hesab dəyişikliklərinə lokal səs əlavə edilib. Bildirişlər proqram bağlı olduqda gəlmir; Play Store buraxılışı deyil.
+Android native Java v0.9.56, WebView yoxdur. Köhnə M loqosu qorunub. Tarixi arxiv, səs, görünüş və keş tənzimləmələri, Taktika Studiyasında Geri al/Güzgü, hərəkət animasiyası və PNG ixracı əlavə edilib. Bildirişlər proqram bağlı olduqda gəlmir; Play Store buraxılışı deyil.
 
 ## 🧰 İnkişafçılar üçün
 
