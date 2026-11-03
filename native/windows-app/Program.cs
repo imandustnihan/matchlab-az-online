@@ -239,7 +239,7 @@ public sealed class MatchlabForm : Form
         brand.SetBounds(80,24,140,30);nav.Controls.Add(brand);
         var sub=Txt("FUTBOL MƏRKƏZİ",8,false,Muted);
         sub.SetBounds(80,53,138,19);nav.Controls.Add(sub);
-        var build=Txt("NATIVE · 0.9.56",8,false,Muted);
+        var build=Txt("NATIVE · 0.9.57",8,false,Muted);
         build.SetBounds(20,91,190,22);nav.Controls.Add(build);
         var items=new(string key,string label)[]{
             ("matches","⚽  Matçlar"),("standings","▤   Cədvəl"),("search","⌕   Axtarış"),
@@ -894,8 +894,30 @@ public sealed class MatchlabForm : Form
         var all=Array(result,"items").Where(m=>
             term.Length==0||Val(m,"home").Contains(term,StringComparison.OrdinalIgnoreCase)||
             Val(m,"away").Contains(term,StringComparison.OrdinalIgnoreCase)).ToList();
-        Message(all.Count+" uyğun tarixi matç · axtarış yerli yaddaşdan işləyir · CANLI DEYİL");
+        Message(legacy
+            ? all.Count+" bu səhifədə uyğun matç · server üzrə axtarış · TAM MÖVSÜM DEYİL · CANLI DEYİL"
+            : all.Count+" uyğun tarixi matç · yerli axtarış · CANLI DEYİL");
         if(all.Count==0){EmptyState("Komanda tapılmadı","Adı dəyişdir və yenidən axtar.",false);return;}
+        if(term.Length>0){
+            var form=new HistoryTeamForm(term);
+            foreach(var game in all){
+                int h=int.TryParse(Val(game,"homeScore"),out int homeGoals)?homeGoals:-1;
+                int a=int.TryParse(Val(game,"awayScore"),out int awayGoals)?awayGoals:-1;
+                form.Add(Val(game,"home"),Val(game,"away"),h,a,Yes(game,"resultRecorded"),Val(game,"date"));
+            }
+            if(form.Ambiguous)
+                Message("Axtarış bir neçə fərqli kluba uyğun gəlir. Forma hesabı üçün klubun tam adını yaz.",true);
+            else if(form.Played>0){
+                bool complete=!legacy&&Yes(result,"bundle")&&Yes(result,"complete");
+                var insight=CardPanel(118);
+                var label=Txt(complete?"KOMANDA FORMASI · TAM MÖVSÜM":"KOMANDA FORMASI · BU SƏHİFƏ (TAM DEYİL)",11,true,Accent);
+                label.SetBounds(15,7,740,29);insight.Controls.Add(label);
+                var totals=Txt(form.Totals,11,true,Ink);
+                totals.SetBounds(15,43,770,28);insight.Controls.Add(totals);
+                var trend=Txt(form.GoalsAndForm,11,false,Muted);
+                trend.SetBounds(15,78,770,28);insight.Controls.Add(trend);
+            }
+        }
         foreach(var m in all.Skip(legacy?0:historyOffset).Take(60)){
             var row=CardPanel(83);
             var round=Txt(Val(m,"round")+"  ·  "+Val(m,"date")+"  "+Val(m,"time"),9,false,Muted);
@@ -1096,12 +1118,15 @@ public sealed class MatchlabForm : Form
                 Heading("Bağlantı və məlumatın doğruluğu");
         Message("Mənbə: Render HTTPS API (Enzonic hələ yoxlanmayıb). Keş məlumatı CANLI DEYİL. Səslər yalnız real hesab dəyişikliyi aşkar olunanda, proqram açıq ikən işləyir.");
         Message("Serveri pulsuz planda oyatmaq gecikmə yarada bilər. İnternet olmadan canlı hesab və dəqiq statistikalar uydurulmur.");
+        var checkClock=System.Diagnostics.Stopwatch.StartNew();
         try{
             var d=await Get("/api/status");
+            checkClock.Stop();
             if(page!="settings")return;
             SetConnection(Yes(d,"ok"));
-            Message("Server: "+Val(d,"version")+"  ·  Arxiv: "+Val(Prop(d,"world"),"total","məlum deyil"));
-        }catch(Exception e){if(page=="settings"){SetConnection(false);Message("Server: "+e.Message,true);}}
+            Message("Server: "+Val(d,"version")+"  ·  Arxiv: "+Val(Prop(d,"world"),"total","məlum deyil")+
+                "  ·  Cavab müddəti: "+checkClock.ElapsedMilliseconds+" ms (şəbəkə daxil)");
+        }catch(Exception e){if(page=="settings"){SetConnection(false);Message("Server: "+e.Message+"  ·  "+checkClock.ElapsedMilliseconds+" ms",true);}}
     }
     protected override void OnFormClosed(FormClosedEventArgs e){refreshTimer.Stop();Api.Dispose();base.OnFormClosed(e);}
 }

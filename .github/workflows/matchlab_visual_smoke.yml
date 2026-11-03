@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - 'qa/**'
+      - 'feat/**'
     paths:
       - 'native/qa/**'
       - '.github/workflows/matchlab_visual_smoke.yml'
@@ -87,6 +88,11 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+      - name: Test pure Java historical form calculation
+        run: |
+          mkdir -p /tmp/matchlab-history-qa
+          javac -d /tmp/matchlab-history-qa native/android/app/src/main/java/az/matchlab/mobile/HistoryTeamForm.java native/qa/HistoryTeamFormSmoke.java
+          java -cp /tmp/matchlab-history-qa HistoryTeamFormSmoke
       - name: Generate Android branding and build real app
         run: |
           set -euo pipefail

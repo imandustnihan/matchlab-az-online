@@ -1,4 +1,4 @@
-# MATCHLAB AZ — Android Studio və Windows build (v0.9.51)
+# MATCHLAB AZ — Android Studio və Windows build (v0.9.57)
 
 ## 1. Android APK — əvvəlcə bunu hazırla
 
@@ -21,7 +21,7 @@
 
 ## GitHub Actions
 
-`.github/workflows/matchlab_build_native.yml` Android APK-nı **əvvəl**, Windows EXE-ni isə Android uğurla bitdikdən **sonra** yaradır. Build artefaktlarının adları `MATCHLAB_AZ_Android_v0951` və `MATCHLAB_AZ_Windows_x64_v0951`-dir.
+`.github/workflows/matchlab_build_native.yml` Android APK-nı **əvvəl**, Windows EXE-ni isə Android uğurla bitdikdən **sonra** yaradır. Build artefaktlarının adları `MATCHLAB_AZ_Android_v0957` və `MATCHLAB_AZ_Windows_x64_v0957`-dir.
 
 ## Hazır funksiyalar və məhdudiyyətlər
 
