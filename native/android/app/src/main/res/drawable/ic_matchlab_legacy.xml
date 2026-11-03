@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="64dp" android:height="64dp"
+    android:viewportWidth="64" android:viewportHeight="64">
+    <!-- Restore the original assets/icon.svg lime M / football dot design. -->
+    <path android:fillColor="#B5F568"
+        android:pathData="M16,0 L48,0 Q64,0 64,16 L64,48 Q64,64 48,64 L16,64 Q0,64 0,48 L0,16 Q0,0 16,0 Z"/>
+    <path android:fillColor="@android:color/transparent" android:strokeColor="#132C20"
+        android:strokeWidth="8" android:strokeLineCap="round" android:strokeLineJoin="round"
+        android:pathData="M10,40 L21,17 L32,33 L43,17 L54,40"/>
+    <path android:fillColor="#132C20"
+        android:pathData="M57,47 A8,8 0,1 1,41 47 A8,8 0,1 1,57 47 Z"/>
+</vector>
