@@ -38,6 +38,21 @@ class PublicHandler(LocalHandler):
             reg=world_db.counts()
             ok=bool(reg and reg.get('total') == 506207)
             return self.json_response(200 if ok else 503, {'ok': ok, 'service': 'matchlab', 'version': '0.9.52', 'registryTotal':reg.get('total',0) if reg else 0, 'hosting':'render'})
+        # Do not expose public repository internals through SimpleHTTPRequestHandler.
+        # Encoded paths and mixed-case extensions must not bypass the check.
+        decoded=urllib.parse.unquote(path).replace('\\\\','/').lower()
+        segments=[part for part in decoded.split('/') if part not in ('', '.')]
+        private_names={'hosting_server.py','server.py','world_football.sqlite',
+                       'data_manifest.json','render.yaml','.env','.git',
+                       'prepare_database.py','requirements.txt'}
+        private_dirs={'.git','.github','deploy','tests','native','score_cache'}
+        private_extensions=('.py','.pyc','.sqlite','.db','.gz','.part001','.part002',
+                            '.part003','.part004','.part005','.part006','.part007','.part008',
+                            '.part009','.part010','.part011','.part012','.part013','.part014',
+                            '.part015','.part016','.pem','.key','.env')
+        if (any(part in private_dirs or part.startswith('.') for part in segments)
+            or any(part in private_names or part.endswith(private_extensions) for part in segments)):
+            return self.json_response(404, {'error': 'Not found'})
         if path in ('/api/install-start', '/api/install-upload', '/api/install-status', '/api/wikipedia-refresh'):
             return self.json_response(403, {'error': 'İctimai serverdə bu əməliyyat aktiv deyil.'})
         if path == '/api/status':
