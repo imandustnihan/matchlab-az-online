@@ -47,6 +47,30 @@ class HistoryTests(unittest.TestCase):
         self.assertFalse(archive.view("unknown","2025-26",fail)["available"])
         self.assertFalse(archive.view("eng.1","2025-35",fail)["available"])
 
+    def test_full_season_bundle_for_local_filtering(self):
+        calls=[]
+        def fetch(url,ttl):
+            calls.append((url,ttl))
+            return {"matches":[
+                {"date":"2025-08-15","team1":"Liverpool FC" if i%2 else "Arsenal",
+                 "team2":"Bournemouth","score":{"ft":[1,0]}} for i in range(145)
+            ]}
+        bundle=archive.bundle("eng.1","2025-26",fetch)
+        self.assertTrue(bundle["bundle"])
+        self.assertTrue(bundle["complete"])
+        self.assertFalse(bundle["live"])
+        self.assertEqual(bundle["count"],145)
+        self.assertEqual(len(bundle["items"]),145)
+        self.assertTrue(all(item["resultRecorded"] for item in bundle["items"]))
+        self.assertEqual(len(calls),2)  # One season source reused across pages.
+
+    def test_bundle_source_failure_is_not_a_fixture(self):
+        def fail(url,ttl):raise TimeoutError("offline")
+        payload=archive.bundle("eng.1","2025-26",fail)
+        self.assertFalse(payload["available"])
+        self.assertFalse(payload["live"])
+        self.assertEqual(payload["items"],[])
+
     def test_pagination_and_clamping(self):
         def fetch(u,t):
             return {"matches":[{"date":"2025-08-15","team1":str(i),"team2":"B","score":[0,0]} for i in range(115)]}
