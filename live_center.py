@@ -116,11 +116,29 @@ def view(league, date, load_one):
         return {'items': [], 'available': False, 'message': 'Liqa mövcud deyil'}
     key = (league, date)
     ttl = 25 if date == baku_today() else 600
+    now = time.monotonic()
     with _LOCK:
         old = _CACHE.get(key)
-        if old and time.monotonic() - old[0] < ttl:
+        if old and now - old[0] < ttl:
             return dict(old[1], cached=True)
         lock = _FLIGHT.setdefault(key, threading.Lock())
+        # Stale-while-revalidate: return a previously checked snapshot immediately.
+        # NEVER present an old result as live. The next request receives refreshed data.
+        # An upstream failure keeps only an explicitly stale-labelled snapshot.
+        if old and 0 <= now - old[0] < 150:
+            result = dict(old[1])
+            result.update(cached=True, stale=True, refreshing=True,
+                          liveCount=0,
+                          message='Keşdəki nəticələr göstərilir; arxa planda yenilənir. CANLI DEYİL.')
+            result['items'] = [dict(item, stale=True) for item in old[1]['items']]
+            if lock.acquire(blocking=False):
+                def background():
+                    try:
+                        _compute_view(league, date, load_one)
+                    finally:
+                        lock.release()
+                threading.Thread(target=background, name='matchlab-live-refresh', daemon=True).start()
+            return result
     with lock:
         with _LOCK:
             old = _CACHE.get(key)
