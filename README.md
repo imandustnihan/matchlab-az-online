@@ -18,22 +18,22 @@
 
 | Platforma | Paket | Yükləmə |
 |---|---|---|
-| 🖥️ **Windows 10/11, 64-bit** | Quraşdırıcı: Start menyusu, masaüstü qısayolu, silinmə | [**MATCHLAB AZ Setup EXE**](https://github.com/imandustnihan/matchlab-az-online/releases/latest/download/MATCHLAB_AZ_Setup_0.9.55_x64.exe) |
-| 💻 **Windows 10/11, 64-bit** | Portable: quraşdırmadan açılan versiya | [**MATCHLAB AZ Portable EXE**](https://github.com/imandustnihan/matchlab-az-online/releases/latest/download/MATCHLAB_AZ_Portable_0.9.55_x64.exe) |
-| 📱 **Android 8+** | **TEST / debug APK** — mobil proqramın yenilənmiş v0.9.55 versiyası | [**MATCHLAB AZ Android TEST APK**](https://github.com/imandustnihan/matchlab-az-online/releases/latest/download/MATCHLAB_AZ_Android_0.9.55_TEST.apk) |
+| 🖥️ **Windows 10/11, 64-bit** | Quraşdırıcı: Start menyusu, masaüstü qısayolu, silinmə | [**MATCHLAB AZ Setup EXE**](https://github.com/imandustnihan/matchlab-az-online/releases/latest/download/MATCHLAB_AZ_Setup_0.9.56_x64.exe) |
+| 💻 **Windows 10/11, 64-bit** | Portable: quraşdırmadan açılan versiya | [**MATCHLAB AZ Portable EXE**](https://github.com/imandustnihan/matchlab-az-online/releases/latest/download/MATCHLAB_AZ_Portable_0.9.56_x64.exe) |
+| 📱 **Android 8+** | **Geliştirme APK** — mobil proqramın yenilənmiş v0.9.56 versiyası | [**MATCHLAB AZ Android APK**](https://github.com/imandustnihan/matchlab-az-online/releases/latest/download/MATCHLAB_AZ_Android_0.9.56.apk) |
 
 > **Alternativ:** [Bütün buraxılışlar](https://github.com/imandustnihan/matchlab-az-online/releases) · [Ən yeni buraxılış](https://github.com/imandustnihan/matchlab-az-online/releases/latest) · [SHA-256 dəyərləri](https://github.com/imandustnihan/matchlab-az-online/releases/latest/download/SHA256SUMS.txt).
 >
 > Windows quraşdırıcısı və EXE hələ **rəqəmsal imzalanmayıb**. Windows SmartScreen xəbərdarlığı göstərə bilər. Yükləmənin mənbəsini və SHA-256 dəyərini yoxlayın. Bu versiya **Microsoft Store-da hələ yayımlanmayıb**.
 
-## 🏟️ Windows + Android Premium — v0.9.55
+## 🏟️ Windows + Android Premium — v0.9.56
 
 - **Tarixi futbol arxivi:** OpenFootball CC0 liqa/mövsüm/komanda filtri; tarixi nəticələr heç vaxt canlı hesab kimi təqdim edilmir.
 - **Windows:** maksimum pəncərə ilə açılış, kateqoriyalara görə orijinal səs melodiyaları və güc ayarı, real hesab dəyişikliklərinin səs ilə bildirilməsi.
 - **Android:** orijinal M loqolu başlıq, tarixi oyunlar ekranı, səs gücü nəzarəti və vibrasiya seçimlərinin ləğvi.
 - **Futbol bazası:** 506207 Reep CC0 kimlik qeydi; bu tam statistika bazası deyil. Hazırda yalnız mənbədə həqiqətən mövcud olan statistikalar göstərilir.
 
-[Buraxılış qeydləri](native/RELEASE_NOTES_v0955.md)
+[Buraxılış qeydləri](native/RELEASE_NOTES_v0956.md)
 
 ### Mövcud Windows imkanları
 
@@ -49,7 +49,7 @@
 
 ## 📱 Android
 
-Android native Java TEST v0.9.55, WebView yoxdur. Köhnə M loqosu qorunub, yeni tarixi futbol ekranı, səs tənzimləmələri və canlı hesab dəyişikliklərinə lokal səs əlavə edilib. Bildirişlər proqram bağlı olduqda gəlmir; Play Store buraxılışı deyil.
+Android native Java TEST v0.9.56, WebView yoxdur. Köhnə M loqosu qorunub, yeni tarixi futbol ekranı, səs tənzimləmələri və canlı hesab dəyişikliklərinə lokal səs əlavə edilib. Bildirişlər proqram bağlı olduqda gəlmir; Play Store buraxılışı deyil.
 
 ## 🧰 İnkişafçılar üçün
 
