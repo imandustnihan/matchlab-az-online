@@ -133,6 +133,10 @@ public static class QaProgram
                 "History form uses the selected team's home/away goals");
             Check(historyForm.RecentForm=="M · H · Q",
                 "History form displays most recent results in descending date order");
+            var ambiguousForm=new HistoryTeamForm("Manchester");
+            ambiguousForm.Add("Manchester City","Chelsea",2,0,true,"2025-08-11");
+            ambiguousForm.Add("Manchester United","Fulham",1,1,true,"2025-08-12");
+            Check(ambiguousForm.Ambiguous,"Shared prefix cannot mix different teams");
 
             RenderPage(form,"tactics");
             var pitch=Walk(form).OfType<PitchPanel>().FirstOrDefault();
