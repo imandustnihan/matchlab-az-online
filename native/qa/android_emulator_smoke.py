@@ -76,7 +76,7 @@ def tap(query,by="text",scroll=False):
             width,height=1080,1920
             try:
                 size=adb("shell","wm","size")
-                match=re.search(r"(\\d+)x(\\d+)",size)
+                match=re.search(r"(\d+)x(\d+)",size)
                 if match:width,height=map(int,match.groups())
             except Exception:pass
             x=int(width*.94)
