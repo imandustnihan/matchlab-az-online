@@ -8,7 +8,7 @@ function Passed([string]$name) {
     Write-Host "[PASS] $name"
 }
 try {
-    $setup = Join-Path (Get-Location) 'native/windows-app/installer-out/MATCHLAB_AZ_Setup_0.9.56_x64.exe'
+    $setup = Join-Path (Get-Location) 'native/windows-app/installer-out/MATCHLAB_AZ_Setup_0.9.57_x64.exe'
     if (-not (Test-Path $setup)) { throw "Setup was not built: $setup" }
     Passed 'Offline Inno Setup installer exists'
     $folder = Join-Path $env:TEMP 'MATCHLAB_QA_Install_0956'
