@@ -407,7 +407,7 @@ public final class MainActivity extends Activity {
                 HttpURLConnection conn=(HttpURLConnection)url.openConnection();
                 conn.setConnectTimeout(6500);conn.setReadTimeout(14500);
                 conn.setRequestProperty("Accept","application/json");
-                conn.setRequestProperty("User-Agent","MATCHLABAZ-Native/0.9.57");
+                conn.setRequestProperty("User-Agent","MATCHLABAZ-Native/0.9.58");
                 int code=conn.getResponseCode();
                 if(code<200||code>=300)throw new IOException("HTTP "+code);
                 try(InputStream input=conn.getInputStream();ByteArrayOutputStream out=new ByteArrayOutputStream()){
@@ -1177,7 +1177,7 @@ public final class MainActivity extends Activity {
         info("Bu plan sənin öz taktiki layihəndir. Real matç heyəti və təsdiqlənmiş formasiya kimi təqdim edilmir.",false);
     }
     private void showSettings(){
-        section("MATCHLAB AZ Native 0.9.57");
+        section("MATCHLAB AZ Native 0.9.58");
         section("Görünüş, şəbəkə və yaddaş");
         Switch refreshToggle=new Switch(this);
         refreshToggle.setText("Matçları avtomatik yenilə");
@@ -1365,7 +1365,8 @@ public final class MainActivity extends Activity {
             }else if(form.played()>0){
                 boolean complete=!legacy&&json.optBoolean("complete")&&json.optBoolean("bundle");
                 section(complete?"KOMANDA FORMASI · TAM MÖVSÜM":"KOMANDA FORMASI · BU SƏHİFƏ (TAM DEYİL)");
-                info(form.totals()+"\n"+form.goalsAndForm(),false);
+                info(form.totals()+"\n"+form.goalsAndForm()+"\n"+
+                    form.homeAway()+"\n"+form.efficiency(),false);
             }
         }
         int begin=legacy?0:historyOffset;

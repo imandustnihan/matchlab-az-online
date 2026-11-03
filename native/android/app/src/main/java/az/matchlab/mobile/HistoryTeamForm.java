@@ -14,6 +14,7 @@ public final class HistoryTeamForm {
     private final List<Game> games=new ArrayList<>();
     private final java.util.Set<String> matchedClubs=new java.util.HashSet<>();
     private int wins,draws,losses,forGoals,againstGoals;
+    private int homeWins,homeDraws,homeLosses,awayWins,awayDraws,awayLosses;
     private static final class Game {
         final String date,form;
         final int order;
@@ -31,9 +32,9 @@ public final class HistoryTeamForm {
         matchedClubs.add((h?home:away).trim().toLowerCase(Locale.ROOT));
         int scored=h?homeScore:awayScore,conceded=h?awayScore:homeScore;
         String mark=scored>conceded?"Q":scored<conceded?"M":"H";
-        if("Q".equals(mark))wins++;
-        else if("M".equals(mark))losses++;
-        else draws++;
+        if("Q".equals(mark)){wins++;if(h)homeWins++;else awayWins++;}
+        else if("M".equals(mark)){losses++;if(h)homeLosses++;else awayLosses++;}
+        else {draws++;if(h)homeDraws++;else awayDraws++;}
         forGoals+=scored;againstGoals+=conceded;
         games.add(new Game(date==null?"":date,mark,games.size()));
     }
@@ -44,6 +45,16 @@ public final class HistoryTeamForm {
     public int losses(){return losses;}
     public int goalsFor(){return forGoals;}
     public int goalsAgainst(){return againstGoals;}
+    public int homePlayed(){return homeWins+homeDraws+homeLosses;}
+    public int awayPlayed(){return awayWins+awayDraws+awayLosses;}
+    public int homeWins(){return homeWins;}
+    public int homeDraws(){return homeDraws;}
+    public int homeLosses(){return homeLosses;}
+    public int awayWins(){return awayWins;}
+    public int awayDraws(){return awayDraws;}
+    public int awayLosses(){return awayLosses;}
+    public int goalDifference(){return forGoals-againstGoals;}
+    public int winPercent(){return played()==0?0:(wins*100+played()/2)/played();}
     public String recentForm(){
         List<Game> ordered=new ArrayList<>(games);
         ordered.sort(Comparator.comparing((Game g)->g.date).thenComparingInt(g->g.order).reversed());
@@ -59,5 +70,13 @@ public final class HistoryTeamForm {
     }
     public String goalsAndForm(){
         return "Qollar: "+forGoals+":"+againstGoals+" · Son 5 (Q/H/M): "+recentForm();
+    }
+    public String homeAway(){
+        return "Evdə "+homePlayed()+" ("+homeWins+"Q/"+homeDraws+"H/"+homeLosses+"M) · Səfərdə "+awayPlayed()+
+            " ("+awayWins+"Q/"+awayDraws+"H/"+awayLosses+"M)";
+    }
+    public String efficiency(){
+        int diff=goalDifference();
+        return "Qol fərqi: "+(diff>0?"+":"")+diff+" · Qələbə faizi: "+winPercent()+"%";
     }
 }

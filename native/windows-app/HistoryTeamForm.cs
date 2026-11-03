@@ -20,12 +20,24 @@ public sealed class HistoryTeamForm
     public int Losses { get; private set; }
     public int GoalsFor { get; private set; }
     public int GoalsAgainst { get; private set; }
+    public int HomeWins { get; private set; }
+    public int HomeDraws { get; private set; }
+    public int HomeLosses { get; private set; }
+    public int AwayWins { get; private set; }
+    public int AwayDraws { get; private set; }
+    public int AwayLosses { get; private set; }
+    public int HomePlayed => HomeWins + HomeDraws + HomeLosses;
+    public int AwayPlayed => AwayWins + AwayDraws + AwayLosses;
+    public int GoalDifference => GoalsFor - GoalsAgainst;
+    public int WinPercent => Played == 0 ? 0 : (Wins * 100 + Played / 2) / Played;
 
-    public HistoryTeamForm(string selectedTeam) => team = selectedTeam.Trim();
+    public HistoryTeamForm(string selectedTeam) => team = selectedTeam?.Trim() ?? "";
 
     public void Add(string home, string away, int homeScore, int awayScore, bool resultRecorded, string date)
     {
         if (team.Length == 0 || !resultRecorded || homeScore < 0 || awayScore < 0) return;
+        home ??= "";
+        away ??= "";
         bool homeMatch = home.Contains(team, StringComparison.OrdinalIgnoreCase);
         bool awayMatch = away.Contains(team, StringComparison.OrdinalIgnoreCase);
         // An ambiguous substring (matching both sides) cannot be attributed safely.
@@ -38,9 +50,9 @@ public sealed class HistoryTeamForm
         Played++;
         GoalsFor += scored;
         GoalsAgainst += conceded;
-        if (form == "Q") Wins++;
-        else if (form == "M") Losses++;
-        else Draws++;
+        if (form == "Q") { Wins++; if (homeMatch) HomeWins++; else AwayWins++; }
+        else if (form == "M") { Losses++; if (homeMatch) HomeLosses++; else AwayLosses++; }
+        else { Draws++; if (homeMatch) HomeDraws++; else AwayDraws++; }
         played.Add((date ?? "", played.Count, form));
     }
 
@@ -52,4 +64,6 @@ public sealed class HistoryTeamForm
 
     public string Totals => $"Oyun: {Played}  ·  Qələbə: {Wins}  ·  Heç-heçə: {Draws}  ·  Məğlubiyyət: {Losses}";
     public string GoalsAndForm => $"Qollar: {GoalsFor}:{GoalsAgainst}  ·  Son 5 (Q/H/M): {RecentForm}";
+    public string HomeAway => $"Evdə {HomePlayed} ({HomeWins}Q/{HomeDraws}H/{HomeLosses}M)  ·  Səfərdə {AwayPlayed} ({AwayWins}Q/{AwayDraws}H/{AwayLosses}M)";
+    public string Efficiency => $"Qol fərqi: {GoalDifference:+0;-0;0}  ·  Qələbə faizi: {WinPercent}%";
 }
