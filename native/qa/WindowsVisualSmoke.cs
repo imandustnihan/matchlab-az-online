@@ -143,7 +143,7 @@ public static class QaProgram
             Check(HasText(form,"Açılışda maksimum"),"Startup window-size option exists");
             Shot(form,"05_settings.png");
             File.WriteAllText(Path.Combine(OutDir,"results.json"),
-                JsonSerializer.Serialize(new{platform="Windows 11 hosted runner",passed=Passed,
+                JsonSerializer.Serialize(new{platform="Windows Server 2025 hosted runner",passed=Passed,
                     count=Passed.Count,mode="WinForms native control rendering and interaction"},
                     new JsonSerializerOptions{WriteIndented=true}));
             Console.WriteLine("Windows GUI QA completed: "+Passed.Count+" checks.");
