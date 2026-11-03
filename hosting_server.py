@@ -60,8 +60,11 @@ class PublicHandler(LocalHandler):
 def main():
     port = int(os.environ.get('PORT', '10000'))
     if not (1 <= port <= 65535): raise ValueError('Invalid PORT')
-    with ThreadingHTTPServer(('0.0.0.0', port), PublicHandler) as httpd:
-        print(f'MATCHLAB AZ onlayn server: 0.0.0.0:{port}', flush=True)
+    bind_host=os.environ.get('MATCHLAB_BIND_HOST','0.0.0.0')
+    if bind_host not in ('127.0.0.1','0.0.0.0'):
+        raise ValueError('MATCHLAB_BIND_HOST must be 127.0.0.1 or 0.0.0.0')
+    with ThreadingHTTPServer((bind_host, port), PublicHandler) as httpd:
+        print(f'MATCHLAB AZ onlayn server: {bind_host}:{port}', flush=True)
         httpd.serve_forever(poll_interval=0.5)
 
 if __name__ == '__main__': main()

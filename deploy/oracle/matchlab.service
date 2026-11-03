@@ -1,0 +1,30 @@
+[Unit]
+Description=MATCHLAB AZ public football API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=matchlab
+Group=matchlab
+WorkingDirectory=/opt/matchlab-az
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=PORT=10000
+Environment=MATCHLAB_BIND_HOST=127.0.0.1
+ExecStart=/usr/bin/python3 /opt/matchlab-az/hosting_server.py
+Restart=always
+RestartSec=5
+TimeoutStopSec=20
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/matchlab-az/score_cache
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+UMask=0027
+LimitNOFILE=2048
+MemoryMax=2G
+
+[Install]
+WantedBy=multi-user.target
