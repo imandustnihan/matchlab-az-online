@@ -402,7 +402,51 @@ public sealed class MatchlabForm : Form
                 Heading(entry+" ("+a.Count+")");
                 foreach(var item in a.Take(35))Message(item.ValueKind==JsonValueKind.String?item.ToString():Val(item,"name",item.ToString()).Substring(0,Math.Min(170,Val(item,"name",item.ToString()).Length)));
             }
+            Heading("Wikipedia / Wikidata və karyera keçidləri");
+            string qid=Val(p,"wikidataId",Val(p,"qid"));
+            if(System.Text.RegularExpressions.Regex.IsMatch(qid,@"^Q[1-9][0-9]{0,11}$")){
+                ExternalLink("Wikidata profili","https://www.wikidata.org/wiki/"+qid);
+                ExternalLink("Wikipedia dillərində məqalələr","https://www.wikidata.org/wiki/Special:SiteLinks/"+qid);
+            }
+            string sourceUrl=Val(p,"wikipediaUrl",Val(p,"url"));
+            if(Uri.TryCreate(sourceUrl,UriKind.Absolute,out var uri)&&uri.Scheme=="https")
+                ExternalLink("Təsdiqlənmiş mənbə səhifəsi",sourceUrl);
+            string profileName=Val(p,"name");
+            ExternalLink("Wikipedia-da axtar","https://en.wikipedia.org/w/index.php?search="+Uri.EscapeDataString(profileName));
+            bool club=Val(p,"kind")=="teams";
+            ExternalLink(club?"Heyət və transfer axtarışı":"Karyera və transfer axtarışı",
+                "https://www.google.com/search?q="+Uri.EscapeDataString(profileName+(club?" club squad transfers":" football career transfers")));
+            ExternalLink(club?"Oyunlar və nəticələr":"Mövsümlük statistika axtarışı",
+                "https://www.google.com/search?q="+Uri.EscapeDataString(profileName+(club?" football fixtures results":" football season statistics")));
         }catch(Exception e){if(page=="profile"&&token==viewVersion){content.Controls.Clear();Message("Profil açılmadı: "+e.Message,true);}}
+    }
+    private void ExternalLink(string title,string url){
+        var p=CardPanel(52);
+        var link=new LinkLabel{Text=title,LinkColor=Accent,ActiveLinkColor=Color.White,
+            VisitedLinkColor=Accent,Dock=DockStyle.Fill,TextAlign=ContentAlignment.MiddleLeft,Padding=new Padding(9)};
+        link.Click+=(_,_)=>{
+            try{
+                var uri=new Uri(url);
+                if(uri.Scheme=="https")System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(uri.AbsoluteUri){UseShellExecute=true});
+            }catch(Exception ex){Message("Keçid açılmadı: "+ex.Message,true);}
+        };
+        p.Controls.Add(link);
+    }
+    private void ShowLineup(JsonElement lineup,string side,string teamName){
+        var squad=Prop(lineup,side);
+        if(squad.ValueKind!=JsonValueKind.Object)return;
+        var starters=Array(squad,"starters").ToList();
+        var bench=Array(squad,"substitutes").ToList();
+        if(starters.Count+bench.Count==0)return;
+        Heading(teamName+" · "+(Yes(squad,"formationVerified")?Val(squad,"formation"):"Düzülüş təsdiqlənməyib"));
+        if(Yes(squad,"incomplete"))Message("Heyət mənbədə natamamdır.",true);
+        void Rows(string name,List<JsonElement> players){
+            if(players.Count==0)return;
+            Heading(name+" ("+players.Count+")");
+            foreach(var player in players.Take(25))
+                Message(Val(player,"number","—")+"   "+Val(player,"name","—")+"   "+Val(player,"position"));
+        }
+        Rows("İlk 11",starters);Rows("Ehtiyatlar",bench);
     }
     private async Task ShowDetails(int token){
         var m=openedMatch;
@@ -426,8 +470,29 @@ public sealed class MatchlabForm : Form
             }
             var stats=Array(data,"statistics").Take(40).ToList();
             if(stats.Count>0){
-                Heading("Statistika");
-                foreach(var ev in stats)Message(Val(ev,"name",Val(ev,"label"))+": "+Val(ev,"home",Val(ev,"homeValue","—"))+"  :  "+Val(ev,"away",Val(ev,"awayValue","—")));
+                Heading("Matç statistikası");
+                foreach(var ev in stats){
+                    string left=Val(ev,"home",Val(ev,"homeValue","—")),right=Val(ev,"away",Val(ev,"awayValue","—"));
+                    var block=CardPanel(77);
+                    var name=Txt(Val(ev,"name",Val(ev,"label","Statistika")),11,true);
+                    name.SetBounds(15,6,310,32);block.Controls.Add(name);
+                    var value=Txt(left+"  :  "+right,11,true,Accent);
+                    value.SetBounds(345,6,170,32);block.Controls.Add(value);
+                    static bool ParseStat(string s,out double n) =>
+                        double.TryParse(s.Trim().TrimEnd('%').Replace(',','.'),NumberStyles.Float,CultureInfo.InvariantCulture,out n)&&n>=0;
+                    if(ParseStat(left,out var l)&&ParseStat(right,out var r)&&l+r>0){
+                        int width=440;
+                        var track=new Panel{Left=15,Top=48,Width=width,Height=8,BackColor=Raised};block.Controls.Add(track);
+                        var fill=new Panel{Left=0,Top=0,Width=Math.Clamp((int)Math.Round(width*l/(l+r)),1,width),Height=8,BackColor=Accent};
+                        track.Controls.Add(fill);
+                    }
+                }
+            }else Message("Mənbədə statistika yoxdur.");
+            var lineup=Prop(data,"lineup");
+            if(lineup.ValueKind==JsonValueKind.Object){
+                Heading("Təsdiqlənmiş heyətlər");
+                ShowLineup(lineup,"home",Team(m,"home"));
+                ShowLineup(lineup,"away",Team(m,"away"));
             }
         }catch(Exception e){if(page=="details"&&token==viewVersion)Message("Matç detalları alınmadı: "+e.Message,true);}
     }
