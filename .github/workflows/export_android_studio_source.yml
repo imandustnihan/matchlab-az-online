@@ -1,0 +1,65 @@
+name: Export Android Studio Source v0.9.58
+on:
+  push:
+    branches:
+      - feat/native-team-insights-v0958
+    paths:
+      - '.github/workflows/export_android_studio_source.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  package-android-project:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Create Gradle wrapper for Android Studio
+        working-directory: native/android
+        run: gradle --no-daemon wrapper --gradle-version 8.9
+      - name: Export independent Android Studio project
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import shutil
+          source=Path("native/android")
+          out=Path("dist/MATCHLAB_AZ_Android_Studio_v0.9.58")
+          out.mkdir(parents=True,exist_ok=True)
+          for f in ("settings.gradle","build.gradle","gradle.properties","gradlew","gradlew.bat"):
+              shutil.copy2(source/f,out/f)
+          shutil.copytree(source/"gradle"/"wrapper",out/"gradle"/"wrapper")
+          shutil.copy2(source/"app"/"build.gradle",out/"app"/"build.gradle")
+          shutil.copytree(source/"app"/"src",out/"app"/"src")
+          (out/"README_AZ.txt").write_text(
+              "MATCHLAB AZ v0.9.58 | Android Studio source project\n"
+              "1. ZIP faylını tam çıxart.\n"
+              "2. Android Studio > Open > MATCHLAB_AZ_Android_Studio_v0.9.58 qovluğunu seç.\n"
+              "3. JDK 17, Android SDK Platform 35 və Gradle Sync aktiv olsun.\n"
+              "4. Build > Build Bundle(s) / APK(s) > Build APK(s).\n"
+              "5. Debug APK: app/build/outputs/apk/debug/app-debug.apk\n"
+              "Qeyd: Bu layihə WebView deyil, Java əsaslı native Android tətbiqidir.\n"
+              "İnternetdən canlı matçlar mövcud Render API-yə bağlıdır.\n"
+              "Tarix arxivinin HTTP 404 cavabı server tərəfdə ayrıca düzəlməlidir.\n"
+              "Debug APK rəsmi Play Store üçün imzalanmış release deyil.\n",
+              encoding="utf-8")
+          print("Android Studio source files:", len(list(out.rglob("*"))))
+          PY
+      - name: Verify wrapper and essential sources
+        run: |
+          test -f dist/MATCHLAB_AZ_Android_Studio_v0.9.58/gradle/wrapper/gradle-wrapper.jar
+          test -f dist/MATCHLAB_AZ_Android_Studio_v0.9.58/gradlew.bat
+          test -f dist/MATCHLAB_AZ_Android_Studio_v0.9.58/app/src/main/java/az/matchlab/mobile/MainActivity.java
+          test -f dist/MATCHLAB_AZ_Android_Studio_v0.9.58/app/src/main/java/az/matchlab/mobile/HistoryTeamForm.java
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MATCHLAB_AZ_Android_Studio_Source_v0958
+          path: dist/MATCHLAB_AZ_Android_Studio_v0.9.58/
+          if-no-files-found: error
+          retention-days: 30
