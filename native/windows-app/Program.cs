@@ -85,6 +85,8 @@ public sealed class MatchlabForm : Form
     private readonly List<Button> navButtons = new();
     private string page="matches";
     private string matchFilter="all";
+    private string? comparisonFirstId;
+    private string? comparisonSecondId;
     private readonly HashSet<string> collapsedLeagues=new();
     private string league="all";
     private DateTime selectedDate=DateTime.UtcNow.AddHours(4).Date;
@@ -261,7 +263,7 @@ public sealed class MatchlabForm : Form
         title.Text=page switch {
             "matches"=>"Canlı matçlar","standings"=>"Turnir cədvəli","search"=>"Futbol arxivi",
             "tactics"=>"Taktika studiyası","favorites"=>"Seçilmiş matçlar","settings"=>"Tənzimləmələr",
-            "details"=>"Matç mərkəzi","profile"=>"Futbol profili",_=>"MATCHLAB AZ"
+            "details"=>"Matç mərkəzi","profile"=>"Futbol profili","comparison"=>"Futbolçu müqayisəsi",_=>"MATCHLAB AZ"
         };
     }
     private Panel CardPanel(int height=80) {
@@ -339,6 +341,7 @@ public sealed class MatchlabForm : Form
             case "settings":_ = ShowSettings();break;
             case "details":if(hasOpenedMatch)_=ShowDetails(token);break;
             case "profile": break;
+            case "comparison": _ = ShowComparison(token); break;
         }
     }
     private static string BakuDate(DateTime x)=>x.ToString("yyyy-MM-dd",CultureInfo.InvariantCulture);
@@ -543,8 +546,69 @@ public sealed class MatchlabForm : Form
                 var id=Val(row,"id");
                 EventHandler open=(_,_)=>_ = OpenProfile(id);
                 p.Click+=open;name.Click+=open;meta.Click+=open;
+                var choose=NewButton("⇄ Müqayisə",Raised,Accent,120);
+                choose.SetBounds(p.Width-145,13,122,43);
+                choose.Anchor=AnchorStyles.Right|AnchorStyles.Top;
+                choose.Click+=(_,_)=>{
+                    if(string.IsNullOrWhiteSpace(comparisonFirstId)||comparisonFirstId==id){
+                        comparisonFirstId=id;comparisonSecondId=null;
+                        Message("Birinci profil seçildi: "+Val(row,"name")+". Müqayisə üçün ikinci profili seç.");
+                    }else{
+                        comparisonSecondId=id;page="comparison";Render();
+                    }
+                };
+                p.Controls.Add(choose);
             }
         }catch(Exception e){if(page!="search"||token!=viewVersion)return;Message("Axtarış alınmadı: "+e.Message,true);}
+    }
+    private async Task ShowComparison(int token){
+        Heading("MƏNBƏYƏ ƏSASLANAN MÜQAYİSƏ");
+        if(string.IsNullOrEmpty(comparisonFirstId)||string.IsNullOrEmpty(comparisonSecondId)){
+            Message("İki fərqli futbolçu/klub profili seçilməyib.",true);return;
+        }
+        var explain=Txt("Yalnız real profil sahələri göstərilir. Məlumat olmayan yerdə — yazılır.",11,false,Muted);
+        var note=CardPanel(55);explain.Dock=DockStyle.Fill;note.Controls.Add(explain);
+        try{
+            var tasks=await Task.WhenAll(
+                Get("/api/profile?id="+Uri.EscapeDataString(comparisonFirstId)),
+                Get("/api/profile?id="+Uri.EscapeDataString(comparisonSecondId)));
+            if(page!="comparison"||token!=viewVersion)return;
+            JsonElement first=Prop(tasks[0],"profile"),second=Prop(tasks[1],"profile");
+            if(first.ValueKind!=JsonValueKind.Object||second.ValueKind!=JsonValueKind.Object){
+                Message("Müqayisə üçün profil məlumatı tapılmadı.",true);return;
+            }
+            var headerCard=CardPanel(138);
+            var leftImage=new PictureBox{Left=16,Top=13,Width=76,Height=76,SizeMode=PictureBoxSizeMode.Zoom};
+            var rightImage=new PictureBox{Left=headerCard.Width-92,Top=13,Width=76,Height=76,SizeMode=PictureBoxSizeMode.Zoom,
+                Anchor=AnchorStyles.Top|AnchorStyles.Right};
+            headerCard.Controls.Add(leftImage);headerCard.Controls.Add(rightImage);
+            _=AttachBadgeAsync(leftImage,Val(first,"image"));_=AttachBadgeAsync(rightImage,Val(second,"image"));
+            var leftName=Txt(Val(first,"name","—"),16,true,Ink);leftName.SetBounds(103,16,300,45);
+            var rightName=Txt(Val(second,"name","—"),16,true,Ink);rightName.TextAlign=ContentAlignment.MiddleRight;
+            rightName.SetBounds(headerCard.Width-404,77,300,40);rightName.Anchor=AnchorStyles.Top|AnchorStyles.Right;
+            headerCard.Controls.Add(leftName);headerCard.Controls.Add(rightName);
+            void Compared(string label,string left,string right){
+                var rowCard=CardPanel(64);
+                var l=Txt(string.IsNullOrWhiteSpace(left)?"—":left,11,true,Ink);
+                l.SetBounds(15,6,260,47);rowCard.Controls.Add(l);
+                var titleText=Txt(label,10,true,Accent);titleText.TextAlign=ContentAlignment.MiddleCenter;
+                titleText.SetBounds(Math.Max(285,rowCard.Width/2-100),6,200,47);rowCard.Controls.Add(titleText);
+                var r=Txt(string.IsNullOrWhiteSpace(right)?"—":right,11,true,Ink);
+                r.TextAlign=ContentAlignment.MiddleRight;
+                r.SetBounds(rowCard.Width-275,6,260,47);r.Anchor=AnchorStyles.Right|AnchorStyles.Top;rowCard.Controls.Add(r);
+                rowCard.SizeChanged+=(_,_)=>titleText.Left=Math.Max(285,rowCard.Width/2-100);
+            }
+            foreach(var key in new[]{("Ölkə","country"),("Mövqe","position"),("Doğum tarixi","birth"),("Vəfat tarixi","death"),("Karyera statusu","careerStatus")}){
+                Compared(key.Item1,Val(first,key.Item2,"—"),Val(second,key.Item2,"—"));
+            }
+            Compared("Klublar",Array(first,"clubs").Count().ToString(),Array(second,"clubs").Count().ToString());
+            Compared("Kuboklar",Array(first,"awards").Count().ToString(),Array(second,"awards").Count().ToString());
+            Compared("Məşqçilik təcrübəsi",Array(first,"coached").Count().ToString(),Array(second,"coached").Count().ToString());
+            Message("Siyahı sayı yalnız mənbənin təqdim etdiyi qeydlərin sayıdır; tam karyera statistikası deyil.");
+        }catch(Exception e){if(page=="comparison"&&token==viewVersion)Message("Müqayisə yüklənmədi: "+e.Message,true);}
+        var again=NewButton("Yeni müqayisə",Accent,Bg,165);
+        again.Click+=(_,_)=>{comparisonFirstId=null;comparisonSecondId=null;page="search";Render();};
+        var bar=CardPanel(67);again.SetBounds(15,10,165,43);bar.Controls.Add(again);
     }
     private async Task OpenProfile(string id){
         page="profile";ClearPage();
