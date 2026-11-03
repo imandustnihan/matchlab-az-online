@@ -12,6 +12,7 @@ import java.util.Locale;
 public final class HistoryTeamForm {
     private final String team;
     private final List<Game> games=new ArrayList<>();
+    private final java.util.Set<String> matchedClubs=new java.util.HashSet<>();
     private int wins,draws,losses,forGoals,againstGoals;
     private static final class Game {
         final String date,form;
@@ -27,6 +28,7 @@ public final class HistoryTeamForm {
         boolean h=home!=null&&home.toLowerCase(Locale.ROOT).contains(team);
         boolean a=away!=null&&away.toLowerCase(Locale.ROOT).contains(team);
         if(h==a)return; // Unmatched or ambiguous substring: do not guess.
+        matchedClubs.add((h?home:away).trim().toLowerCase(Locale.ROOT));
         int scored=h?homeScore:awayScore,conceded=h?awayScore:homeScore;
         String mark=scored>conceded?"Q":scored<conceded?"M":"H";
         if("Q".equals(mark))wins++;
@@ -35,6 +37,7 @@ public final class HistoryTeamForm {
         forGoals+=scored;againstGoals+=conceded;
         games.add(new Game(date==null?"":date,mark,games.size()));
     }
+    public boolean ambiguous(){return matchedClubs.size()>1;}
     public int played(){return games.size();}
     public int wins(){return wins;}
     public int draws(){return draws;}
