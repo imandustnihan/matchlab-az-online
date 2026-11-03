@@ -1,0 +1,47 @@
+name: Enzonic Python hosting checks
+
+on:
+  pull_request:
+    paths:
+      - 'deploy/enzonic/**'
+      - 'hosting_server.py'
+      - '.github/workflows/enzonic_verify.yml'
+  push:
+    branches: [main, 'infra/**']
+    paths:
+      - 'deploy/enzonic/**'
+      - 'hosting_server.py'
+      - '.github/workflows/enzonic_verify.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Syntax and deployment checks
+        run: |
+          set -eu
+          python -m py_compile hosting_server.py server.py prepare_database.py world_db.py
+          sh -n deploy/enzonic/start.sh
+          python -m unittest discover -s tests -p 'test_live_center_cache.py' -v
+          grep -Fq 'exec python3 hosting_server.py' deploy/enzonic/start.sh
+      - name: Verify database archive fragments
+        run: |
+          python - <<'PY'
+          import hashlib, json, pathlib
+          m=json.loads(pathlib.Path('data_manifest.json').read_text())
+          assert m['total']==506207
+          for p in m['parts']:
+              data=pathlib.Path(p['name']).read_bytes()
+              assert len(data)==p['bytes']
+              assert hashlib.sha256(data).hexdigest()==p['sha256']
+          print('Verified database fragments:',len(m['parts']))
+          PY
