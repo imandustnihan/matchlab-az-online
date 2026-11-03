@@ -803,12 +803,20 @@ public final class MainActivity extends Activity {
             String qid=p.optString("wikidataId",p.optString("qid",""));
             if(qid.matches("Q[1-9][0-9]{0,11}")){
                 externalLink("Wikidata profili","https://www.wikidata.org/wiki/"+qid);
-                externalLink("Wikipedia məqalələrini tap","https://www.wikidata.org/wiki/Special:EntityData/"+qid+".json");
+                externalLink("Wikipedia məqalələri","https://www.wikidata.org/wiki/Special:SiteLinks/"+qid);
             }
             String url=p.optString("wikipediaUrl",p.optString("url",""));
             if(url.startsWith("https://"))externalLink("Mənbə səhifəsi",url);
             profileFact("Məlumat mənbəyi",p.optString("source"));
-            if("teams".equals(kind))externalLink("Klub haqqında axtarış","https://www.google.com/search?q="+encode(name+" football club"));
+            if("teams".equals(kind)){
+                externalLink("Klubun rəsmi saytı — axtar","https://www.google.com/search?q="+encode(name+" official football club website"));
+                externalLink("Klubun oyunları və nəticələri","https://www.google.com/search?q="+encode(name+" fixtures results"));
+                externalLink("Klubun heyəti və transferləri","https://www.google.com/search?q="+encode(name+" squad transfers"));
+            }else{
+                externalLink("Mövsüm statistikası — axtar","https://www.google.com/search?q="+encode(name+" football statistics 2026"));
+                externalLink("Karyera və transfer tarixçəsi","https://www.google.com/search?q="+encode(name+" football career transfers"));
+            }
+            externalLink("Wikipedia-da axtar","https://en.wikipedia.org/w/index.php?search="+encode(name));
             if(qid.isEmpty()&&url.isEmpty())info("Bu profil üçün təsdiqlənmiş birbaşa Wikipedia bağlantısı yoxdur.",false);
         });
     }
@@ -859,14 +867,27 @@ public final class MainActivity extends Activity {
                 for(int i=0;i<Math.min(stats.length(),32);i++){
                     JSONObject stat=stats.optJSONObject(i);
                     if(stat==null)continue;
+                    LinearLayout block=column();
+                    block.setPadding(dp(10),dp(9),dp(10),dp(9));
                     LinearLayout line=row();
-                    line.setPadding(dp(9),dp(8),dp(9),dp(8));
                     line.addView(fixed(val(stat,"home"),12,INK,true,48));
                     TextView title=single(stat.optString("name",stat.optString("label","Statistika")),11,MUTED,false);
                     title.setGravity(Gravity.CENTER);line.addView(title,new LinearLayout.LayoutParams(0,-2,1));
                     line.addView(fixed(val(stat,"away"),12,INK,true,48));
-                    line.setBackgroundColor(i%2==0?CARD:RAISED);
-                    page.addView(line);
+                    block.addView(line);
+                    double left=statNumber(val(stat,"home")),right=statNumber(val(stat,"away"));
+                    if(left>=0&&right>=0&&left+right>0){
+                        LinearLayout bar=row();bar.setBackground(shape(RAISED,4));
+                        int leftWeight=Math.max(1,(int)Math.round(1000*left/(left+right)));
+                        View h=new View(this);h.setBackground(shape(ACCENT,4));
+                        bar.addView(h,new LinearLayout.LayoutParams(0,dp(5),leftWeight));
+                        View a=new View(this);a.setBackground(shape(Color.rgb(97,122,145),4));
+                        bar.addView(a,new LinearLayout.LayoutParams(0,dp(5),1001-leftWeight));
+                        LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(-1,dp(5));bp.topMargin=dp(7);
+                        block.addView(bar,bp);
+                    }
+                    block.setBackgroundColor(i%2==0?CARD:RAISED);
+                    page.addView(block);
                 }
             }else info("Mənbədə təsdiqlənmiş statistika yoxdur.",false);
             JSONObject lineup=data.optJSONObject("lineup");
@@ -901,6 +922,12 @@ public final class MainActivity extends Activity {
             String note=data.optString("message","");
             if(!note.isEmpty()&&data.optBoolean("available"))info(note,false);
         });
+    }
+    private double statNumber(String raw){
+        if(raw==null)return -1;
+        String value=raw.trim().replace("%","").replace(",",".");
+        if(!value.matches("[0-9]+(\\.[0-9]+)?"))return -1;
+        try{return Double.parseDouble(value);}catch(NumberFormatException e){return -1;}
     }
     private void addSquad(String label,JSONArray entries){
         if(entries==null||entries.length()==0)return;
@@ -977,18 +1004,24 @@ public final class MainActivity extends Activity {
     private void showSettings(){
         section("MATCHLAB AZ Native 0.9.49");
         section("Bildiriş və səs idarəetməsi");
-        for(String[] setting:new String[][]{{"notif_goals","Qol bildirişləri"},{"notif_kickoff","Matç başlanğıcı"},{"notif_halftime","Fasilə"},{"notif_final","Matçın bitməsi"},{"notif_cards","Qırmızı kart"},{"notif_favorites","Yalnız seçilmiş matçlar"},{"sound_enabled","Tətbiqdaxili səs"},{"sound_vibrate","Vibrasiya"}}){
+        for(String[] setting:new String[][]{{"notif_goals","Qol bildirişləri"},{"notif_kickoff","Matç başlanğıcı"},{"notif_halftime","Fasilə"},{"notif_final","Matçın bitməsi"},{"notif_cards","Qırmızı kart"},{"notif_yellow_cards","Sarı kart"},{"notif_assists","Assist"},{"notif_penalties","Penalti"},{"notif_lineups","Heyətlər açıqlananda"},{"notif_corners","Künc zərbəsi"},{"notif_favorites","Yalnız seçilmiş matçlar"},{"sound_enabled","Tətbiqdaxili səs"},{"sound_vibrate","Vibrasiya"}}){
             Switch toggle=new Switch(this);toggle.setText(setting[1]);toggle.setTextSize(13);toggle.setTextColor(INK);
             toggle.setChecked(prefs.getBoolean(setting[0],false));toggle.setPadding(dp(9),dp(9),dp(9),dp(9));
             toggle.setOnCheckedChangeListener((view,checked)->prefs.edit().putBoolean(setting[0],checked).apply());card(toggle);
         }
-        Button preview=button("♪  Qol səsini sına");preview.setOnClickListener(v->{
-            if(prefs.getBoolean("sound_enabled",false)){
-                ToneGenerator tone=new ToneGenerator(AudioManager.STREAM_NOTIFICATION,65);
-                tone.startTone(ToneGenerator.TONE_PROP_ACK,180);ui.postDelayed(tone::release,300);
-            }else Toast.makeText(this,"Əvvəlcə tətbiqdaxili səsi aktivləşdir",Toast.LENGTH_SHORT).show();
-        });card(preview);
-        info("Bu seçimlər yerli yaddaşa yazılır. Real hadisə bildirişlərinin avtomatik gəlməsi ayrıca bildiriş mühərriki tələb edir; hələ aktiv deyil.",false);
+        section("Bildiriş səslərinin sınağı");
+        String[][] previews={{"Qol","TONE_PROP_ACK"},{"Matç başlanğıcı","TONE_PROP_BEEP"},{"Kart","TONE_PROP_NACK"},{"Matçın bitməsi","TONE_PROP_PROMPT"}};
+        for(int i=0;i<previews.length;i++){
+            final int toneId=i==0?ToneGenerator.TONE_PROP_ACK:i==1?ToneGenerator.TONE_PROP_BEEP:i==2?ToneGenerator.TONE_PROP_NACK:ToneGenerator.TONE_PROP_PROMPT;
+            Button soundTest=button("♪ "+previews[i][0]+" səsini sına");
+            soundTest.setOnClickListener(v->{
+                if(!prefs.getBoolean("sound_enabled",false)){Toast.makeText(this,"Əvvəlcə tətbiqdaxili səsi aktivləşdir",Toast.LENGTH_SHORT).show();return;}
+                ToneGenerator tg=new ToneGenerator(AudioManager.STREAM_NOTIFICATION,65);
+                tg.startTone(toneId,220);ui.postDelayed(tg::release,350);
+            });
+            card(soundTest);
+        }
+                info("Bu seçimlər yerli yaddaşa yazılır. Real hadisə bildirişlərinin avtomatik gəlməsi ayrıca bildiriş mühərriki tələb edir; hələ aktiv deyil.",false);
         info("Ekranlar yalnız Android Java komponentlərindən qurulub. Veb səhifə göstərilmir.",false);
         info("Canlı matçlar və profillər HTTPS JSON API-dən gəlir. Mənbələrdə boşluqlar ola bilər.",false);
         Button statusButton=button("Server vəziyyətini yoxla");
