@@ -100,7 +100,7 @@ def main():
     wait_for("Canlı matçlar")
     wait_for("MATCHLAB AZ")
     capture("01_home")
-    check("MATCHLAB" in adb("shell","dumpsys","activity","activities"),
+    check(APP in adb("shell","dumpsys","activity","activities"),
           "Native Android activity starts")
 
     tap("Taktika",by="desc")
