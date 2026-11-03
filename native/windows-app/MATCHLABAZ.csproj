@@ -8,7 +8,7 @@
     <AssemblyName>MATCHLAB_AZ</AssemblyName>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <ApplicationIcon>../branding/matchlab_icon.ico</ApplicationIcon>
-    <Version>0.9.53</Version>
+    <Version>0.9.54</Version>
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
