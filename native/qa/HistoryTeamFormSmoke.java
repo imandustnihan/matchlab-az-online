@@ -20,6 +20,10 @@ public final class HistoryTeamFormSmoke {
         check(f.goalsFor()==6&&f.goalsAgainst()==5,"Home and away goals oriented to chosen team");
         check("M · H · Q".equals(f.recentForm()),"Recent form sorted newest first");
         check(f.totals().contains("Qələbə: 1"),"Readable Azerbaijani summary");
+        HistoryTeamForm ambiguous=new HistoryTeamForm("Manchester");
+        ambiguous.add("Manchester United","Everton",2,0,true,"2025-08-11");
+        ambiguous.add("Manchester City","Chelsea",3,1,true,"2025-08-12");
+        check(ambiguous.ambiguous(),"Different clubs matching same filter flagged ambiguous");
         HistoryTeamForm empty=new HistoryTeamForm("");
         empty.add("X","Y",2,0,true,"2026-01-01");
         check(empty.played()==0,"Blank team filter must not aggregate entire league");
