@@ -53,16 +53,16 @@ jobs:
           if (-not (Test-Path $compiler)) { throw "Inno Setup compiler is missing" }
           & $compiler 'native/installer/MATCHLAB_AZ.iss'
           if ($LASTEXITCODE -ne 0) { throw "Inno Setup compiler failed with $LASTEXITCODE" }
-          if (-not (Test-Path 'native/windows-app/installer-out/MATCHLAB_AZ_Setup_0.9.54_x64.exe')) { throw "Installer missing" }
+          if (-not (Test-Path 'native/windows-app/installer-out/MATCHLAB_AZ_Setup_0.9.55_x64.exe')) { throw "Installer missing" }
       - uses: actions/upload-artifact@v4
         with:
-          name: MATCHLAB_AZ_Setup_v0954
-          path: native/windows-app/installer-out/MATCHLAB_AZ_Setup_0.9.54_x64.exe
+          name: MATCHLAB_AZ_Setup_v0955
+          path: native/windows-app/installer-out/MATCHLAB_AZ_Setup_0.9.55_x64.exe
           if-no-files-found: error
           retention-days: 30
       - uses: actions/upload-artifact@v4
         with:
-          name: MATCHLAB_AZ_Windows_x64_v0954
+          name: MATCHLAB_AZ_Windows_x64_v0955
           path: native/windows-app/out/MATCHLAB_AZ.exe
           if-no-files-found: error
           retention-days: 30
@@ -77,7 +77,10 @@ jobs:
         with:
           python-version: '3.12'
       - name: Test live scores cache and stale labeling
-        run: python -m unittest discover -s tests -p test_live_center_cache.py -v
+        run: |
+          python -m unittest discover -s tests -p test_live_center_cache.py -v
+          python -m unittest discover -s tests -p test_history_archive.py -v
+          python -m unittest discover -s tests -p test_profile_auto_updates.py -v
       - name: Generate Android launcher icons
         run: |
           python -m pip install pillow
@@ -100,7 +103,7 @@ jobs:
         run: gradle --no-daemon --stacktrace :app:assembleDebug
       - uses: actions/upload-artifact@v4
         with:
-          name: MATCHLAB_AZ_Android_v0952
+          name: MATCHLAB_AZ_Android_v0955
           path: native/android/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 30
@@ -117,26 +120,26 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          name: MATCHLAB_AZ_Setup_v0954
+          name: MATCHLAB_AZ_Setup_v0955
           path: dist/setup
       - uses: actions/download-artifact@v4
         with:
-          name: MATCHLAB_AZ_Windows_x64_v0954
+          name: MATCHLAB_AZ_Windows_x64_v0955
           path: dist/portable
       - uses: actions/download-artifact@v4
         with:
-          name: MATCHLAB_AZ_Android_v0952
+          name: MATCHLAB_AZ_Android_v0955
           path: dist/android
       - name: Prepare clearly named public downloads and checksums
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p public
-          cp dist/setup/MATCHLAB_AZ_Setup_0.9.54_x64.exe public/MATCHLAB_AZ_Setup_0.9.54_x64.exe
-          cp dist/portable/MATCHLAB_AZ.exe public/MATCHLAB_AZ_Portable_0.9.54_x64.exe
+          cp dist/setup/MATCHLAB_AZ_Setup_0.9.55_x64.exe public/MATCHLAB_AZ_Setup_0.9.55_x64.exe
+          cp dist/portable/MATCHLAB_AZ.exe public/MATCHLAB_AZ_Portable_0.9.55_x64.exe
           APK="$(find dist/android -type f -name '*.apk' | head -n 1)"
           test -n "$APK"
-          cp "$APK" public/MATCHLAB_AZ_Android_0.9.52_TEST.apk
+          cp "$APK" public/MATCHLAB_AZ_Android_0.9.55_TEST.apk
           (cd public && sha256sum *.exe *.apk > SHA256SUMS.txt)
           ls -lh public
       - name: Create or update GitHub Release with direct public assets
@@ -145,13 +148,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          TAG="v0.9.54"
+          TAG="v0.9.55"
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" public/* --clobber
           else
             gh release create "$TAG" public/* \
-              --title "MATCHLAB AZ v0.9.54 — Windows & Android" \
-              --notes-file native/RELEASE_NOTES_v0954.md \
+              --title "MATCHLAB AZ v0.9.55 — Windows & Android" \
+              --notes-file native/RELEASE_NOTES_v0955.md \
               --latest
           fi
           gh release view "$TAG" --json url,assets --jq '{url: .url, files: [.assets[].name]}'

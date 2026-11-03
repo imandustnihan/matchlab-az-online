@@ -7,6 +7,9 @@ import os, json, time, threading, urllib.parse
 from http.server import ThreadingHTTPServer
 from server import Handler as LocalHandler, send_data
 import world_db
+import wikipedia_enrichment
+import profile_auto_updates
+from server import get_json
 
 RATE_LIMIT = 180
 RATE_WINDOW = 60.0
@@ -78,6 +81,9 @@ def main():
     bind_host=os.environ.get('MATCHLAB_BIND_HOST','0.0.0.0')
     if bind_host not in ('127.0.0.1','0.0.0.0'):
         raise ValueError('MATCHLAB_BIND_HOST must be 127.0.0.1 or 0.0.0.0')
+    # Populate the automatic profile watcher only on the running HTTP instance.
+    # The daemon respects Wikimedia rate limits and refreshes max 8 QIDs/hour.
+    profile_auto_updates.start(wikipedia_enrichment.enrich,get_json)
     with ThreadingHTTPServer((bind_host, port), PublicHandler) as httpd:
         print(f'MATCHLAB AZ onlayn server: {bind_host}:{port}', flush=True)
         httpd.serve_forever(poll_interval=0.5)

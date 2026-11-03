@@ -16,6 +16,8 @@ import identity_unification as people
 import club_history
 import season_stats
 import league_catalog
+import historical_archive
+import profile_auto_updates
 import free_football_sources as open_feeds
 
 ROOT=Path(__file__).resolve().parent
@@ -439,6 +441,20 @@ def media_by_qid(qid,kind='players',retry=False):
          'complete':complete}
 
 def send_data(path,params):
+  # Explicit CC0 archive endpoint: historical data is never labeled live.
+  if path=='/api/history-leagues':
+   return {'items':[{'id':key,'name':name} for key,(_,name) in historical_archive.LEAGUES.items()],
+           'startYear':historical_archive.START_YEAR,
+           'endYear':historical_archive.END_YEAR,
+           'source':'OpenFootball CC0','live':False}
+  if path=='/api/history':
+   try:
+    return historical_archive.view(
+       params.get('league',['eng.1'])[0],params.get('season',['2025-26'])[0],
+       get_json,params.get('limit',['60'])[0],params.get('offset',['0'])[0],
+       params.get('team',[''])[0])
+   except (TypeError,ValueError):
+    return {'available':False,'items':[],'live':False,'message':'Tarixi axtarış parametrləri düzgün deyil.'}
  if path=='/api/season-stats':
   identifier=params.get('id',[''])[0][:120]
   if not (QID.fullmatch(identifier) or identifier in CATBYID or re.fullmatch(r'r[ctp][a-z0-9]{8,30}|reep_[a-z][a-f0-9]{8,30}',identifier)):
@@ -590,6 +606,11 @@ def send_data(path,params):
    profile['otherRoles']=[]
   if profile.get('clubs') and profile.get('coached'):
    profile['roles']=list(dict.fromkeys(people.roles_of(profile)+['players','coaches']))
+  # Opt in recently accessed, verified identities to a bounded background refresh.
+  # No scrape of all 506207 records; death/club facts remain source-attributed.
+  if QID.fullmatch(qid or '') and profile.get('kind') in ('players','coaches','teams'):
+   meta=profile_auto_updates.watch(qid,profile['kind'])
+   if meta:profile['updateStatus']=meta
   return {'profile':profile,'online':bool(profile.get('image')),'source':profile.get('source','Reep CC0')}
  if path=='/api/wikipedia-refresh':
   identifier=params.get('id',[''])[0]
