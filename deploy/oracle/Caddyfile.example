@@ -7,6 +7,10 @@ MATCHLAB_HOSTNAME {
         Referrer-Policy strict-origin-when-cross-origin
         -Server
     }
+    # Block direct downloads of internal server code, database and deployment files.
+    @internal path /deploy/* /native/* /world_football.sqlite /world_football.sqlite.gz* /world_football.sqlite.gz.part* /*.py /*.sqlite
+    respond @internal 404
+
     reverse_proxy 127.0.0.1:10000 {
         transport http {
             dial_timeout 5s
