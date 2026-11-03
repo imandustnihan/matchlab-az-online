@@ -955,7 +955,15 @@ public final class MainActivity extends Activity {
         if(count==0)info("Seçilmiş matç yoxdur. ☆ düyməsinə toxun.",false);
     }
     private void showTactics(){
-        section("TAKTİKA STUDİYASI");
+        section("TAKTİKA STUDİYASI PRO");
+        LinearLayout modeBar=row();
+        for(String mode:new String[]{"Hücum","Müdafiə","Standart"}){
+            Button button=button(mode);button.setTextColor(mode.equals(prefs.getString("tactic_mode","Standart"))?ACCENT:INK);
+            button.setOnClickListener(v->{prefs.edit().putString("tactic_mode",mode).apply();navigate("tactics");});
+            modeBar.addView(button,new LinearLayout.LayoutParams(0,dp(45),1));
+        }
+        card(modeBar);
+        info("Rejim: "+prefs.getString("tactic_mode","Standart")+" · fərdi məşq planı",false);
         banner("İnteraktiv məşq lövhəsi · 11 mövqe · Yerli yaddaş",ACCENT);
         LinearLayout presets=row();
         TextView label=single("Düzülüş",12,MUTED,true);presets.addView(label,new LinearLayout.LayoutParams(0,dp(44),1));
@@ -997,6 +1005,32 @@ public final class MainActivity extends Activity {
         Button clear=button("✕ Oxları sil");clear.setOnClickListener(v->pitch.clearArrows());tools.addView(clear,new LinearLayout.LayoutParams(0,dp(44),1));
         page.addView(tools);
         gap(page,9);
+        section("Ehtiyat oyunçular və əvəzetmələr");
+        for(int i=1;i<=7;i++){
+            final int slot=i;
+            String key="tactic_sub_"+formation+"_"+slot;
+            LinearLayout line=row();
+            TextView sub=text(slot+". "+prefs.getString(key,"Ehtiyat oyunçu"),13,INK,false);
+            line.addView(sub,new LinearLayout.LayoutParams(0,dp(42),1));
+            Button edit=button("Dəyiş");
+            edit.setOnClickListener(v->{
+                EditText input=new EditText(this);input.setSingleLine(true);input.setText(prefs.getString(key,""));
+                new AlertDialog.Builder(this).setTitle("Ehtiyat oyunçu "+slot).setView(input)
+                    .setNegativeButton("Ləğv et",null).setPositiveButton("Saxla",(d,w)->{
+                        prefs.edit().putString(key,input.getText().toString().trim()).apply();navigate("tactics");
+                    }).show();
+            });
+            line.addView(edit);card(line);
+        }
+        Button export=button("Taktika planını və ehtiyatları paylaş");
+        export.setOnClickListener(v->{
+            StringBuilder sb=new StringBuilder(pitch.exportText()).append("\\nRejim: ").append(prefs.getString("tactic_mode","Standart")).append("\\nEhtiyatlar:\\n");
+            for(int i=1;i<=7;i++)sb.append(i).append(". ").append(prefs.getString("tactic_sub_"+formation+"_"+i,"—")).append("\\n");
+            Intent shareIntent=new Intent(Intent.ACTION_SEND);shareIntent.setType("text/plain");
+            shareIntent.putExtra(Intent.EXTRA_TEXT,sb.toString());
+            startActivity(Intent.createChooser(shareIntent,"Taktika planını paylaş"));
+        });card(export);
+        gap(page,9);
         info("Oxlar alətini aktivləşdirib meydançada başlanğıc və bitiş nöqtəsinə toxun. Oxlar saxlanılır.",false);
         info("Oyunçunu sürüşdürərək mövqeyini dəyiş. Ad və nömrəni dəyişmək üçün oyunçuya qısa toxun. Dəyişikliklər avtomatik saxlanılır.",false);
         info("Bu plan sənin öz taktiki layihəndir. Real matç heyəti və təsdiqlənmiş formasiya kimi təqdim edilmir.",false);
@@ -1009,19 +1043,50 @@ public final class MainActivity extends Activity {
             toggle.setChecked(prefs.getBoolean(setting[0],false));toggle.setPadding(dp(9),dp(9),dp(9),dp(9));
             toggle.setOnCheckedChangeListener((view,checked)->prefs.edit().putBoolean(setting[0],checked).apply());card(toggle);
         }
-        section("Bildiriş səslərinin sınağı");
-        String[][] previews={{"Qol","TONE_PROP_ACK"},{"Matç başlanğıcı","TONE_PROP_BEEP"},{"Kart","TONE_PROP_NACK"},{"Matçın bitməsi","TONE_PROP_PROMPT"}};
-        for(int i=0;i<previews.length;i++){
-            final int toneId=i==0?ToneGenerator.TONE_PROP_ACK:i==1?ToneGenerator.TONE_PROP_BEEP:i==2?ToneGenerator.TONE_PROP_NACK:ToneGenerator.TONE_PROP_PROMPT;
-            Button soundTest=button("♪ "+previews[i][0]+" səsini sına");
-            soundTest.setOnClickListener(v->{
-                if(!prefs.getBoolean("sound_enabled",false)){Toast.makeText(this,"Əvvəlcə tətbiqdaxili səsi aktivləşdir",Toast.LENGTH_SHORT).show();return;}
-                ToneGenerator tg=new ToneGenerator(AudioManager.STREAM_NOTIFICATION,65);
-                tg.startTone(toneId,220);ui.postDelayed(tg::release,350);
-            });
-            card(soundTest);
+        section("Hər hadisə üçün səs və vibrasiya");
+        String[][] alerts={
+            {"goals","Qol"},{"assists","Assist"},{"penalties","Penalti"},
+            {"cards","Qırmızı kart"},{"yellow_cards","Sarı kart"},{"corners","Künc zərbəsi"},
+            {"lineups","Heyət açıqlanması"},{"final","Matç bitdi"},{"kickoff","Matç başladı"}
+        };
+        String[] tones={"Səssiz","Qısa siqnal","Təsdiq","Xəbərdarlıq","İkili siqnal"};
+        for(String[] alert:alerts){
+            final String key=alert[0];
+            LinearLayout control=column();control.setPadding(dp(10),dp(10),dp(10),dp(10));
+            control.addView(text(alert[1],14,INK,true));
+            LinearLayout buttons=row();
+            Button sound=button("Səs: "+tones[Math.max(0,Math.min(4,prefs.getInt("alert_tone_"+key,1)))]);
+            sound.setOnClickListener(v->new AlertDialog.Builder(this).setTitle(alert[1]+" səsi")
+                .setSingleChoiceItems(tones,prefs.getInt("alert_tone_"+key,1),(dialog,selected)->{
+                    prefs.edit().putInt("alert_tone_"+key,selected).apply();
+                    sound.setText("Səs: "+tones[selected]);dialog.dismiss();
+                }).setNegativeButton("Bağla",null).show());
+            buttons.addView(sound,new LinearLayout.LayoutParams(0,dp(45),2));
+            Switch vibration=new Switch(this);vibration.setText("Titrə");
+            vibration.setTextColor(INK);vibration.setTextSize(11);
+            vibration.setChecked(prefs.getBoolean("alert_vibrate_"+key,false));
+            vibration.setOnCheckedChangeListener((view,checked)->prefs.edit().putBoolean("alert_vibrate_"+key,checked).apply());
+            buttons.addView(vibration,new LinearLayout.LayoutParams(0,dp(45),1));
+            control.addView(buttons);
+            Button preview=button("♪  Sına");
+            preview.setOnClickListener(v->{
+                int selected=prefs.getInt("alert_tone_"+key,1);
+                if(selected>0){
+                    int tone=selected==1?ToneGenerator.TONE_PROP_BEEP:selected==2?ToneGenerator.TONE_PROP_ACK:selected==3?ToneGenerator.TONE_PROP_NACK:ToneGenerator.TONE_PROP_PROMPT;
+                    ToneGenerator generator=new ToneGenerator(AudioManager.STREAM_NOTIFICATION,65);
+                    generator.startTone(tone,200);ui.postDelayed(generator::release,320);
+                }
+                if(prefs.getBoolean("alert_vibrate_"+key,false)){
+                    android.os.Vibrator vibrator=(android.os.Vibrator)getSystemService(VIBRATOR_SERVICE);
+                    if(vibrator!=null&&vibrator.hasVibrator()){
+                        if(android.os.Build.VERSION.SDK_INT>=26)vibrator.vibrate(android.os.VibrationEffect.createOneShot(140,android.os.VibrationEffect.DEFAULT_AMPLITUDE));
+                        else vibrator.vibrate(140);
+                    }
+                }
+            });control.addView(preview);
+            card(control);
         }
-                info("Bu seçimlər yerli yaddaşa yazılır. Real hadisə bildirişlərinin avtomatik gəlməsi ayrıca bildiriş mühərriki tələb edir; hələ aktiv deyil.",false);
+        info("Bu seçimlər yerli yaddaşa yazılır. Real hadisə bildirişlərinin avtomatik gəlməsi ayrıca bildiriş mühərriki tələb edir; hələ aktiv deyil.",false);
         info("Ekranlar yalnız Android Java komponentlərindən qurulub. Veb səhifə göstərilmir.",false);
         info("Canlı matçlar və profillər HTTPS JSON API-dən gəlir. Mənbələrdə boşluqlar ola bilər.",false);
         Button statusButton=button("Server vəziyyətini yoxla");
