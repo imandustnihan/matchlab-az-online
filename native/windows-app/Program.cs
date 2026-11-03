@@ -712,6 +712,18 @@ public sealed class MatchlabForm : Form
         Tool("➜ Oxları çək",()=>{pitch.ArrowMode=!pitch.ArrowMode;},128);
         Tool("▦ Tor",()=>{pitch.ShowGrid=!pitch.ShowGrid;},95);
         Tool("Oxları sil",pitch.ClearArrows,115);
+        var extras=CardPanel(76);int ex=12;
+        void Extra(string label,Action action,int width){
+            var btn=NewButton(label,Raised,Ink,width);btn.SetBounds(ex,12,width,45);ex+=width+10;
+            btn.Click+=(_,_)=>action();extras.Controls.Add(btn);
+        }
+        Extra("▶ Animasiya",pitch.TogglePlayback,150);
+        Extra("▣ PNG saxla",()=>{
+            using var save=new SaveFileDialog{Title="Taktika şəkli",Filter="PNG (*.png)|*.png",FileName="MATCHLAB_AZ_Taktika_"+formations[formation].Replace("-","_")+".png"};
+            if(save.ShowDialog(this)!=DialogResult.OK)return;
+            try{pitch.ExportPng(save.FileName);MessageBox.Show("Məşq planı PNG kimi saxlandı.","MATCHLAB AZ");}
+            catch(Exception e){MessageBox.Show("PNG saxlamaq alınmadı: "+e.Message,"MATCHLAB AZ");}
+        },150);
         Tool("Sıfırla",()=>{
             if(MessageBox.Show("Bu düzülüşü sıfırlamaq istəyirsən?","MATCHLAB AZ",MessageBoxButtons.YesNo)==DialogResult.Yes)
                 pitch.ResetPlan();
@@ -740,7 +752,7 @@ public sealed class MatchlabForm : Form
             };
             row.Controls.Add(edit);
         }
-        Message("11 oyunçunu siçanla sürüşdür; iki dəfə kliklə ad və nömrəni dəyiş. Ox rejimində iki nöqtəyə kliklə. Plan avtomatik yerli yaddaşa yazılır.");
+        Message("Meydanda 11 oyunçunu sürüşdür, iki dəfə kliklə ad/nömrəni dəyiş. Hərəkət oxlarını animasiyada oynat və PNG saxla. Şəxsi plan avtomatik yadda qalır.");
     }
     private async Task ShowSettings(){
         Heading("Bildiriş və səs mərkəzi · kateqoriyalar");
