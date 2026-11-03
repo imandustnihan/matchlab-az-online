@@ -56,8 +56,12 @@ public sealed class MatchlabForm : Form
     private JsonElement openedMatch;
     private bool hasOpenedMatch;
     private int formation=0;
-    private readonly string[] formations={"4-3-3","4-2-3-1","4-4-2","3-5-2"};
+    private readonly string[] formations={"4-3-3","4-2-3-1","4-4-2","3-5-2","3-4-3","4-1-4-1","5-3-2","4-2-2-2"};
     private List<JsonElement> latestMatches = new();
+    private readonly string optionsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MATCHLAB_AZ", "options.json");
+    private readonly Dictionary<string, string> options = new();
+    private readonly string[] alertIds={"goals","assists","penalties","cards","yellow_cards","corners","lineups","final","kickoff"};
+    private readonly string[] alertNames={"Qol","Assist","Penalti","Qırmızı kart","Sarı kart","Künc zərbəsi","Heyət açıqlanması","Matç bitdi","Matç başladı"};
 
     public MatchlabForm()
     {
@@ -74,6 +78,13 @@ public sealed class MatchlabForm : Form
                 if(raw!=null)foreach(var x in raw) favoriteSnapshots[x.Key]=x.Value;
             }
         }catch {}
+        try{
+            if(File.Exists(optionsPath)){
+                var saved=JsonSerializer.Deserialize<Dictionary<string,string>>(File.ReadAllText(optionsPath));
+                if(saved!=null)foreach(var item in saved)options[item.Key]=item.Value;
+            }
+            if(int.TryParse(Option("tactic_formation","0"),out int selected)&&selected>=0&&selected<formations.Length)formation=selected;
+        }catch{}
         var shell=new TableLayoutPanel {Dock=DockStyle.Fill, ColumnCount=2, RowCount=1, Margin=Padding.Empty, Padding=Padding.Empty, BackColor=Bg};
         shell.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,222));
         shell.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
@@ -428,21 +439,102 @@ public sealed class MatchlabForm : Form
             try{using var json=JsonDocument.Parse(raw);MatchRow(json.RootElement.Clone(),saved:true);}catch{}
         }
     }
+    private string Option(string name,string fallback="") => options.TryGetValue(name,out var value)?value:fallback;
+    private void SaveOption(string name,string value){
+        options[name]=value;
+        try{
+            Directory.CreateDirectory(Path.GetDirectoryName(optionsPath)!);
+            File.WriteAllText(optionsPath,JsonSerializer.Serialize(options));
+        }catch(IOException ex){Message("Ayar saxlanmadı: "+ex.Message,true);}
+    }
     private void ShowTactics(){
-        var panel=CardPanel(75);
-        var t=Txt("Düzülüş",12,true);t.SetBounds(18,16,110,40);panel.Controls.Add(t);
-        var select=new ComboBox{DropDownStyle=ComboBoxStyle.DropDownList,BackColor=Raised,ForeColor=Ink,Width=200};
+        Heading("TAKTİKA STUDİYASI PRO · Yerli məşq planı");
+        var panel=CardPanel(85);
+        var t=Txt("Düzülüş",12,true);t.SetBounds(12,14,95,42);panel.Controls.Add(t);
+        var select=new ComboBox{DropDownStyle=ComboBoxStyle.DropDownList,BackColor=Raised,ForeColor=Ink};
         select.Items.AddRange(formations.Cast<object>().ToArray());
-        select.SelectedIndex=formation;select.SetBounds(135,17,200,41);panel.Controls.Add(select);
-        var field=CardPanel(570);
+        select.SelectedIndex=formation;select.SetBounds(110,17,165,39);panel.Controls.Add(select);
+        var modes=new ComboBox{DropDownStyle=ComboBoxStyle.DropDownList,BackColor=Raised,ForeColor=Ink};
+        modes.Items.AddRange(new object[]{"Standart","Hücum","Müdafiə"});
+        modes.SelectedItem=Option("tactic_mode","Standart");
+        if(modes.SelectedIndex<0)modes.SelectedIndex=0;
+        modes.SetBounds(292,17,145,39);panel.Controls.Add(modes);
+        modes.SelectedIndexChanged+=(_,_)=>SaveOption("tactic_mode",modes.Text);
+        var field=CardPanel(545);
         var pitch=new PitchPanel {Dock=DockStyle.Fill,Formation=formations[formation]};
         field.Controls.Add(pitch);
-        select.SelectedIndexChanged+=(_,_)=>{formation=select.SelectedIndex;pitch.Formation=formations[formation];pitch.Invalidate();};
-        Message("Bu, yerli/native taktika lövhəsidir. Hazırda düzülüş seçimini dəstəkləyir; heyət adları mənbə olmadan uydurulmur.");
+        select.SelectedIndexChanged+=(_,_)=>{
+            formation=select.SelectedIndex;
+            SaveOption("tactic_formation",formation.ToString(CultureInfo.InvariantCulture));
+            pitch.Formation=formations[formation];
+            Render();
+        };
+        var tools=CardPanel(78);
+        int bx=12;
+        void Tool(string label,Action click,int width=130){
+            var b=NewButton(label,Raised,Ink,width);b.SetBounds(bx,12,width,45);bx+=width+10;
+            b.Click+=(_,_)=>click();tools.Controls.Add(b);
+        }
+        Tool("➜ Oxları çək",()=>{pitch.ArrowMode=!pitch.ArrowMode;},128);
+        Tool("▦ Tor",()=>{pitch.ShowGrid=!pitch.ShowGrid;},95);
+        Tool("Oxları sil",pitch.ClearArrows,115);
+        Tool("Sıfırla",()=>{
+            if(MessageBox.Show("Bu düzülüşü sıfırlamaq istəyirsən?","MATCHLAB AZ",MessageBoxButtons.YesNo)==DialogResult.Yes)
+                pitch.ResetPlan();
+        },100);
+        Tool("Paylaş",()=>{
+            var sb=new System.Text.StringBuilder(pitch.ExportText());
+            sb.Append("\nRejim: ").Append(Option("tactic_mode","Standart")).Append("\nEhtiyatlar:");
+            for(int n=1;n<=7;n++)sb.Append("\n").Append(n).Append(". ").Append(Option("sub_"+formation+"_"+n,"—"));
+            Clipboard.SetText(sb.ToString());
+            MessageBox.Show("Taktika və ehtiyatlar mübadilə buferinə köçürüldü.","MATCHLAB AZ");
+        },112);
+        Heading("Ehtiyat oyunçular");
+        for(int n=1;n<=7;n++){
+            int index=n;
+            var row=CardPanel(61);
+            var label=Txt(n+".  "+Option("sub_"+formation+"_"+n,"Ehtiyat oyunçu"),11);
+            label.SetBounds(16,8,430,38);row.Controls.Add(label);
+            var edit=NewButton("Dəyiş",Raised,Accent,120);edit.SetBounds(465,8,120,40);
+            edit.Click+=(_,_)=>{
+                using var dialog=new Form{Text="Ehtiyat oyunçu "+index,Width=405,Height=170,StartPosition=FormStartPosition.CenterParent};
+                var name=new TextBox{Left=18,Top=17,Width=350,Text=Option("sub_"+formation+"_"+index,"")};
+                var save=NewButton("Saxla",Accent,Bg,110);save.SetBounds(258,60,110,42);
+                save.Click+=(_,_)=>{SaveOption("sub_"+formation+"_"+index,name.Text.Trim());dialog.DialogResult=DialogResult.OK;};
+                dialog.Controls.AddRange(new Control[]{name,save});
+                if(dialog.ShowDialog(this)==DialogResult.OK)Render();
+            };
+            row.Controls.Add(edit);
+        }
+        Message("11 oyunçunu siçanla sürüşdür; iki dəfə kliklə ad və nömrəni dəyiş. Ox rejimində iki nöqtəyə kliklə. Plan avtomatik yerli yaddaşa yazılır.");
     }
     private async Task ShowSettings(){
+        Heading("Bildiriş və səs mərkəzi · kateqoriyalar");
+        string[] toneNames={"Səssiz","Qısa siqnal","Təsdiq","Xəbərdarlıq","İkili siqnal"};
+        for(int i=0;i<alertIds.Length;i++){
+            string id=alertIds[i];
+            var card=CardPanel(77);
+            var label=Txt(alertNames[i],11,true);label.SetBounds(12,12,185,42);card.Controls.Add(label);
+            var tone=new ComboBox{DropDownStyle=ComboBoxStyle.DropDownList,BackColor=Raised,ForeColor=Ink};
+            tone.Items.AddRange(toneNames.Cast<object>().ToArray());
+            tone.SelectedIndex=int.TryParse(Option("tone_"+id,"1"),out var chosen)?Math.Clamp(chosen,0,4):1;
+            tone.SetBounds(199,15,170,37);card.Controls.Add(tone);
+            tone.SelectedIndexChanged+=(_,_)=>SaveOption("tone_"+id,tone.SelectedIndex.ToString());
+            var vibrate=new CheckBox{Text="Vibrasiya",ForeColor=Ink,Checked=Option("vibrate_"+id,"false")=="true"};
+            vibrate.SetBounds(383,16,120,38);
+            vibrate.CheckedChanged+=(_,_)=>SaveOption("vibrate_"+id,vibrate.Checked?"true":"false");
+            card.Controls.Add(vibrate);
+            var preview=NewButton("♪ Sına",Raised,Accent,100);preview.SetBounds(510,13,100,42);
+            preview.Click+=(_,_)=>{
+                int n=tone.SelectedIndex;
+                if(n>0)System.Media.SystemSounds.Beep.Play();
+                if(vibrate.Checked)MessageBox.Show("Windows masaüstündə vibrasiya cihazı aşkarlanması tətbiq olunmayıb.","MATCHLAB AZ");
+            };
+            card.Controls.Add(preview);
+        }
         Heading("Proqram məlumatı");
-        Message("MATCHLAB AZ Native v0.9.30 · Windows Forms. Brauzer və WebView işlətmir.");
+        Message("MATCHLAB AZ Native v0.9.51 · Windows Forms. Brauzer və WebView işlətmir.");
+        Message("Bildiriş seçimləri və səs sınaqları lokaldır; avtomatik canlı push bildirişləri hələ aktiv deyil.");
         Message("Canlı nəticələr və profillər Render serverindən HTTPS API vasitəsilə gəlir. İnternet olmayanda uydurma statistika göstərilmir.");
         try{
             var d=await Get("/api/status");
@@ -454,39 +546,3 @@ public sealed class MatchlabForm : Form
     protected override void OnFormClosed(FormClosedEventArgs e){refreshTimer.Stop();Api.Dispose();base.OnFormClosed(e);}
 }
 
-public sealed class PitchPanel : Panel
-{
-    public string Formation {get;set;}="4-3-3";
-    public PitchPanel(){DoubleBuffered=true;BackColor=Color.FromArgb(20,86,66);}
-    protected override void OnPaint(PaintEventArgs e){
-        base.OnPaint(e);
-        var g=e.Graphics;
-        g.SmoothingMode=System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-        float x=30,y=22,w=Math.Max(280,Width-60),h=Math.Max(450,Height-44);
-        using var line=new Pen(Color.FromArgb(145,215,211,211),2);
-        using var white=new SolidBrush(Color.FromArgb(245,250,240));
-        using var green=new SolidBrush(Color.FromArgb(25,107,76));
-        g.FillRectangle(green,x,y,w,h);
-        g.DrawRectangle(line,x,y,w,h);
-        g.DrawLine(line,x,y+h/2,x+w,y+h/2);
-        g.DrawEllipse(line,x+w/2-52,y+h/2-52,104,104);
-        g.DrawRectangle(line,x+w*.22f,y,w*.56f,h*.17f);
-        g.DrawRectangle(line,x+w*.22f,y+h-h*.17f,w*.56f,h*.17f);
-        string[] pieces=Formation.Split('-');
-        var layers=new List<int>{1};layers.AddRange(pieces.Select(z=>int.TryParse(z,out int n)?n:0));
-        int number=1;
-        for(int r=0;r<layers.Count;r++){
-            int count=layers[r];
-            float py=y+h-54-r*(h-112)/(layers.Count-1f);
-            for(int col=0;col<count;col++){
-                float px=x+((col+1f)/(count+1f))*w;
-                using var circle=new SolidBrush(Color.FromArgb(153,236,116));
-                g.FillEllipse(circle,px-18,py-18,36,36);
-                string n=(number++).ToString();
-                using var f=new Font("Segoe UI Semibold",10);
-                var ts=g.MeasureString(n,f);
-                g.DrawString(n,f,Brushes.Black,px-ts.Width/2,py-ts.Height/2);
-            }
-        }
-    }
-}
