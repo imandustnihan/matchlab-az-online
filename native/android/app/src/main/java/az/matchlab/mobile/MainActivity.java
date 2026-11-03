@@ -48,6 +48,10 @@ public final class MainActivity extends Activity {
     private int generation=0, formation=0;
     private String matchMode="all";
     private final Set<String> collapsedLeagues=new HashSet<>();
+    private final Map<String,String> scoreBaseline=new HashMap<>();
+    private boolean hasScoreBaseline=false;
+    private String historyLeague="eng.1",historySeason="2025-26",historyTeam="";
+    private int historyOffset=0;
     private int searchOffset=0;
     private JSONArray searchRows=new JSONArray();
     private boolean standingsExpanded=false;
@@ -174,6 +178,11 @@ public final class MainActivity extends Activity {
         if(Build.VERSION.SDK_INT>=30)getWindow().setDecorFitsSystemWindows(false);
         else body.setFitsSystemWindows(true);
         LinearLayout top=row();top.setPadding(dp(13),dp(6),dp(9),dp(6));
+        ImageView oldLogo=new ImageView(this);
+        oldLogo.setImageResource(R.drawable.ic_matchlab_legacy);
+        oldLogo.setContentDescription("MATCHLAB AZ orijinal M loqosu");
+        LinearLayout.LayoutParams logoSize=new LinearLayout.LayoutParams(dp(37),dp(37));
+        logoSize.rightMargin=dp(10);top.addView(oldLogo,logoSize);
         LinearLayout brandBox=column();
         TextView brand=text("MATCHLAB AZ",9,ACCENT,true);brand.setLetterSpacing(.13f);
         brandBox.addView(brand);
@@ -211,7 +220,7 @@ public final class MainActivity extends Activity {
         if(name.equals("matches"))league=matchLeague;
         else if(name.equals("standings"))league=tableLeague;
         if(contentScroll!=null)contentScroll.scrollTo(0,0);
-        header.setText(name.equals("matches")?"Canlı matçlar":name.equals("standings")?"Turnir cədvəli":name.equals("search")?"Axtarış":name.equals("tactics")?"Taktika":name.equals("favorites")?"Seçilmişlər":name.equals("details")?"Matç mərkəzi":name.equals("profile")?"Futbol profili":"Tənzimləmələr");
+        header.setText(name.equals("matches")?"Canlı matçlar":name.equals("standings")?"Turnir cədvəli":name.equals("search")?"Axtarış":name.equals("tactics")?"Taktika":name.equals("favorites")?"Seçilmişlər":name.equals("details")?"Matç mərkəzi":name.equals("profile")?"Futbol profili" :"history".equals(name)?"Tarixi futbol arxivi":"Tənzimləmələr");
         nav.removeAllViews();
         String[][] items={{"matches","⚽","Matçlar"},{"standings","▤","Cədvəl"},{"search","⌕","Axtar"},{"favorites","☆","Seçilmiş"},{"tactics","▦","Taktika"}};
         for(String[] item:items){
@@ -236,6 +245,7 @@ public final class MainActivity extends Activity {
         else if(name.equals("tactics"))showTactics();
         else if(name.equals("details"))showDetails();
         else if(name.equals("settings"))showSettings();
+        else if(name.equals("history"))showHistory();
     }
     private String date(){
         return new SimpleDateFormat("yyyy-MM-dd",Locale.US).format(day.getTime());
@@ -378,7 +388,7 @@ public final class MainActivity extends Activity {
                 HttpURLConnection conn=(HttpURLConnection)url.openConnection();
                 conn.setConnectTimeout(6500);conn.setReadTimeout(14500);
                 conn.setRequestProperty("Accept","application/json");
-                conn.setRequestProperty("User-Agent","MATCHLABAZ-Native/0.9.52");
+                conn.setRequestProperty("User-Agent","MATCHLABAZ-Native/0.9.55");
                 int code=conn.getResponseCode();
                 if(code<200||code>=300)throw new IOException("HTTP "+code);
                 try(InputStream input=conn.getInputStream();ByteArrayOutputStream out=new ByteArrayOutputStream()){
@@ -390,6 +400,48 @@ public final class MainActivity extends Activity {
             JSONObject data=result;Exception failure=error;
             ui.post(()->callback.done(data,failure));
         });
+    }
+    private void playMatchTone(String category){
+        if(!prefs.getBoolean("sound_enabled",true))return;
+        if(!prefs.getBoolean("notif_"+category,true))return;
+        if(prefs.getInt("alert_tone_"+category,1)==0)return;
+        int volume=prefs.getInt("sound_volume",90);
+        if(volume<=0)return;
+        int frequency="goals".equals(category)?ToneGenerator.TONE_PROP_ACK:
+            "final".equals(category)?ToneGenerator.TONE_PROP_NACK:ToneGenerator.TONE_PROP_PROMPT;
+        try{
+            ToneGenerator generator=new ToneGenerator(AudioManager.STREAM_MUSIC,Math.min(100,Math.max(1,volume)));
+            generator.startTone(frequency,"goals".equals(category)?400:260);
+            ui.postDelayed(generator::release,650);
+        }catch(RuntimeException ignored){}
+    }
+    private void checkLiveScoreChanges(JSONObject response){
+        // Do not notify for an old cached snapshot, partial feed or first server response.
+        if(!response.optBoolean("available")||response.optBoolean("stale")||response.optBoolean("partial"))return;
+        JSONArray rows=response.optJSONArray("items");
+        if(rows==null)return;
+        Map<String,String> current=new HashMap<>();
+        for(int i=0;i<rows.length();i++){
+            JSONObject match=rows.optJSONObject(i);if(match==null)continue;
+            String id=match.optString("id","");
+            String state=match.optString("state","");
+            if(id.isEmpty()||match.optBoolean("stale")||"scheduled".equals(state))continue;
+            if(!match.has("homeScore")||match.isNull("homeScore")||!match.has("awayScore")||match.isNull("awayScore"))continue;
+            int h=match.optInt("homeScore",-1),a=match.optInt("awayScore",-1);
+            if(h<0||a<0)continue;
+            String snapshot=h+":"+a+":"+state;current.put(id,snapshot);
+            String old=scoreBaseline.get(id);
+            if(!hasScoreBaseline||old==null)continue;
+            if(prefs.getBoolean("notif_favorites",false)&&!prefs.contains("fav_"+id))continue;
+            String[] previous=old.split(":");
+            if(previous.length!=3)continue;
+            try{
+                if(h>Integer.parseInt(previous[0])||a>Integer.parseInt(previous[1]))playMatchTone("goals");
+                else if("final".equals(state)&&!"final".equals(previous[2]))playMatchTone("final");
+            }catch(NumberFormatException ignored){}
+        }
+        if(current.isEmpty())return;
+        scoreBaseline.clear();scoreBaseline.putAll(current);hasScoreBaseline=true;
     }
     private boolean matchVisible(JSONObject match){
         String state=match.optString("state","");
@@ -483,6 +535,7 @@ public final class MainActivity extends Activity {
             status.setTextColor(json.optBoolean("available")?ACCENT:RED);
             if(json.optBoolean("available")&&!json.optBoolean("stale")&&json.toString().length()<130000)
                 prefs.edit().putString(cacheKey,json.toString()).apply();
+            checkLiveScoreChanges(json);
             renderLiveMatches(json);
         });
     }
@@ -1075,14 +1128,23 @@ public final class MainActivity extends Activity {
         info("Bu plan sənin öz taktiki layihəndir. Real matç heyəti və təsdiqlənmiş formasiya kimi təqdim edilmir.",false);
     }
     private void showSettings(){
-        section("MATCHLAB AZ Native 0.9.52");
+        section("MATCHLAB AZ Native 0.9.55");
         section("Bildiriş və səs idarəetməsi");
-        for(String[] setting:new String[][]{{"notif_goals","Qol bildirişləri"},{"notif_kickoff","Matç başlanğıcı"},{"notif_halftime","Fasilə"},{"notif_final","Matçın bitməsi"},{"notif_cards","Qırmızı kart"},{"notif_yellow_cards","Sarı kart"},{"notif_assists","Assist"},{"notif_penalties","Penalti"},{"notif_lineups","Heyətlər açıqlananda"},{"notif_corners","Künc zərbəsi"},{"notif_favorites","Yalnız seçilmiş matçlar"},{"sound_enabled","Tətbiqdaxili səs"},{"sound_vibrate","Vibrasiya"}}){
+        section("Səs səviyyəsi");
+        SeekBar volume=new SeekBar(this);
+        volume.setMax(100);volume.setProgress(prefs.getInt("sound_volume",90));
+        volume.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
+            public void onProgressChanged(SeekBar b,int value,boolean user){if(user)prefs.edit().putInt("sound_volume",value).apply();}
+            public void onStartTrackingTouch(SeekBar b){}
+            public void onStopTrackingTouch(SeekBar b){}
+        });
+        card(volume);
+        for(String[] setting:new String[][]{{"notif_goals","Qol bildirişləri"},{"notif_kickoff","Matç başlanğıcı"},{"notif_halftime","Fasilə"},{"notif_final","Matçın bitməsi"},{"notif_cards","Qırmızı kart"},{"notif_yellow_cards","Sarı kart"},{"notif_assists","Assist"},{"notif_penalties","Penalti"},{"notif_lineups","Heyətlər açıqlananda"},{"notif_corners","Künc zərbəsi"},{"notif_favorites","Yalnız seçilmiş matçlar"},{"sound_enabled","Tətbiqdaxili səs"}}){
             Switch toggle=new Switch(this);toggle.setText(setting[1]);toggle.setTextSize(13);toggle.setTextColor(INK);
             toggle.setChecked(prefs.getBoolean(setting[0],false));toggle.setPadding(dp(9),dp(9),dp(9),dp(9));
             toggle.setOnCheckedChangeListener((view,checked)->prefs.edit().putBoolean(setting[0],checked).apply());card(toggle);
         }
-        section("Hər hadisə üçün səs və vibrasiya");
+        section("Hər hadisə üçün səs seçimi");
         String[][] alerts={
             {"goals","Qol"},{"assists","Assist"},{"penalties","Penalti"},
             {"cards","Qırmızı kart"},{"yellow_cards","Sarı kart"},{"corners","Künc zərbəsi"},
@@ -1101,31 +1163,19 @@ public final class MainActivity extends Activity {
                     sound.setText("Səs: "+tones[selected]);dialog.dismiss();
                 }).setNegativeButton("Bağla",null).show());
             buttons.addView(sound,new LinearLayout.LayoutParams(0,dp(45),2));
-            Switch vibration=new Switch(this);vibration.setText("Titrə");
-            vibration.setTextColor(INK);vibration.setTextSize(11);
-            vibration.setChecked(prefs.getBoolean("alert_vibrate_"+key,false));
-            vibration.setOnCheckedChangeListener((view,checked)->prefs.edit().putBoolean("alert_vibrate_"+key,checked).apply());
-            buttons.addView(vibration,new LinearLayout.LayoutParams(0,dp(45),1));
             control.addView(buttons);
             Button preview=button("♪  Sına");
             preview.setOnClickListener(v->{
                 int selected=prefs.getInt("alert_tone_"+key,1);
                 if(selected>0){
                     int tone=selected==1?ToneGenerator.TONE_PROP_BEEP:selected==2?ToneGenerator.TONE_PROP_ACK:selected==3?ToneGenerator.TONE_PROP_NACK:ToneGenerator.TONE_PROP_PROMPT;
-                    ToneGenerator generator=new ToneGenerator(AudioManager.STREAM_NOTIFICATION,65);
+                    ToneGenerator generator=new ToneGenerator(AudioManager.STREAM_MUSIC,prefs.getInt("sound_volume",90));
                     generator.startTone(tone,200);ui.postDelayed(generator::release,320);
-                }
-                if(prefs.getBoolean("alert_vibrate_"+key,false)){
-                    android.os.Vibrator vibrator=(android.os.Vibrator)getSystemService(VIBRATOR_SERVICE);
-                    if(vibrator!=null&&vibrator.hasVibrator()){
-                        if(android.os.Build.VERSION.SDK_INT>=26)vibrator.vibrate(android.os.VibrationEffect.createOneShot(140,android.os.VibrationEffect.DEFAULT_AMPLITUDE));
-                        else vibrator.vibrate(140);
-                    }
                 }
             });control.addView(preview);
             card(control);
         }
-        info("Bu seçimlər yerli yaddaşa yazılır. Real hadisə bildirişlərinin avtomatik gəlməsi ayrıca bildiriş mühərriki tələb edir; hələ aktiv deyil.",false);
+        info("Bu seçimlər yerli yaddaşa yazılır. Qol və final səsləri yalnız proqram açıq olarkən yeni, təsdiqlənmiş hesab dəyişikliyi görüldükdə işləyir. Push bildirişləri aktiv deyil.",false);
         info("Ekranlar yalnız Android Java komponentlərindən qurulub. Veb səhifə göstərilmir.",false);
         info("Canlı matçlar və profillər HTTPS JSON API-dən gəlir. Mənbələrdə boşluqlar ola bilər.",false);
         Button statusButton=button("Server vəziyyətini yoxla");
@@ -1137,6 +1187,50 @@ public final class MainActivity extends Activity {
         });card(statusButton);
     }
 
+    private void showHistory(){
+        section("FOOTBALL HERITAGE  ·  CC0 ARXİV");
+        info("Arxiv matçları canlı DEYİL. Hesab və tarix yalnız mənbədə mövcuddursa göstərilir.",false);
+        final String[] ids={"eng.1","esp.1","ger.1","ita.1","fra.1","tur.1","por.1","ned.1","sco.1","eng.2","bel.1"};
+        final String[] names={"Premier League","La Liga","Bundesliga","Serie A","Ligue 1","Süper Lig","Primeira Liga","Eredivisie","Scottish Premiership","Championship","Belgian Pro League"};
+        LinearLayout tools=column();
+        Spinner leaguesPicker=spinner(names,Math.max(0,Arrays.asList(ids).indexOf(historyLeague)),n->historyLeague=ids[n]);
+        tools.addView(leaguesPicker);
+        String[] seasons=new String[17];
+        for(int i=0;i<seasons.length;i++){int y=2026-i;seasons[i]=y+"-"+String.format(Locale.US,"%02d",(y+1)%100);}
+        Spinner seasonPicker=spinner(seasons,Math.max(0,Arrays.asList(seasons).indexOf(historySeason)),n->historySeason=seasons[n]);
+        tools.addView(seasonPicker);
+        EditText club=new EditText(this);club.setSingleLine(true);club.setHint("Komanda adına görə filtr");
+        club.setText(historyTeam);club.setTextColor(INK);club.setHintTextColor(MUTED);
+        tools.addView(club);
+        Button load=button("⌕  Tarixi matçları axtar");
+        load.setOnClickListener(v->{historyTeam=club.getText().toString().trim();historyOffset=0;showHistory();});
+        tools.addView(load);card(tools);
+        int token=generation;
+        fetch("/api/history?league="+encode(historyLeague)+"&season="+encode(historySeason)+"&offset="+historyOffset+"&limit=60&team="+encode(historyTeam),(json,error)->{
+            if(token!=generation||!"history".equals(screen))return;
+            if(error!=null||json==null){info(networkMessage(error),true);return;}
+            if(!json.optBoolean("available")){info(json.optString("message","Tarixi arxiv mövcud deyil."),true);return;}
+            section(json.optString("leagueName",historyLeague)+"  ·  "+historySeason+"  ·  "+json.optInt("count")+" matç");
+            JSONArray rows=json.optJSONArray("items");
+            if(rows==null||rows.length()==0){info("Bu filtrə uyğun matç yoxdur.",false);return;}
+            for(int i=0;i<rows.length();i++){
+                JSONObject game=rows.optJSONObject(i);if(game==null)continue;
+                LinearLayout item=column();item.setPadding(dp(12),dp(12),dp(12),dp(12));item.setBackground(shape(CARD,12));
+                item.addView(text(game.optString("round")+"   ·   "+game.optString("date")+"  "+game.optString("time"),10,MUTED,false));
+                String score=game.optBoolean("resultRecorded")?game.optString("homeScore")+" : "+game.optString("awayScore"):"— : —";
+                item.addView(text(game.optString("home")+"  "+score+"  "+game.optString("away"),13,INK,true));
+                LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.bottomMargin=dp(7);page.addView(item,lp);
+            }
+            if(!json.isNull("nextOffset")){
+                int next=json.optInt("nextOffset",-1);
+                if(next>historyOffset){
+                    Button more=button("Daha 60 matç");
+                    more.setOnClickListener(v->{historyOffset=next;showHistory();});card(more);
+                }
+            }
+            info("OpenFootball football.json (CC0). Tarixi matçlar, canlı nəticə deyil.",false);
+        });
+    }
     private void showMenu(View anchor){
         PopupMenu popup=new PopupMenu(this,anchor);
         popup.getMenu().add(0,1,0,"Canlı matçlar");
@@ -1144,12 +1238,14 @@ public final class MainActivity extends Activity {
         popup.getMenu().add(0,3,2,"Seçilmişlər");
         popup.getMenu().add(0,4,3,"Tənzimləmələr və server");
         popup.getMenu().add(0,5,4,"Android tətbiq məlumatları");
+        popup.getMenu().add(0,6,5,"◷ Tarixi futbol arxivi");
         popup.setOnMenuItemClickListener(item->{
             switch(item.getItemId()){
                 case 1:navigate("matches");return true;
                 case 2:navigate("search");return true;
                 case 3:navigate("favorites");return true;
                 case 4:navigate("settings");return true;
+                case 6:navigate("history");return true;
                 case 5:
                     Intent intent=new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                         android.net.Uri.parse("package:"+getPackageName()));
