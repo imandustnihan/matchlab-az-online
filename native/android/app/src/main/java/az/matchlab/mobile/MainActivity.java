@@ -1308,7 +1308,19 @@ public final class MainActivity extends Activity {
         fetch("/api/history-bundle?league="+encode(historyLeague)+"&season="+encode(historySeason),(json,error)->{
             if(token!=generation||!"history".equals(screen)||!key.equals(historyKey()))return;
             if(error!=null||json==null||!json.optBoolean("available")){
-                if(old==null)info(error!=null?networkMessage(error):json==null?"Arxiv alınmadı":json.optString("message"),true);
+                if(old==null){
+                    // The live Render server can lag behind the new full-season endpoint.
+                    // Use its earlier paged endpoint rather than breaking the archive.
+                    fetch("/api/history?league="+encode(historyLeague)+"&season="+encode(historySeason)+
+                        "&limit=60&offset="+historyOffset+"&team="+encode(historyTeam),(legacy,legacyError)->{
+                        if(token!=generation||!"history".equals(screen)||!key.equals(historyKey()))return;
+                        if(legacyError!=null||legacy==null||!legacy.optBoolean("available")){
+                            info(legacyError!=null?networkMessage(legacyError):legacy==null?"Arxiv cavab vermədi":legacy.optString("message"),true);return;
+                        }
+                        info("Uyğunluq rejimi · server tam mövsüm yeniləməsini hələ dəstəkləmir.",false);
+                        renderHistoricalRows(legacy,false,true);
+                    });
+                }
                 return;
             }
             if(json.optBoolean("complete")&&json.toString().length()<1_500_000){
@@ -1319,7 +1331,8 @@ public final class MainActivity extends Activity {
             if(old==null)renderHistoricalRows(json,false);
         });
     }
-    private void renderHistoricalRows(JSONObject json,boolean cached){
+    private void renderHistoricalRows(JSONObject json,boolean cached){renderHistoricalRows(json,cached,false);}
+    private void renderHistoricalRows(JSONObject json,boolean cached,boolean legacy){
         section(json.optString("leagueName",historyLeague)+" · "+historySeason+(cached?" · YERLİ KEŞ":" · CC0"));
         JSONArray rows=json.optJSONArray("items");
         if(rows==null){info("Tarixi məlumat yoxdur.",false);return;}
@@ -1333,8 +1346,9 @@ public final class MainActivity extends Activity {
             filtered.add(game);
         }
         info(filtered.size()+" uyğun oyun · tarixi, canlı deyil",false);
-        int end=Math.min(historyOffset+60,filtered.size());
-        for(int i=historyOffset;i<end;i++){
+        int begin=legacy?0:historyOffset;
+        int end=Math.min(begin+60,filtered.size());
+        for(int i=begin;i<end;i++){
             JSONObject game=filtered.get(i);
             LinearLayout item=column();item.setPadding(dp(12),dp(12),dp(12),dp(12));
             item.setBackground(shape(CARD,12));
@@ -1343,9 +1357,13 @@ public final class MainActivity extends Activity {
             item.addView(text(game.optString("home")+"   "+score+"   "+game.optString("away"),13,INK,true));
             LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.bottomMargin=dp(7);page.addView(item,p);
         }
-        if(end<filtered.size()){
+        boolean hasMore=legacy?!json.isNull("nextOffset")&&json.optInt("nextOffset",-1)>historyOffset:end<filtered.size();
+        if(hasMore){
             Button more=button("Daha 60 oyun");
-            more.setOnClickListener(v->{historyOffset=end;showHistory();});card(more);
+            more.setOnClickListener(v->{
+                historyOffset=legacy?json.optInt("nextOffset",historyOffset+60):end;
+                showHistory();
+            });card(more);
         }
         info("Mənbə: OpenFootball CC0. Arxiv yerli yaddaşa köçürülür; gündə bir dəfə yenilənir.",false);
     }
