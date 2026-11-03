@@ -17,6 +17,7 @@ import club_history
 import season_stats
 import league_catalog
 import historical_archive
+import profile_auto_updates
 import free_football_sources as open_feeds
 
 ROOT=Path(__file__).resolve().parent
@@ -605,6 +606,11 @@ def send_data(path,params):
    profile['otherRoles']=[]
   if profile.get('clubs') and profile.get('coached'):
    profile['roles']=list(dict.fromkeys(people.roles_of(profile)+['players','coaches']))
+  # Opt in recently accessed, verified identities to a bounded background refresh.
+  # No scrape of all 506207 records; death/club facts remain source-attributed.
+  if QID.fullmatch(qid or '') and profile.get('kind') in ('players','coaches','teams'):
+   meta=profile_auto_updates.watch(qid,profile['kind'])
+   if meta:profile['updateStatus']=meta
   return {'profile':profile,'online':bool(profile.get('image')),'source':profile.get('source','Reep CC0')}
  if path=='/api/wikipedia-refresh':
   identifier=params.get('id',[''])[0]
