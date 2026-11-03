@@ -1,4 +1,4 @@
-name: MATCHLAB AZ Native Android APK v0949
+name: MATCHLAB AZ Native Android APK v0949 corrected
 on:
   workflow_dispatch:
   push:
