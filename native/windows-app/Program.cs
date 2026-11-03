@@ -84,6 +84,9 @@ public sealed class MatchlabForm : Form
     private readonly Panel nav = new() { Dock=DockStyle.Fill, BackColor=Sidebar };
     private readonly List<Button> navButtons = new();
     private string page="matches";
+    private bool sortChronological=false;
+    private string detailTab="overview",openedDetailsId="";
+    private JsonElement openedDetails=default;
     private string historyLeague="eng.1";
     private string historySeason="2025-26";
     private int historyOffset=0;
@@ -216,6 +219,7 @@ public sealed class MatchlabForm : Form
             foreach(Control c in content.Controls)
                 if(c is Panel || c is FlowLayoutPanel) c.Width=Math.Max(380,content.ClientSize.Width-36);
         };
+        sortChronological=Option("match_sort","league")=="time";
         refreshTimer.Tick+=(_,_)=>{ if(page=="matches"&&WindowState!=FormWindowState.Minimized&&Option("auto_refresh","true")=="true") _=ReloadMatches(false); };
         refreshTimer.Interval=Option("refresh_seconds","30") switch {"60"=>60000,"45"=>45000,"15"=>15000,_=>30000};
         refreshTimer.Start();
@@ -239,7 +243,7 @@ public sealed class MatchlabForm : Form
         brand.SetBounds(80,24,140,30);nav.Controls.Add(brand);
         var sub=Txt("FUTBOL MƏRKƏZİ",8,false,Muted);
         sub.SetBounds(80,53,138,19);nav.Controls.Add(sub);
-        var build=Txt("NATIVE · 0.9.58",8,false,Muted);
+        var build=Txt("NATIVE · 0.9.59",8,false,Muted);
         build.SetBounds(20,91,190,22);nav.Controls.Add(build);
         var items=new(string key,string label)[]{
             ("matches","⚽  Matçlar"),("standings","▤   Cədvəl"),("search","⌕   Axtarış"),
@@ -494,6 +498,16 @@ public sealed class MatchlabForm : Form
             btn.Click+=(_,_)=>{matchFilter=filter;Render();};
             bar.Controls.Add(btn);
         }
+        var sort=NewButton(sortChronological?"◷ Saat üzrə":"▤ Liqa üzrə",Raised,Accent,136);
+        sort.SetBounds(Math.Max(550,bar.Width-150),13,136,39);
+        sort.Anchor=AnchorStyles.Top|AnchorStyles.Right;
+        sort.Click+=(_,_)=>{
+            sortChronological=!sortChronological;
+            SaveOption("match_sort",sortChronological?"time":"league");
+            content.Controls.Clear();DashboardHero();DateFilter();MatchFilterBar(stale);
+            RenderGroupedMatches(latestMatches,stale);
+        };
+        bar.Controls.Add(sort);
     }
     private void RenderGroupedMatches(IEnumerable<JsonElement> all,bool stale){
         var filtered=all.Where(m=>matchFilter switch{
@@ -502,6 +516,14 @@ public sealed class MatchlabForm : Form
         }).ToList();
         if(filtered.Count==0){EmptyState(matchFilter=="live"?"Hazırda canlı matç yoxdur":"Uyğun matç tapılmadı",
             "Başqa tarix, liqa və ya filtri seçə bilərsən.",false);return;}
+        if(sortChronological){
+            Heading("SAAT ARDICILLIĞI · "+filtered.Count+" OYUN");
+            foreach(var match in filtered.OrderBy(m=>{
+                string time=Val(m,"time");
+                return System.Text.RegularExpressions.Regex.IsMatch(time,@"^\d{2}:\d{2}$")?time:"99:99";
+            }))MatchRow(match,stale);
+            return;
+        }
         foreach(var group in filtered.GroupBy(m=>Val(m,"leagueName",Val(m,"league","Digər")))){
             var title=group.Key;
             var rows=group.ToList();
@@ -549,7 +571,9 @@ public sealed class MatchlabForm : Form
             SaveFavorites();fav.Text=favoriteSnapshots.ContainsKey(id)?"★":"☆";
         };
         p.Cursor=Cursors.Hand;
-        EventHandler open=(_,_)=>{openedMatch=m.Clone();hasOpenedMatch=true;page="details";Render();};
+        EventHandler open=(_,_)=>{openedMatch=m.Clone();hasOpenedMatch=true;
+            detailTab="overview";openedDetails=default;openedDetailsId="";
+            page="details";Render();};
         foreach(Control x in p.Controls)if(x!=fav)x.Click+=open;
         p.Click+=open;
         homeBadge.Click+=open;awayBadge.Click+=open;
@@ -600,17 +624,45 @@ public sealed class MatchlabForm : Form
         Message("500 mindən artıq real futbol qeydini serverdə axtara bilərsən. Nəticələr mənbədən alınır.");
         if(query.Length>0)Go();
     }
+
+    private void RenderOfflineIdentities(System.Collections.Generic.List<OfflineIdentityIndex.Entry> rows){
+        if(rows.Count==0)return;
+        Heading("OFFLAYN REEP CC0 · 506 207 REAL FUTBOL KİMLİYİ");
+        Message("Axtarış yerli, mənbə ilə təsdiqlənmiş ad reyestrindən işləyir. Cari klub, karyera, heyət və oyun statistikası bu paketdə saxlanmır.");
+        foreach(var row in rows){
+            var p=CardPanel(67);p.Cursor=Cursors.Hand;
+            var name=Txt(row.Name,12,true,Ink);name.SetBounds(16,7,670,29);p.Controls.Add(name);
+            var meta=Txt(row.Kind+"  ·  "+row.Country+"  ·  OFFLAYN",9,false,Muted);
+            meta.SetBounds(17,38,600,22);p.Controls.Add(meta);
+            EventHandler open=(_,_)=>{
+                var choice=MessageBox.Show(row.Name+"\nMənbə: Reep CC0\nÖlkə: "+row.Country+
+                    "\nİnternet qoşulanda profilin cari məlumatlarını serverdən yoxlaya bilərsən.",
+                    "Yerli futbol reyestri",MessageBoxButtons.YesNo,MessageBoxIcon.Information);
+                if(choice==DialogResult.Yes)_=OpenProfile(row.Id);
+            };
+            p.Click+=open;name.Click+=open;meta.Click+=open;
+        }
+    }
     private async Task LoadSearch(string q,string kind){
         if(string.IsNullOrWhiteSpace(q)){Message("Axtarış üçün ad yaz.");return;}
         int token=viewVersion;
+        var online=Get("/api/search?q="+Uri.EscapeDataString(q)+"&kind="+kind);
+        System.Collections.Generic.List<OfflineIdentityIndex.Entry> offline;
         try{
-            var data=await Get("/api/search?q="+Uri.EscapeDataString(q)+"&kind="+kind);
+            offline=await System.Threading.Tasks.Task.Run(()=>OfflineIdentityIndex.SearchBundled(q,kind,75));
+        }catch(Exception){offline=new();}
+        if(page!="search"||token!=viewVersion)return;
+        if(offline.Count>0){
+            while(content.Controls.Count>2)content.Controls.RemoveAt(content.Controls.Count-1);
+            RenderOfflineIdentities(offline);
+        }
+        try{
+            var data=await online;
             if(page!="search"||token!=viewVersion)return;
-            // Preserve the two input panels; replace only search results.
-            while(content.Controls.Count>2) content.Controls.RemoveAt(content.Controls.Count-1);
+            while(content.Controls.Count>2)content.Controls.RemoveAt(content.Controls.Count-1);
             var rows=Array(data,"items").ToList();
-            Heading("Nəticələr · "+rows.Count);
-            if(rows.Count==0){Message("Bu sorğu üzrə nəticə tapılmadı.");return;}
+            Heading("ONLAYN REYESTR NƏTİCƏLƏRİ · "+rows.Count);
+            if(rows.Count==0){Message("Bu sorğu üzrə onlayn nəticə tapılmadı.");return;}
             foreach(var row in rows){
                 var p=CardPanel(70);p.Cursor=Cursors.Hand;
                 var name=Txt(Val(row,"name","—"),12,true);name.SetBounds(18,7,520,29);p.Controls.Add(name);
@@ -632,7 +684,11 @@ public sealed class MatchlabForm : Form
                 };
                 p.Controls.Add(choose);
             }
-        }catch(Exception e){if(page!="search"||token!=viewVersion)return;Message("Axtarış alınmadı: "+e.Message,true);}
+        }catch(Exception e){
+            if(page=="search"&&token==viewVersion)Message(
+                offline.Count>0?"Server əlçatan deyil: yerli 506 207 qeydli arxiv göstərilir.":
+                "Server və yerli reyestr əlçatan deyil: "+e.Message,true);
+        }
     }
     private async Task ShowComparison(int token){
         Heading("MƏNBƏYƏ ƏSASLANAN MÜQAYİSƏ");
@@ -784,19 +840,63 @@ public sealed class MatchlabForm : Form
         name.SetBounds(20,14,790,56);p.Controls.Add(name);
         var meta=Txt(Val(m,"leagueName")+"  ·  "+Status(m)+"  ·  "+Val(m,"source"),11,false,Muted);
         meta.SetBounds(20,83,790,42);p.Controls.Add(meta);
+
+        var tabs=CardPanel(62);
+        var choices=new[]{("overview","Xülasə"),("stats","Statistika"),("lineups","Heyətlər"),("events","Hadisələr")};
+        for(int i=0;i<choices.Length;i++){
+            var choice=choices[i];
+            bool active=detailTab==choice.Item1;
+            var b=NewButton(choice.Item2,active?Accent:Raised,active?Bg:Ink,154);
+            b.SetBounds(14+i*167,10,154,42);
+            b.Click+=(_,_)=>{detailTab=choice.Item1;Render();};
+            tabs.Controls.Add(b);
+        }
+
         string id=Val(m,"id");
         var split=id.Split(':',3);
-        if(split.Length!=3 || !new[]{"espn","open","sportsdb"}.Contains(split[0])){Message("Bu matçın detalları hazırda mövcud deyil.");return;}
-        Message("Matç hadisələri və statistika alınır…");
+        if(split.Length!=3||!new[]{"espn","open","sportsdb"}.Contains(split[0])){
+            Message("Bu matç üçün doğrulanmış detal mənbəyi mövcud deyil.",true);return;
+        }
+        if(openedDetails.ValueKind==JsonValueKind.Object&&openedDetailsId==id){
+            RenderDetailPanel(openedDetails);return;
+        }
+        Message("Təsdiqlənmiş matç məlumatları mənbədən alınır…");
         try{
-            var data=await Get("/api/match-detail?provider="+split[0]+"&league="+Uri.EscapeDataString(split[1])+"&id="+Uri.EscapeDataString(split[2]));
+            var data=await Get("/api/match-detail?provider="+split[0]+
+                "&league="+Uri.EscapeDataString(split[1])+"&id="+Uri.EscapeDataString(split[2]));
             if(page!="details"||token!=viewVersion)return;
-            if(!Yes(data,"available"))Message(Val(data,"message","Təfsilat mənbədə mövcud deyil."),true);
+            openedDetails=data.Clone();openedDetailsId=id;
+            Render();
+        }catch(Exception e){
+            if(page=="details"&&token==viewVersion)Message("Matç məlumatları alınmadı: "+e.Message,true);
+        }
+    }
+
+    private void RenderDetailPanel(JsonElement data){
+        if(!Yes(data,"available"))Message(Val(data,"message","Bu matçın mənbədə təsdiqlənmiş məlumatları yoxdur."),true);
+        if(Yes(data,"partial"))Message("Mənbədə yalnız qismən məlumat var; olmayan heyətlər və xG uydurulmur.",true);
+        if(detailTab=="overview"){
+            int events=Array(data,"events").Count(),stats=Array(data,"statistics").Count();
+            var lineup=Prop(data,"lineup");
+            int starters=0;
+            if(lineup.ValueKind==JsonValueKind.Object)
+                foreach(var side in new[]{"home","away"})starters+=Array(Prop(lineup,side),"starters").Count();
+            Heading("MATÇ XÜLASƏSİ");
+            Message(events+" hadisə  ·  "+stats+" statistik göstərici  ·  "+starters+" start heyəti üzvü");
+            Message("Matçın detalları üçün Statistika, Heyətlər və Hadisələr bölmələrindən istifadə et.");
+            return;
+        }
+        if(detailTab=="events"){
             var events=Array(data,"events").Take(70).ToList();
             if(events.Count>0){
                 Heading("Matç hadisələri");
                 foreach(var ev in events)Message(Val(ev,"minute",Val(ev,"clock"))+"  "+Val(ev,"text",Val(ev,"type",ev.ToString())));
             }
+
+            if(events.Count==0)Message("Mənbədə təsdiqlənmiş matç hadisəsi yoxdur.");
+            return;
+        }
+        if(detailTab=="stats"){
             var stats=Array(data,"statistics").Take(40).ToList();
             if(stats.Count>0){
                 Heading("Matç statistikası");
@@ -817,13 +917,21 @@ public sealed class MatchlabForm : Form
                     }
                 }
             }else Message("Mənbədə statistika yoxdur.");
+
+            return;
+        }
+        if(detailTab=="lineups"){
             var lineup=Prop(data,"lineup");
             if(lineup.ValueKind==JsonValueKind.Object){
                 Heading("Təsdiqlənmiş heyətlər");
-                ShowLineup(lineup,"home",Team(m,"home"));
-                ShowLineup(lineup,"away",Team(m,"away"));
+                ShowLineup(lineup,"home",Team(openedMatch,"home"));
+                ShowLineup(lineup,"away",Team(openedMatch,"away"));
             }
-        }catch(Exception e){if(page=="details"&&token==viewVersion)Message("Matç detalları alınmadı: "+e.Message,true);}
+
+            if(lineup.ValueKind!=JsonValueKind.Object)
+                Message("Mənbədə ilk 11 və ehtiyat heyəti göstərilməyib.");
+            return;
+        }
     }
     private void ShowHistory(){
         Heading("FOOTBALL HERITAGE  /  OPENFOOTBALL CC0");

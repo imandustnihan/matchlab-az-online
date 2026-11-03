@@ -99,6 +99,13 @@ def main():
     adb("shell","am","start","-n",ACTIVITY,timeout=50)
     wait_for("Canlı matçlar")
     wait_for("MATCHLAB AZ")
+    wait_for("Saata görə")
+    tap("Saata görə")
+    pref=adb("shell","run-as",APP,"cat","shared_prefs/matchlab_native.xml")
+    check("sort_chronological" in pref and "true" in pref,
+          "Chronological match sorting persists in Android preferences")
+    wait_for("Liqa üzrə")
+    tap("Liqa üzrə")
     capture("01_home")
     check(APP in adb("shell","dumpsys","activity","activities"),
           "Native Android activity starts")

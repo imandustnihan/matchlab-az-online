@@ -25,6 +25,11 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build verified offline registry for Windows GUI testing
+        run: python native/qa/export_offline_registry.py --output native/shared/registry_offline.tsv.gz
       - name: Compile and run Windows GUI checks
         shell: pwsh
         run: |
@@ -54,6 +59,8 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
+      - name: Build verified offline registry for Windows installer
+        run: python native/qa/export_offline_registry.py --output native/shared/registry_offline.tsv.gz
       - name: Publish the real standalone Windows EXE
         shell: pwsh
         run: |
@@ -93,6 +100,12 @@ jobs:
           mkdir -p /tmp/matchlab-history-qa
           javac -d /tmp/matchlab-history-qa native/android/app/src/main/java/az/matchlab/mobile/HistoryTeamForm.java native/qa/HistoryTeamFormSmoke.java
           java -cp /tmp/matchlab-history-qa HistoryTeamFormSmoke
+      - name: Verify and export offline registry for Android emulator
+        run: |
+          python3 native/qa/export_offline_registry.py --output native/android/app/src/main/assets/registry_offline.bin
+          mkdir -p /tmp/matchlab-offline-qa
+          javac -d /tmp/matchlab-offline-qa native/android/app/src/main/java/az/matchlab/mobile/OfflineIdentityIndex.java native/qa/OfflineIdentitySmoke.java
+          java -cp /tmp/matchlab-offline-qa OfflineIdentitySmoke
       - name: Generate Android branding and build real app
         run: |
           set -euo pipefail
