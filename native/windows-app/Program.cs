@@ -628,7 +628,7 @@ public sealed class MatchlabForm : Form
             card.Controls.Add(preview);
         }
         Heading("Proqram məlumatı");
-        Message("MATCHLAB AZ Native v0.9.51 · Windows Forms. Brauzer və WebView işlətmir.");
+        Message("MATCHLAB AZ Native v0.9.52 · Windows Forms. Brauzer və WebView işlətmir.");
         Message("Bildiriş seçimləri və səs sınaqları lokaldır; avtomatik canlı push bildirişləri hələ aktiv deyil.");
         Message("Canlı nəticələr və profillər Render serverindən HTTPS API vasitəsilə gəlir. İnternet olmayanda uydurma statistika göstərilmir.");
         try{
