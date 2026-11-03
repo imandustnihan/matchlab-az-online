@@ -2,7 +2,7 @@
 $ErrorActionPreference = 'Stop'
 $out = Join-Path (Get-Location) 'qa-artifacts/windows-installer'
 New-Item -ItemType Directory -Force -Path $out | Out-Null
-$report = [ordered]@{ platform='Windows 11 hosted runner'; physicalDevice=$false; steps=@() }
+$report = [ordered]@{ platform='Windows Server 2025 hosted runner'; physicalDevice=$false; steps=@() }
 function Passed([string]$name) {
     $report.steps += $name
     Write-Host "[PASS] $name"
