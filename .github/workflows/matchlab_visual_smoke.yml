@@ -16,8 +16,8 @@ permissions:
 
 jobs:
   windows-visual:
-    name: Windows 11 native visual and functional smoke
-    runs-on: windows-latest
+    name: Windows Server 2025 native visual and functional smoke
+    runs-on: windows-2025
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -38,7 +38,7 @@ jobs:
 
   windows-installer:
     name: Windows Setup install, launch and uninstall
-    runs-on: windows-latest
+    runs-on: windows-2025
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
