@@ -71,8 +71,8 @@ public sealed class MatchlabForm : Form
             else badge.Image=cached;
         }catch(Exception){/* Unsupported logo -> neutral fallback, never block scores. */}
     }
-    private readonly string[] leagues = {"all","eng.1","esp.1","ger.1","ita.1","fra.1","uefa.champions","uefa.europa","tur.1","por.1","ned.1"};
-    private readonly string[] leagueNames = {"Bütün liqalar","Premier League","La Liga","Bundesliga","Serie A","Ligue 1","Champions League","Europa League","Süper Lig","Primeira Liga","Eredivisie"};
+    private readonly string[] leagues = {"all","aze.1","eng.1","esp.1","ger.1","ita.1","fra.1","uefa.champions","uefa.europa","uefa.europa.conf","tur.1","por.1","ned.1","sco.1","bel.1","usa.1","ksa.1","eng.2","arg.1","bra.1","jpn.1","mex.1"};
+    private readonly string[] leagueNames = {"Bütün liqalar","Azərbaycan Premyer Liqası","Premier League","La Liga","Bundesliga","Serie A","Ligue 1","Champions League","Europa League","Konfrans Liqası","Süper Lig","Primeira Liga","Eredivisie","Scottish Premiership","Belgian Pro League","MLS","Saudi Pro League","Championship","Argentina Primera","Brasileirão","J1 League","Liga MX"};
     private readonly Dictionary<string, string> favoriteSnapshots = new();
     private readonly string savePath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -84,6 +84,8 @@ public sealed class MatchlabForm : Form
     private readonly Panel nav = new() { Dock=DockStyle.Fill, BackColor=Sidebar };
     private readonly List<Button> navButtons = new();
     private string page="matches";
+    private string matchFilter="all";
+    private readonly HashSet<string> collapsedLeagues=new();
     private string league="all";
     private DateTime selectedDate=DateTime.UtcNow.AddHours(4).Date;
     private string selectedKind="all";
@@ -199,7 +201,7 @@ public sealed class MatchlabForm : Form
         brand.SetBounds(80,24,140,30);nav.Controls.Add(brand);
         var sub=Txt("FUTBOL MƏRKƏZİ",8,false,Muted);
         sub.SetBounds(80,53,138,19);nav.Controls.Add(sub);
-        var build=Txt("NATIVE · 0.9.53",8,false,Muted);
+        var build=Txt("NATIVE · 0.9.54",8,false,Muted);
         build.SetBounds(20,91,190,22);nav.Controls.Add(build);
         var items=new(string key,string label)[]{
             ("matches","⚽  Matçlar"),("standings","▤   Cədvəl"),("search","⌕   Axtarış"),
@@ -280,7 +282,7 @@ public sealed class MatchlabForm : Form
         var l=Txt(text,12,true,Accent);l.Dock=DockStyle.Fill;row.Controls.Add(l);
     }
     private void DashboardHero(string? caption=null){
-        var hero=CardPanel(137);
+        var hero=CardPanel(165);
         hero.BackColor=Color.FromArgb(17,43,48);
         var eyebrow=Txt("MATCHLAB  /  MATÇ MƏRKƏZİ",9,true,Accent);
         eyebrow.SetBounds(18,11,370,21);hero.Controls.Add(eyebrow);
@@ -289,19 +291,23 @@ public sealed class MatchlabForm : Form
         var detail=Txt(caption??"Real nəticələr, təsdiqlənmiş heyətlər və klub statistikası — bir məkanda.",10,false,Muted);
         detail.SetBounds(19,75,570,27);hero.Controls.Add(detail);
         var quick=new (string label,string target)[]{("⌕  Axtarış","search"),("▦  Taktika","tactics"),("▤  Cədvəl","standings")};
-        var x=Math.Max(610,hero.Width-390);
+        var shortcutButtons=new List<Button>();
         for(int i=0;i<quick.Length;i++){
-            string target=quick[i].target;
-            var action=NewButton(quick[i].label,Raised,Ink,112);
-            action.Height=38;action.SetBounds(x+i*122,49,112,38);
+            var target=quick[i].target;
+            var action=NewButton(quick[i].label,Raised,Ink,105);
             action.Click+=(_,_)=>{page=target;Render();};
-            hero.Controls.Add(action);
+            hero.Controls.Add(action);shortcutButtons.Add(action);
         }
-        hero.SizeChanged+=(_,_)=>{
-            int left=Math.Max(610,hero.Width-390);
-            int i=0;
-            foreach(Control control in hero.Controls)if(control is Button)control.Left=left+122*i++;
-        };
+        void LayoutHero(){
+            bool narrow=hero.Width<920;
+            int x=narrow?18:hero.Width-365;
+            int y=narrow?114:53;
+            for(int index=0;index<shortcutButtons.Count;index++)
+                shortcutButtons[index].SetBounds(x+index*115,y,105,36);
+            detail.Width=narrow?hero.Width-36:hero.Width-435;
+        }
+        hero.SizeChanged+=(_,_)=>LayoutHero();
+        LayoutHero();
     }
     private void LoadingState(string message){
         var panel=CardPanel(83);
@@ -384,12 +390,8 @@ public sealed class MatchlabForm : Form
                 EmptyState(Yes(data,"available")?"Bu tarixdə oyun tapılmadı":"Mənbə hazırda əlçatan deyil",
                     Yes(data,"available")?"Başqa liqa və ya tarix seçə bilərsən.":"Yoxlamanı təkrarla. Render pulsuz serveri oyanarkən gecikə bilər.");
             }else{
-                string group="";
-                foreach(var m in latestMatches){
-                    string next=Val(m,"leagueName",Val(m,"league","Digər"));
-                    if(next!=group){Heading(next);group=next;}
-                    MatchRow(m);
-                }
+                MatchFilterBar(Yes(data,"stale"));
+                RenderGroupedMatches(latestMatches,Yes(data,"stale"));
             }
             content.ResumeLayout();
         }catch(Exception e){
@@ -399,6 +401,45 @@ public sealed class MatchlabForm : Form
                 content.Controls.Clear();DashboardHero();DateFilter();
                 EmptyState("Serverə qoşulmaq mümkün olmadı",e.Message);
             }else Message("Serverlə əlaqə alınmadı: "+e.Message+" · saxlanmış nəticələr CANLI DEYİL.",true);
+        }
+    }
+    private void MatchFilterBar(bool stale){
+        var bar=CardPanel(67);
+        var live=latestMatches.Count(m=>Val(m,"state")=="live"&&!Yes(m,"stale")&&!stale);
+        var total=latestMatches.Count;
+        var caption=Txt(total+" matç  ·  "+live+" canlı",11,true,live>0?Accent:Muted);
+        caption.SetBounds(12,12,185,40);bar.Controls.Add(caption);
+        int left=215;
+        foreach(var item in new[]{("all","Hamısı"),("live","● Canlı"),("favorites","☆ Seçilmiş")}){
+            string filter=item.Item1;
+            var selected=filter==matchFilter;
+            var btn=NewButton(item.Item2,selected?Accent:Raised,selected?Bg:Ink,105);
+            btn.SetBounds(left,13,105,39);left+=113;
+            btn.Click+=(_,_)=>{matchFilter=filter;Render();};
+            bar.Controls.Add(btn);
+        }
+    }
+    private void RenderGroupedMatches(IEnumerable<JsonElement> all,bool stale){
+        var filtered=all.Where(m=>matchFilter switch{
+            "live" => Val(m,"state")=="live"&&!Yes(m,"stale")&&!stale,
+            "favorites"=>favoriteSnapshots.ContainsKey(Val(m,"id")), _=>true
+        }).ToList();
+        if(filtered.Count==0){EmptyState(matchFilter=="live"?"Hazırda canlı matç yoxdur":"Uyğun matç tapılmadı",
+            "Başqa tarix, liqa və ya filtri seçə bilərsən.",false);return;}
+        foreach(var group in filtered.GroupBy(m=>Val(m,"leagueName",Val(m,"league","Digər")))){
+            var title=group.Key;
+            var rows=group.ToList();
+            var bar=CardPanel(45);
+            bar.BackColor=Color.FromArgb(27,48,65);
+            var label=Txt((collapsedLeagues.Contains(title)?"▸  ":"▾  ")+title,11,true,Ink);
+            label.SetBounds(14,2,Math.Max(300,bar.Width-150),39);bar.Controls.Add(label);
+            var count=Txt(rows.Count+" oyun",10,true,Accent);count.Anchor=AnchorStyles.Right;
+            count.SetBounds(bar.Width-105,3,90,38);bar.Controls.Add(count);
+            bar.SizeChanged+=(_,_)=>count.Left=bar.Width-105;
+            void Toggle(object? sender,EventArgs e){if(!collapsedLeagues.Add(title))collapsedLeagues.Remove(title);Render();}
+            bar.Cursor=Cursors.Hand;bar.Click+=Toggle;label.Click+=Toggle;count.Click+=Toggle;
+            if(collapsedLeagues.Contains(title))continue;
+            foreach(var match in rows)MatchRow(match,stale);
         }
     }
     private static string Team(JsonElement m,string key)=>Val(Prop(m,key),"name","—");
@@ -726,7 +767,7 @@ public sealed class MatchlabForm : Form
             card.Controls.Add(preview);
         }
         Heading("Proqram məlumatı");
-        Message("MATCHLAB AZ Native v0.9.52 · Windows Forms. Brauzer və WebView işlətmir.");
+        Message("MATCHLAB AZ Native v0.9.54 · Windows Forms. Brauzer və WebView işlətmir.");
         Message("Bildiriş seçimləri və səs sınaqları lokaldır; avtomatik canlı push bildirişləri hələ aktiv deyil.");
         Message("Canlı nəticələr və profillər Render serverindən HTTPS API vasitəsilə gəlir. İnternet olmayanda uydurma statistika göstərilmir.");
         try{
