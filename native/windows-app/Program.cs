@@ -35,6 +35,41 @@ public sealed class MatchlabForm : Form
         BaseAddress = new Uri("https://matchlab-az-online.onrender.com"),
         Timeout = TimeSpan.FromSeconds(17)
     };
+    // Download only provider-supplied HTTPS raster logos; never guess identities from names.
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string,Image> BadgeCache = new();
+    private static readonly System.Threading.SemaphoreSlim ImageSlots = new(4);
+    private async Task AttachBadgeAsync(PictureBox badge,string url){
+        if(string.IsNullOrEmpty(url)||url.Length>650||!Uri.TryCreate(url,UriKind.Absolute,out var uri)||uri.Scheme!="https")return;
+        try{
+            if(BadgeCache.TryGetValue(url,out var cached)){if(!badge.IsDisposed)badge.Image=cached;return;}
+            await ImageSlots.WaitAsync();
+            try{
+                if(!BadgeCache.TryGetValue(url,out cached)){
+                    using var response=await Api.GetAsync(uri,HttpCompletionOption.ResponseHeadersRead);
+                    if(!response.IsSuccessStatusCode)return;
+                    var mime=response.Content.Headers.ContentType?.MediaType??"";
+                    if(!new[]{"image/png","image/jpeg","image/webp","image/gif"}.Contains(mime))return;
+                    if(response.Content.Headers.ContentLength.GetValueOrDefault()>650000)return;
+                    using var stream=await response.Content.ReadAsStreamAsync();
+                    using var buffer=new MemoryStream();
+                    byte[] bytes=new byte[8192];
+                    while(true){
+                        int count=await stream.ReadAsync(bytes.AsMemory(0,bytes.Length));
+                        if(count==0)break;
+                        if(buffer.Length+count>650000)return;
+                        buffer.Write(bytes,0,count);
+                    }
+                    buffer.Position=0;
+                    using var raw=Image.FromStream(buffer);
+                    cached=new Bitmap(raw);
+                    if(BadgeCache.Count<180)BadgeCache.TryAdd(url,cached);
+                }
+            }finally{ImageSlots.Release();}
+            if(badge.IsDisposed)return;
+            if(badge.InvokeRequired)badge.BeginInvoke(new Action(()=>{if(!badge.IsDisposed)badge.Image=cached;}));
+            else badge.Image=cached;
+        }catch(Exception){/* Unsupported logo -> neutral fallback, never block scores. */}
+    }
     private readonly string[] leagues = {"all","eng.1","esp.1","ger.1","ita.1","fra.1","uefa.champions","uefa.europa","tur.1","por.1","ned.1"};
     private readonly string[] leagueNames = {"Bütün liqalar","Premier League","La Liga","Bundesliga","Serie A","Ligue 1","Champions League","Europa League","Süper Lig","Primeira Liga","Eredivisie"};
     private readonly Dictionary<string, string> favoriteSnapshots = new();
@@ -322,8 +357,13 @@ public sealed class MatchlabForm : Form
     }
     private void MatchRow(JsonElement m,bool saved=false) {
         var p=CardPanel(78);
-        var home=Txt(Team(m,"home"),11,true);home.SetBounds(16,9,235,30);home.Anchor=AnchorStyles.Top|AnchorStyles.Left;p.Controls.Add(home);
-        var away=Txt(Team(m,"away"),11,true);away.SetBounds(16,40,235,28);p.Controls.Add(away);
+        var home=Txt(Team(m,"home"),11,true);home.SetBounds(48,9,206,30);home.Anchor=AnchorStyles.Top|AnchorStyles.Left;p.Controls.Add(home);
+        var away=Txt(Team(m,"away"),11,true);away.SetBounds(48,40,206,28);p.Controls.Add(away);
+        var homeBadge=new PictureBox{Left=15,Top=12,Width=25,Height=25,SizeMode=PictureBoxSizeMode.Zoom};
+        var awayBadge=new PictureBox{Left=15,Top=42,Width=25,Height=25,SizeMode=PictureBoxSizeMode.Zoom};
+        p.Controls.Add(homeBadge);p.Controls.Add(awayBadge);
+        _=AttachBadgeAsync(homeBadge,Val(Prop(m,"home"),"image"));
+        _=AttachBadgeAsync(awayBadge,Val(Prop(m,"away"),"image"));
         var score=Txt(Score(m),16,true,Ink);score.SetBounds(258,17,145,39);p.Controls.Add(score);
         var state=Txt(saved?"Saxlanmış nəticə · canlı deyil":Status(m),10,false,Val(m,"state")=="live"?Accent:Muted);
         state.SetBounds(417,15,160,36);p.Controls.Add(state);
@@ -340,6 +380,7 @@ public sealed class MatchlabForm : Form
         EventHandler open=(_,_)=>{openedMatch=m.Clone();hasOpenedMatch=true;page="details";Render();};
         foreach(Control x in p.Controls)if(x!=fav)x.Click+=open;
         p.Click+=open;
+        homeBadge.Click+=open;awayBadge.Click+=open;
     }
     private void SaveFavorites(){
         try{Directory.CreateDirectory(Path.GetDirectoryName(savePath)!);File.WriteAllText(savePath,JsonSerializer.Serialize(favoriteSnapshots));}catch{}
@@ -420,8 +461,10 @@ public sealed class MatchlabForm : Form
             var p=Prop(d,"profile");
             if(p.ValueKind!=JsonValueKind.Object){Message("Bu profil üçün təsdiqlənmiş məlumat yoxdur.",true);return;}
             var header=CardPanel(185);
-            var name=Txt(Val(p,"name","—"),24,true,Accent);name.SetBounds(22,10,610,52);header.Controls.Add(name);
-            var kind=Txt(Val(p,"kind")+" · "+Val(p,"country"),12,false,Muted);kind.SetBounds(22,70,610,30);header.Controls.Add(kind);
+            var name=Txt(Val(p,"name","—"),21,true,Accent);name.SetBounds(134,10,520,52);header.Controls.Add(name);
+            var photo=new PictureBox{Left=20,Top=22,Width=100,Height=100,BackColor=Raised,SizeMode=PictureBoxSizeMode.Zoom};
+            header.Controls.Add(photo);_ = AttachBadgeAsync(photo,Val(p,"image"));
+            var kind=Txt(Val(p,"kind")+" · "+Val(p,"country"),12,false,Muted);kind.SetBounds(134,70,520,30);header.Controls.Add(kind);
             var dates=Txt("Doğum: "+Val(p,"birth","məlum deyil")+"     Vəfat: "+Val(p,"death","—"),11);dates.SetBounds(22,110,620,32);header.Controls.Add(dates);
             foreach(var entry in new[]{"position","description","source","careerStatus","lifeStatus"}){
                 var value=Val(p,entry);
