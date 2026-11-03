@@ -133,6 +133,29 @@ public static class QaProgram
                 "History form uses the selected team's home/away goals");
             Check(historyForm.RecentForm=="M · H · Q",
                 "History form displays most recent results in descending date order");
+            Check(historyForm.HomePlayed==2&&historyForm.AwayPlayed==1,
+                "Native EXE home and away results are split correctly");
+            Check(historyForm.HomeWins==1&&historyForm.HomeLosses==1&&historyForm.AwayDraws==1,
+                "Native EXE home and away W/D/L counts use recorded matches");
+            Check(historyForm.GoalDifference==0&&historyForm.WinPercent==33,
+                "Native EXE goal difference and win percent are accurate");
+            Check(historyForm.HomeAway.Contains("Evdə 2")&&historyForm.Efficiency.Contains("33%"),
+                "Native EXE shows Azerbaijani advanced statistics");
+            var emptyForm=new HistoryTeamForm("");
+            Check(emptyForm.Played==0&&emptyForm.WinPercent==0,
+                "Native EXE empty team has no results and cannot divide by zero");
+            var awayTeam=new HistoryTeamForm("Atletico");
+            awayTeam.Add("Real","Atletico",0,2,true,"2026-01-01");
+            awayTeam.Add("Atletico","Cadiz",1,1,true,"2026-01-02");
+            awayTeam.Add("Real","Atletico",4,1,true,"2026-01-03");
+            awayTeam.Add("Atletico","Cadiz",9,9,false,"2026-01-04");
+            Check(awayTeam.HomePlayed==1&&awayTeam.AwayPlayed==2&&awayTeam.GoalDifference==-1,
+                "Native EXE away wins and losses plus negative goal difference correct");
+            var roundingTeam=new HistoryTeamForm("Team X");
+            roundingTeam.Add("Team X","A",2,0,true,"2026-01-01");
+            roundingTeam.Add("B","Team X",0,1,true,"2026-01-02");
+            roundingTeam.Add("Team X","C",1,1,true,"2026-01-03");
+            Check(roundingTeam.WinPercent==67,"Native EXE win percent rounds two of three to 67");
             var ambiguousForm=new HistoryTeamForm("Manchester");
             ambiguousForm.Add("Manchester City","Chelsea",2,0,true,"2025-08-11");
             ambiguousForm.Add("Manchester United","Fulham",1,1,true,"2025-08-12");

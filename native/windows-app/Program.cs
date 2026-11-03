@@ -239,7 +239,7 @@ public sealed class MatchlabForm : Form
         brand.SetBounds(80,24,140,30);nav.Controls.Add(brand);
         var sub=Txt("FUTBOL MƏRKƏZİ",8,false,Muted);
         sub.SetBounds(80,53,138,19);nav.Controls.Add(sub);
-        var build=Txt("NATIVE · 0.9.57",8,false,Muted);
+        var build=Txt("NATIVE · 0.9.58",8,false,Muted);
         build.SetBounds(20,91,190,22);nav.Controls.Add(build);
         var items=new(string key,string label)[]{
             ("matches","⚽  Matçlar"),("standings","▤   Cədvəl"),("search","⌕   Axtarış"),
@@ -909,13 +909,17 @@ public sealed class MatchlabForm : Form
                 Message("Axtarış bir neçə fərqli kluba uyğun gəlir. Forma hesabı üçün klubun tam adını yaz.",true);
             else if(form.Played>0){
                 bool complete=!legacy&&Yes(result,"bundle")&&Yes(result,"complete");
-                var insight=CardPanel(118);
+                var insight=CardPanel(170);
                 var label=Txt(complete?"KOMANDA FORMASI · TAM MÖVSÜM":"KOMANDA FORMASI · BU SƏHİFƏ (TAM DEYİL)",11,true,Accent);
                 label.SetBounds(15,7,740,29);insight.Controls.Add(label);
                 var totals=Txt(form.Totals,11,true,Ink);
                 totals.SetBounds(15,43,770,28);insight.Controls.Add(totals);
                 var trend=Txt(form.GoalsAndForm,11,false,Muted);
-                trend.SetBounds(15,78,770,28);insight.Controls.Add(trend);
+                trend.SetBounds(15,76,770,26);insight.Controls.Add(trend);
+                var splits=Txt(form.HomeAway,10,false,Muted);
+                splits.SetBounds(15,108,800,26);insight.Controls.Add(splits);
+                var efficiency=Txt(form.Efficiency,10,false,Accent);
+                efficiency.SetBounds(15,138,800,26);insight.Controls.Add(efficiency);
             }
         }
         foreach(var m in all.Skip(legacy?0:historyOffset).Take(60)){
