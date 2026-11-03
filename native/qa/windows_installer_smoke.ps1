@@ -8,10 +8,14 @@ function Passed([string]$name) {
     Write-Host "[PASS] $name"
 }
 try {
-    $setup = Join-Path (Get-Location) 'native/windows-app/installer-out/MATCHLAB_AZ_Setup_0.9.57_x64.exe'
+    $iss = Get-Content 'native/installer/MATCHLAB_AZ.iss' -Raw
+    $declared = [regex]::Match($iss, '(?m)^#define MyAppVersion "(\d+\.\d+\.\d+)"')
+    if (-not $declared.Success) { throw 'Installer version is not declared in Inno Setup file' }
+    $version = $declared.Groups[1].Value
+    $setup = Join-Path (Get-Location) ("native/windows-app/installer-out/MATCHLAB_AZ_Setup_${version}_x64.exe")
     if (-not (Test-Path $setup)) { throw "Setup was not built: $setup" }
     Passed 'Offline Inno Setup installer exists'
-    $folder = Join-Path $env:TEMP 'MATCHLAB_QA_Install_0956'
+    $folder = Join-Path $env:TEMP ('MATCHLAB_QA_Install_' + $version.Replace('.',''))
     if (Test-Path $folder) { Remove-Item -Recurse -Force $folder }
     $arguments = @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',('/DIR=' + $folder))
     $install = Start-Process -FilePath $setup -ArgumentList $arguments -Wait -PassThru
