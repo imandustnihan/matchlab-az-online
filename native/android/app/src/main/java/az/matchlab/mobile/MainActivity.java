@@ -1002,7 +1002,7 @@ public final class MainActivity extends Activity {
         info("Bu plan sənin öz taktiki layihəndir. Real matç heyəti və təsdiqlənmiş formasiya kimi təqdim edilmir.",false);
     }
     private void showSettings(){
-        section("MATCHLAB AZ Native 0.9.49");
+        section("MATCHLAB AZ Native 0.9.50");
         section("Bildiriş və səs idarəetməsi");
         for(String[] setting:new String[][]{{"notif_goals","Qol bildirişləri"},{"notif_kickoff","Matç başlanğıcı"},{"notif_halftime","Fasilə"},{"notif_final","Matçın bitməsi"},{"notif_cards","Qırmızı kart"},{"notif_yellow_cards","Sarı kart"},{"notif_assists","Assist"},{"notif_penalties","Penalti"},{"notif_lineups","Heyətlər açıqlananda"},{"notif_corners","Künc zərbəsi"},{"notif_favorites","Yalnız seçilmiş matçlar"},{"sound_enabled","Tətbiqdaxili səs"},{"sound_vibrate","Vibrasiya"}}){
             Switch toggle=new Switch(this);toggle.setText(setting[1]);toggle.setTextSize(13);toggle.setTextColor(INK);
