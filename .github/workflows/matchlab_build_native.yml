@@ -45,9 +45,24 @@ jobs:
         shell: pwsh
         run: |
           dotnet publish native/windows-app/MATCHLABAZ.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o native/windows-app/out
+      - name: Build native Windows setup installer
+        shell: pwsh
+        run: |
+          choco install innosetup --yes --no-progress
+          $compiler = Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) 'Inno Setup 6/ISCC.exe'
+          if (-not (Test-Path $compiler)) { throw "Inno Setup compiler is missing" }
+          & $compiler 'native/installer/MATCHLAB_AZ.iss'
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup compiler failed with $LASTEXITCODE" }
+          if (-not (Test-Path 'native/windows-app/installer-out/MATCHLAB_AZ_Setup_0.9.53_x64.exe')) { throw "Installer missing" }
       - uses: actions/upload-artifact@v4
         with:
-          name: MATCHLAB_AZ_Windows_x64_v0952
+          name: MATCHLAB_AZ_Setup_v0953
+          path: native/windows-app/installer-out/MATCHLAB_AZ_Setup_0.9.53_x64.exe
+          if-no-files-found: error
+          retention-days: 30
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MATCHLAB_AZ_Windows_x64_v0953
           path: native/windows-app/out/MATCHLAB_AZ.exe
           if-no-files-found: error
           retention-days: 30
