@@ -680,7 +680,14 @@ public sealed class MatchlabForm : Form
             header.Controls.Add(photo);_ = AttachBadgeAsync(photo,Val(p,"image"));
             var kind=Txt(Val(p,"kind")+" · "+Val(p,"country"),12,false,Muted);kind.SetBounds(134,70,520,30);header.Controls.Add(kind);
             var dates=Txt("Doğum: "+Val(p,"birth","məlum deyil")+"     Vəfat: "+Val(p,"death","—"),11);dates.SetBounds(22,110,620,32);header.Controls.Add(dates);
-            foreach(var entry in new[]{"position","description","source","careerStatus","lifeStatus"}){
+            var refresh=Prop(p,"updateStatus");
+            if(Yes(refresh,"autoRefresh")){
+                var last=Val(refresh,"checkedUtc");
+                Message("Avtomatik yoxlama aktivdir · Son yoxlama: "+
+                    (string.IsNullOrWhiteSpace(last)?"Hələ yoxlanılmayıb":last)+
+                    " · Mənbə: Wikipedia / Wikidata. Yalnız izlənən profillər.");
+            }
+            foreach(var entry in new[]{"position","description","source","careerStatus","lifeStatus","manager","league","stadium"}){
                 var value=Val(p,entry);
                 if(!string.IsNullOrWhiteSpace(value))Message(entry+": "+value);
             }
