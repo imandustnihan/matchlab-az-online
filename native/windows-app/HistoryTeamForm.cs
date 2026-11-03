@@ -12,6 +12,8 @@ public sealed class HistoryTeamForm
 {
     private readonly string team;
     private readonly List<(string Date, int Order, string Form)> played = new();
+    private readonly HashSet<string> matchedClubs = new(StringComparer.OrdinalIgnoreCase);
+    public bool Ambiguous => matchedClubs.Count > 1;
     public int Played { get; private set; }
     public int Wins { get; private set; }
     public int Draws { get; private set; }
@@ -28,6 +30,7 @@ public sealed class HistoryTeamForm
         bool awayMatch = away.Contains(team, StringComparison.OrdinalIgnoreCase);
         // An ambiguous substring (matching both sides) cannot be attributed safely.
         if (homeMatch == awayMatch) return;
+        matchedClubs.Add((homeMatch ? home : away).Trim());
 
         int scored = homeMatch ? homeScore : awayScore;
         int conceded = homeMatch ? awayScore : homeScore;
