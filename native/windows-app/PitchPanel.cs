@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -25,6 +26,26 @@ public sealed class PitchPanel : Panel
     private bool arrowMode;
     private bool gridVisible;
     private bool changed;
+    private readonly Stopwatch playback = new();
+    private readonly System.Windows.Forms.Timer playbackTimer = new() { Interval = 25 };
+    private bool playing;
+    public bool IsPlaying => playing;
+    public void TogglePlayback()
+    {
+        if(playing){StopPlayback();return;}
+        if(arrows.Count==0){MessageBox.Show("Əvvəlcə ən azı bir hərəkət oxu çək.","MATCHLAB AZ");return;}
+        playing=true;playback.Restart();playbackTimer.Start();Invalidate();
+    }
+    private void StopPlayback()
+    {
+        playing=false;playbackTimer.Stop();playback.Reset();Invalidate();
+    }
+    public void ExportPng(string filename)
+    {
+        using var canvas=new Bitmap(Math.Max(500,Width),Math.Max(450,Height));
+        DrawToBitmap(canvas,new Rectangle(0,0,canvas.Width,canvas.Height));
+        canvas.Save(filename,System.Drawing.Imaging.ImageFormat.Png);
+    }
 
     private sealed class SavedPlan
     {
@@ -37,12 +58,21 @@ public sealed class PitchPanel : Panel
     {
         DoubleBuffered = true;
         BackColor = Color.FromArgb(20, 86, 66);
+        playbackTimer.Tick+=(_,_)=>{
+            if(!IsDisposed&&playing)Invalidate();
+            else playbackTimer.Stop();
+        };
         LoadPlan();
+    }
+    protected override void Dispose(bool disposing)
+    {
+        if(disposing)playbackTimer.Dispose();
+        base.Dispose(disposing);
     }
     public string Formation
     {
         get => formation;
-        set { formation = value; arrowStart = null; LoadPlan(); Invalidate(); }
+        set { StopPlayback(); formation = value; arrowStart = null; LoadPlan(); Invalidate(); }
     }
     public bool ArrowMode
     {
@@ -110,8 +140,8 @@ public sealed class PitchPanel : Panel
         }
         catch (IOException e) { MessageBox.Show("Taktika saxlanmadı: " + e.Message, "MATCHLAB AZ"); }
     }
-    public void ResetPlan() { Defaults(); SavePlan(); Invalidate(); }
-    public void ClearArrows() { arrows.Clear(); arrowStart = null; SavePlan(); Invalidate(); }
+    public void ResetPlan() { StopPlayback(); Defaults(); SavePlan(); Invalidate(); }
+    public void ClearArrows() { StopPlayback(); arrows.Clear(); arrowStart = null; SavePlan(); Invalidate(); }
     public void ReplacePlayer(int index, string newName)
     {
         if (index < 0 || index >= SquadSize || string.IsNullOrWhiteSpace(newName)) return;
@@ -143,6 +173,7 @@ public sealed class PitchPanel : Panel
     {
         base.OnMouseDown(e);
         if (e.Button != MouseButtons.Left) return;
+        if(playing)StopPlayback();
         if (arrowMode)
         {
             var p = Normalized(e.Location);
@@ -224,6 +255,20 @@ public sealed class PitchPanel : Panel
         foreach (var arrow in arrows)
             g.DrawLine(arrowPen, f.Left + arrow[0] * f.Width, f.Top + arrow[1] * f.Height,
                 f.Left + arrow[2] * f.Width, f.Top + arrow[3] * f.Height);
+        if(playing&&arrows.Count>0)
+        {
+            // Visual rehearsal of the user's own paths, not tracked player movement.
+            var t=(float)(playback.Elapsed.TotalSeconds % (arrows.Count*1.2))/1.2f;
+            int index=Math.Min(arrows.Count-1,(int)t);
+            float fraction=t-index;
+            var a=arrows[index];
+            float x=f.Left+(a[0]+(a[2]-a[0])*fraction)*f.Width;
+            float y=f.Top+(a[1]+(a[3]-a[1])*fraction)*f.Height;
+            using var glow=new SolidBrush(Color.FromArgb(110,255,212,83));
+            using var dot=new SolidBrush(Color.FromArgb(255,244,120));
+            g.FillEllipse(glow,x-18,y-18,36,36);
+            g.FillEllipse(dot,x-8,y-8,16,16);
+        }
         if (arrowStart is PointF start)
         {
             using var brush = new SolidBrush(Color.Gold);
