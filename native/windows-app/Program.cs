@@ -905,7 +905,9 @@ public sealed class MatchlabForm : Form
                 int a=int.TryParse(Val(game,"awayScore"),out int awayGoals)?awayGoals:-1;
                 form.Add(Val(game,"home"),Val(game,"away"),h,a,Yes(game,"resultRecorded"),Val(game,"date"));
             }
-            if(form.Played>0){
+            if(form.Ambiguous)
+                Message("Axtarış bir neçə fərqli kluba uyğun gəlir. Forma hesabı üçün klubun tam adını yaz.",true);
+            else if(form.Played>0){
                 bool complete=!legacy&&Yes(result,"bundle")&&Yes(result,"complete");
                 var insight=CardPanel(118);
                 var label=Txt(complete?"KOMANDA FORMASI · TAM MÖVSÜM":"KOMANDA FORMASI · BU SƏHİFƏ (TAM DEYİL)",11,true,Accent);
