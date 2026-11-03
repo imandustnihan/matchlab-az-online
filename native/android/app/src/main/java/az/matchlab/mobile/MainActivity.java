@@ -1360,7 +1360,9 @@ public final class MainActivity extends Activity {
                     game.optInt("homeScore",-1),game.optInt("awayScore",-1),
                     game.optBoolean("resultRecorded"),game.optString("date"));
             }
-            if(form.played()>0){
+            if(form.ambiguous()){
+                info("Axtarış bir neçə kluba uyğun gəlir. Dəqiq forma üçün klubun tam adını yaz.",true);
+            }else if(form.played()>0){
                 boolean complete=!legacy&&json.optBoolean("complete")&&json.optBoolean("bundle");
                 section(complete?"KOMANDA FORMASI · TAM MÖVSÜM":"KOMANDA FORMASI · BU SƏHİFƏ (TAM DEYİL)");
                 info(form.totals()+"\n"+form.goalsAndForm(),false);
