@@ -583,27 +583,43 @@ public sealed class MatchlabForm : Form
                 Anchor=AnchorStyles.Top|AnchorStyles.Right};
             headerCard.Controls.Add(leftImage);headerCard.Controls.Add(rightImage);
             _=AttachBadgeAsync(leftImage,Val(first,"image"));_=AttachBadgeAsync(rightImage,Val(second,"image"));
-            var leftName=Txt(Val(first,"name","—"),16,true,Ink);leftName.SetBounds(103,16,300,45);
-            var rightName=Txt(Val(second,"name","—"),16,true,Ink);rightName.TextAlign=ContentAlignment.MiddleRight;
-            rightName.SetBounds(headerCard.Width-404,77,300,40);rightName.Anchor=AnchorStyles.Top|AnchorStyles.Right;
+            var leftName=Txt(Val(first,"name","—"),15,true,Ink);
+            var rightName=Txt(Val(second,"name","—"),15,true,Ink);
+            rightName.TextAlign=ContentAlignment.MiddleRight;
             headerCard.Controls.Add(leftName);headerCard.Controls.Add(rightName);
+            void ArrangeProfileHeader(){
+                int half=headerCard.Width/2;
+                leftName.SetBounds(105,24,Math.Max(150,half-121),48);
+                rightName.SetBounds(half+12,24,Math.Max(150,half-118),48);
+                rightImage.Left=headerCard.Width-92;
+            }
+            headerCard.SizeChanged+=(_,_)=>ArrangeProfileHeader();
+            ArrangeProfileHeader();
             void Compared(string label,string left,string right){
                 var rowCard=CardPanel(64);
+                var layout=new TableLayoutPanel{Dock=DockStyle.Fill,RowCount=1,ColumnCount=3,BackColor=Color.Transparent,Margin=Padding.Empty};
+                layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,39));
+                layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,22));
+                layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,39));
                 var l=Txt(string.IsNullOrWhiteSpace(left)?"—":left,11,true,Ink);
-                l.SetBounds(15,6,260,47);rowCard.Controls.Add(l);
-                var titleText=Txt(label,10,true,Accent);titleText.TextAlign=ContentAlignment.MiddleCenter;
-                titleText.SetBounds(Math.Max(285,rowCard.Width/2-100),6,200,47);rowCard.Controls.Add(titleText);
+                l.Dock=DockStyle.Fill;l.Padding=new Padding(5,0,4,0);
+                var labelText=Txt(label,10,true,Accent);labelText.Dock=DockStyle.Fill;
+                labelText.TextAlign=ContentAlignment.MiddleCenter;
                 var r=Txt(string.IsNullOrWhiteSpace(right)?"—":right,11,true,Ink);
-                r.TextAlign=ContentAlignment.MiddleRight;
-                r.SetBounds(rowCard.Width-275,6,260,47);r.Anchor=AnchorStyles.Right|AnchorStyles.Top;rowCard.Controls.Add(r);
-                rowCard.SizeChanged+=(_,_)=>titleText.Left=Math.Max(285,rowCard.Width/2-100);
+                r.Dock=DockStyle.Fill;r.TextAlign=ContentAlignment.MiddleRight;r.Padding=new Padding(5,0,4,0);
+                layout.Controls.Add(l,0,0);layout.Controls.Add(labelText,1,0);layout.Controls.Add(r,2,0);
+                rowCard.Controls.Add(layout);
             }
             foreach(var key in new[]{("Ölkə","country"),("Mövqe","position"),("Doğum tarixi","birth"),("Vəfat tarixi","death"),("Karyera statusu","careerStatus")}){
                 Compared(key.Item1,Val(first,key.Item2,"—"),Val(second,key.Item2,"—"));
             }
-            Compared("Klublar",Array(first,"clubs").Count().ToString(),Array(second,"clubs").Count().ToString());
-            Compared("Kuboklar",Array(first,"awards").Count().ToString(),Array(second,"awards").Count().ToString());
-            Compared("Məşqçilik təcrübəsi",Array(first,"coached").Count().ToString(),Array(second,"coached").Count().ToString());
+            string SourceCount(JsonElement profile,string key){
+                var source=Prop(profile,key);
+                return source.ValueKind==JsonValueKind.Array?source.GetArrayLength().ToString():"—";
+            }
+            Compared("Klub qeydləri",SourceCount(first,"clubs"),SourceCount(second,"clubs"));
+            Compared("Kubok qeydləri",SourceCount(first,"awards"),SourceCount(second,"awards"));
+            Compared("Məşqçilik qeydləri",SourceCount(first,"coached"),SourceCount(second,"coached"));
             Message("Siyahı sayı yalnız mənbənin təqdim etdiyi qeydlərin sayıdır; tam karyera statistikası deyil.");
         }catch(Exception e){if(page=="comparison"&&token==viewVersion)Message("Müqayisə yüklənmədi: "+e.Message,true);}
         var again=NewButton("Yeni müqayisə",Accent,Bg,165);
