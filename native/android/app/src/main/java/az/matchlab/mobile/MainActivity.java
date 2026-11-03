@@ -98,9 +98,9 @@ public final class MainActivity extends Activity {
     }
     private void gap(LinearLayout p,int h){View v=new View(this);p.addView(v,new LinearLayout.LayoutParams(1,dp(h)));}
     private void card(View v){
-        LinearLayout wrapper=column();wrapper.setPadding(dp(11),dp(9),dp(11),dp(9));wrapper.setBackground(shape(CARD,12));
+        LinearLayout wrapper=column();wrapper.setPadding(dp(9),dp(7),dp(9),dp(7));wrapper.setBackground(shape(CARD,10));
         wrapper.addView(v);
-        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.bottomMargin=dp(7);
+        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.bottomMargin=dp(5);
         page.addView(wrapper,lp);
     }
     private String networkMessage(Exception error){
@@ -128,7 +128,7 @@ public final class MainActivity extends Activity {
     private Button button(String label){
         Button b=new Button(this);b.setText(label);b.setTextSize(12);b.setAllCaps(false);
         b.setTextColor(INK);b.setBackground(shape(RAISED,11));
-        b.setMinHeight(dp(42));b.setMinimumHeight(dp(42));b.setPadding(dp(8),dp(7),dp(8),dp(7));return b;
+        b.setMinHeight(dp(38));b.setMinimumHeight(dp(38));b.setPadding(dp(6),dp(5),dp(6),dp(5));return b;
     }
 
     private String val(JSONObject object,String key){
@@ -175,24 +175,24 @@ public final class MainActivity extends Activity {
         else body.setFitsSystemWindows(true);
         LinearLayout top=row();top.setPadding(dp(13),dp(6),dp(9),dp(6));
         LinearLayout brandBox=column();
-        TextView brand=text("MATCHLAB AZ",10,ACCENT,true);brand.setLetterSpacing(.13f);
+        TextView brand=text("MATCHLAB AZ",9,ACCENT,true);brand.setLetterSpacing(.13f);
         brandBox.addView(brand);
-        header=text("Canlı matçlar",18,INK,true);brandBox.addView(header);
+        header=text("Canlı matçlar",16,INK,true);brandBox.addView(header);
         top.addView(brandBox,new LinearLayout.LayoutParams(0,-2,1));
         status=text("●",16,ACCENT,true);top.addView(status);
         TextView menu=text("⋮",26,INK,true);menu.setGravity(Gravity.CENTER);
         menu.setContentDescription("Tətbiq menyusu");menu.setClickable(true);
         menu.setOnClickListener(v->showMenu(menu));
-        top.addView(menu,new LinearLayout.LayoutParams(dp(48),dp(52)));
+        top.addView(menu,new LinearLayout.LayoutParams(dp(40),dp(45)));
         top.setBackgroundColor(Color.rgb(13,28,42));
-        body.addView(top,new LinearLayout.LayoutParams(-1,dp(62)));
+        body.addView(top,new LinearLayout.LayoutParams(-1,dp(56)));
         ScrollView scroll=new ScrollView(this);contentScroll=scroll;scroll.setFillViewport(false);
         scroll.setClipToPadding(false);
-        page=column();page.setPadding(dp(12),dp(6),dp(12),dp(16));scroll.addView(page);
+        page=column();page.setPadding(dp(9),dp(4),dp(9),dp(12));scroll.addView(page);
         body.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
         nav=row();nav.setBackgroundColor(Color.rgb(14,30,46));
-        nav.setMinimumHeight(dp(62));
-        body.addView(nav,new LinearLayout.LayoutParams(-1,dp(64)));
+        nav.setMinimumHeight(dp(56));
+        body.addView(nav,new LinearLayout.LayoutParams(-1,dp(59)));
         if(Build.VERSION.SDK_INT>=30){
             body.setOnApplyWindowInsetsListener((v,insets)->{
                 android.graphics.Insets sys=insets.getInsets(WindowInsets.Type.systemBars()|WindowInsets.Type.displayCutout());
@@ -218,11 +218,11 @@ public final class MainActivity extends Activity {
             LinearLayout cell=column();cell.setGravity(Gravity.CENTER);
             boolean active=name.equals(item[0]);
             NavGlyph glyph=new NavGlyph(this,item[0],active?ACCENT:MUTED);
-            cell.addView(glyph,new LinearLayout.LayoutParams(dp(22),dp(22)));
-            TextView label=text(item[2],10,active?ACCENT:MUTED,active);label.setGravity(Gravity.CENTER);
+            cell.addView(glyph,new LinearLayout.LayoutParams(dp(20),dp(20)));
+            TextView label=text(item[2],9,active?ACCENT:MUTED,active);label.setGravity(Gravity.CENTER);
             cell.addView(label);
-            cell.setPadding(dp(1),dp(5),dp(1),dp(5));
-            cell.setMinimumHeight(dp(56));
+            cell.setPadding(dp(1),dp(4),dp(1),dp(4));
+            cell.setMinimumHeight(dp(52));
             if(active)cell.setBackground(shape(Color.rgb(29,55,48),10));
             cell.setContentDescription(item[2]);
             cell.setClickable(true);
@@ -257,16 +257,16 @@ public final class MainActivity extends Activity {
             LinearLayout dateBar=row();
             Button previous=button("‹");previous.setContentDescription("Əvvəlki gün");
             previous.setOnClickListener(v->{day.add(Calendar.DATE,-1);navigate("matches");});
-            dateBar.addView(previous,new LinearLayout.LayoutParams(dp(45),dp(42)));
+            dateBar.addView(previous,new LinearLayout.LayoutParams(dp(40),dp(38)));
             TextView current=text(new SimpleDateFormat("EEE, d MMM",new Locale("az")).format(day.getTime()),13,INK,true);
             current.setGravity(Gravity.CENTER);
-            dateBar.addView(current,new LinearLayout.LayoutParams(0,dp(42),1));
+            dateBar.addView(current,new LinearLayout.LayoutParams(0,dp(38),1));
             Button next=button("›");next.setContentDescription("Növbəti gün");
             next.setOnClickListener(v->{day.add(Calendar.DATE,1);navigate("matches");});
-            dateBar.addView(next,new LinearLayout.LayoutParams(dp(45),dp(42)));
+            dateBar.addView(next,new LinearLayout.LayoutParams(dp(40),dp(38)));
             Button today=button("Bu gün");
             today.setOnClickListener(v->{day=Calendar.getInstance(TimeZone.getTimeZone("Asia/Baku"));navigate("matches");});
-            dateBar.addView(today,new LinearLayout.LayoutParams(dp(76),dp(42)));
+            dateBar.addView(today,new LinearLayout.LayoutParams(dp(66),dp(38)));
             card(dateBar);
             LinearLayout chips=row();
             String[][] types={{"all","Hamısı"},{"live","● Canlı"},{"favorites","☆ Seçilmiş"}};
@@ -275,7 +275,7 @@ public final class MainActivity extends Activity {
                 Button tab=button(type[1]);
                 tab.setTextColor(selected?BG:MUTED);
                 tab.setBackground(shape(selected?ACCENT:RAISED,13));
-                LinearLayout.LayoutParams w=new LinearLayout.LayoutParams(0,dp(42),1);
+                LinearLayout.LayoutParams w=new LinearLayout.LayoutParams(0,dp(38),1);
                 w.rightMargin=dp(5);
                 chips.addView(tab,w);
                 tab.setOnClickListener(v->{
@@ -288,7 +288,7 @@ public final class MainActivity extends Activity {
             card(chips);
             LinearLayout controls=row();
             TextView label=single(league.equals("all")?"Bütün liqalar":"Liqa: "+leagueLabel(league),12,MUTED,true);
-            controls.addView(label,new LinearLayout.LayoutParams(0,dp(42),1));
+            controls.addView(label,new LinearLayout.LayoutParams(0,dp(38),1));
             Button choose=button("Filtrlə  ⌄");
             choose.setOnClickListener(v->showLeaguePicker(choose,false));
             controls.addView(choose);
@@ -376,9 +376,9 @@ public final class MainActivity extends Activity {
             try{
                 URL url=new URL(BASE+path);
                 HttpURLConnection conn=(HttpURLConnection)url.openConnection();
-                conn.setConnectTimeout(10000);conn.setReadTimeout(26000);
+                conn.setConnectTimeout(6500);conn.setReadTimeout(14500);
                 conn.setRequestProperty("Accept","application/json");
-                conn.setRequestProperty("User-Agent","MATCHLABAZ-Native/0.9.47");
+                conn.setRequestProperty("User-Agent","MATCHLABAZ-Native/0.9.52");
                 int code=conn.getResponseCode();
                 if(code<200||code>=300)throw new IOException("HTTP "+code);
                 try(InputStream input=conn.getInputStream();ByteArrayOutputStream out=new ByteArrayOutputStream()){
@@ -427,9 +427,9 @@ public final class MainActivity extends Activity {
             String name=group.getKey();
             boolean collapsed=collapsedLeagues.contains(name);
             LinearLayout heading=row();
-            heading.setPadding(dp(12),dp(9),dp(10),dp(9));
-            TextView title=single(name,13,INK,true);
-            heading.addView(title,new LinearLayout.LayoutParams(0,dp(29),1));
+            heading.setPadding(dp(10),dp(6),dp(8),dp(6));
+            TextView title=single(name,12,INK,true);
+            heading.addView(title,new LinearLayout.LayoutParams(0,dp(27),1));
             TextView meta=single(group.getValue().size()+" oyun  "+(collapsed?"⌄":"⌃"),11,ACCENT,true);
             heading.addView(meta);
             heading.setBackground(shape(RAISED,12));
@@ -440,7 +440,7 @@ public final class MainActivity extends Activity {
                 renderLiveMatches(data);
             });
             LinearLayout.LayoutParams h=new LinearLayout.LayoutParams(-1,-2);
-            h.topMargin=dp(7);h.bottomMargin=dp(5);page.addView(heading,h);
+            h.topMargin=dp(5);h.bottomMargin=dp(4);page.addView(heading,h);
             if(!collapsed){
                 for(JSONObject m:group.getValue())matchRow(m,false);
             }
@@ -448,7 +448,25 @@ public final class MainActivity extends Activity {
     }
     private void loadMatches(boolean reset){
         int token=generation;
-        if(reset){filters(false);banner("Real matçlar yüklənir…",MUTED);}
+        String cacheKey="match_cache_"+league+"_"+date();
+        if(reset){
+            filters(false);
+            String snapshot=prefs.getString(cacheKey,"");
+            if(!snapshot.isEmpty()){
+                try{
+                    JSONObject cached=new JSONObject(snapshot);
+                    JSONArray saved=cached.optJSONArray("items");
+                    if(saved!=null){
+                        for(int i=0;i<saved.length();i++){
+                            JSONObject item=saved.optJSONObject(i);if(item!=null)item.put("stale",true);
+                        }
+                        cached.put("stale",true);cached.put("liveCount",0);cached.put("available",true);
+                        cached.put("message","Saxlanmış matçlar göstərilir · yenilənir (CANLI DEYİL)");
+                        renderLiveMatches(cached);
+                    }
+                }catch(Exception ignored){/* Corrupt snapshot: load from network. */}
+            }else banner("Real matçlar yüklənir…",MUTED);
+        }
         fetch("/api/live?league="+encode(league)+"&date="+date(),(json,error)->{
             if(token!=generation||!screen.equals("matches"))return;
             if(error!=null||json==null){
@@ -457,13 +475,15 @@ public final class MainActivity extends Activity {
                 info(networkMessage(error),true);retry("matches");return;
             }
             status.setTextColor(json.optBoolean("available")?ACCENT:RED);
+            if(json.optBoolean("available")&&!json.optBoolean("stale")&&json.toString().length()<130000)
+                prefs.edit().putString(cacheKey,json.toString()).apply();
             renderLiveMatches(json);
         });
     }
     private void matchRow(JSONObject m,boolean saved){
         LinearLayout wrapper=column();
         wrapper.setBackground(shape(CARD,12));
-        wrapper.setPadding(dp(10),dp(9),dp(10),dp(9));
+        wrapper.setPadding(dp(9),dp(7),dp(9),dp(7));
         String state=m.optString("state");
         boolean live=!saved&&!m.optBoolean("stale")&&"live".equals(state);
         LinearLayout top=row();
@@ -472,35 +492,35 @@ public final class MainActivity extends Activity {
         String provider=m.optString("source");
         if(!provider.isEmpty())top.addView(single(provider,10,MUTED,false));
         wrapper.addView(top);
-        gap(wrapper,6);
+        gap(wrapper,4);
         LinearLayout body=row();
         LinearLayout teams=column();
         JSONObject home=m.optJSONObject("home"),away=m.optJSONObject("away");
         for(JSONObject team:new JSONObject[]{home,away}){
             LinearLayout teamRow=row();
             String name=val(team,"name");
-            TeamBadge badge=new TeamBadge(this,name,team==null?"":team.optString("image"),27);
-            LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(dp(27),dp(27));bp.rightMargin=dp(8);
+            TeamBadge badge=new TeamBadge(this,name,team==null?"":team.optString("image"),24);
+            LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(dp(24),dp(24));bp.rightMargin=dp(6);
             teamRow.addView(badge,bp);
-            teamRow.addView(single(name,13,INK,true),new LinearLayout.LayoutParams(0,-2,1));
+            teamRow.addView(single(name,11,INK,true),new LinearLayout.LayoutParams(0,-2,1));
             teams.addView(teamRow);
-            if(team==home)gap(teams,5);
+            if(team==home)gap(teams,3);
         }
         body.addView(teams,new LinearLayout.LayoutParams(0,-2,1));
         LinearLayout scoreBlock=column();scoreBlock.setGravity(Gravity.CENTER);
         String score="scheduled".equals(state)?"– : –":val(m,"homeScore")+" : "+val(m,"awayScore");
-        TextView result=single(score,17,live?ACCENT:INK,true);
+        TextView result=single(score,15,live?ACCENT:INK,true);
         result.setGravity(Gravity.CENTER);
         scoreBlock.addView(result);
         String time=val(m,"minute");
         if(!"—".equals(time)&&live){
             TextView minute=text(time,10,ACCENT,true);minute.setGravity(Gravity.CENTER);scoreBlock.addView(minute);
         }
-        body.addView(scoreBlock,new LinearLayout.LayoutParams(dp(82),-2));
+        body.addView(scoreBlock,new LinearLayout.LayoutParams(dp(64),-2));
         String id=m.optString("id");
-        TextView star=fixed(prefs.contains("fav_"+id)?"★":"☆",23,ACCENT,false,40);
+        TextView star=fixed(prefs.contains("fav_"+id)?"★":"☆",21,ACCENT,false,30);
         star.setContentDescription("Seçilmişlərə əlavə et və ya çıxart");
-        star.setMinHeight(dp(44));star.setClickable(true);
+        star.setMinHeight(dp(40));star.setClickable(true);
         star.setOnClickListener(v->{
             if(prefs.contains("fav_"+id))prefs.edit().remove("fav_"+id).apply();
             else prefs.edit().putString("fav_"+id,m.toString()).apply();
@@ -510,7 +530,7 @@ public final class MainActivity extends Activity {
         wrapper.addView(body);
         wrapper.setOnClickListener(v->{currentMatch=m;navigate("details");});
         wrapper.setContentDescription(val(home,"name")+" "+score+" "+val(away,"name")+", "+stateLabel(m,saved));
-        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.bottomMargin=dp(6);
+        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.bottomMargin=dp(5);
         page.addView(wrapper,lp);
     }
     private void standingsHeader(boolean wide){
@@ -954,6 +974,24 @@ public final class MainActivity extends Activity {
         }
         if(count==0)info("Seçilmiş matç yoxdur. ☆ düyməsinə toxun.",false);
     }
+    private void showFormationPicker(){
+        LinearLayout list=column();
+        list.setPadding(dp(8),dp(8),dp(8),dp(8));
+        final AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Taktiki düzülüş").setView(list)
+            .setNegativeButton("Bağla",null).create();
+        for(int i=0;i<formations.length;i++){
+            final int selection=i;
+            TextView choice=text((i==formation?"●  ":"○  ")+formations[i],15,i==formation?ACCENT:INK,i==formation);
+            choice.setPadding(dp(22),0,dp(12),0);choice.setBackground(shape(RAISED,8));
+            LinearLayout.LayoutParams item=new LinearLayout.LayoutParams(-1,dp(43));item.bottomMargin=dp(4);
+            list.addView(choice,item);
+            choice.setClickable(true);
+            choice.setOnClickListener(v->{formation=selection;prefs.edit().putInt("tactic_formation",selection).apply();dialog.dismiss();navigate("tactics");});
+        }
+        dialog.show();
+        if(dialog.getWindow()!=null)dialog.getWindow().setLayout(
+            getResources().getDisplayMetrics().widthPixels-dp(56),-2);
+    }
     private void showTactics(){
         section("TAKTİKA STUDİYASI PRO");
         LinearLayout modeBar=row();
@@ -963,21 +1001,16 @@ public final class MainActivity extends Activity {
             modeBar.addView(button,new LinearLayout.LayoutParams(0,dp(45),1));
         }
         card(modeBar);
-        info("Rejim: "+prefs.getString("tactic_mode","Standart")+" · fərdi məşq planı",false);
-        banner("İnteraktiv məşq lövhəsi · 11 mövqe · Yerli yaddaş",ACCENT);
+        // Active mode is indicated in the controls; keep the pitch above the fold.
         LinearLayout presets=row();
         TextView label=single("Düzülüş",12,MUTED,true);presets.addView(label,new LinearLayout.LayoutParams(0,dp(44),1));
         Button choose=button(formations[formation]+"   ⌄");
         choose.setOnClickListener(v->{
-            new AlertDialog.Builder(this).setTitle("Taktiki düzülüş")
-                .setSingleChoiceItems(formations,formation,(dialog,index)->{
-                    formation=index;prefs.edit().putInt("tactic_formation",formation).apply();
-                    dialog.dismiss();navigate("tactics");
-                }).setNegativeButton("Bağla",null).show();
+            showFormationPicker();
         });presets.addView(choose);
         card(presets);
         PitchView pitch=new PitchView(this,formations[formation]);
-        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,dp(460));
+        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,dp(380));
         p.bottomMargin=dp(9);page.addView(pitch,p);
         LinearLayout actions=row();
         Button reset=button("↺ Sıfırla");
