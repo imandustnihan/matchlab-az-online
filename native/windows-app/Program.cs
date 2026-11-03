@@ -189,6 +189,7 @@ public sealed class MatchlabForm : Form
             }
             if(int.TryParse(Option("tactic_formation","0"),out int selected)&&selected>=0&&selected<formations.Length)formation=selected;
         }catch{}
+        if(Option("start_maximized","true")!="true")WindowState=FormWindowState.Normal;
         var shell=new TableLayoutPanel {Dock=DockStyle.Fill, ColumnCount=2, RowCount=1, Margin=Padding.Empty, Padding=Padding.Empty, BackColor=Bg};
         shell.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,222));
         shell.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
@@ -321,13 +322,18 @@ public sealed class MatchlabForm : Form
     private void DashboardHero(string? caption=null){
         var hero=CardPanel(194);
         hero.BackColor=Color.FromArgb(17,43,48);
+        // Reuse the original green M-ball emblem, never a substitute logo.
+        var originalIcon=new PictureBox{Left=17,Top=40,Width=68,Height=68,SizeMode=PictureBoxSizeMode.Zoom};
+        var iconBitmap=new Bitmap(136,136);
+        using(var graphics=Graphics.FromImage(iconBitmap))BrandArtwork.Draw(graphics,new RectangleF(0,0,136,136));
+        originalIcon.Image=iconBitmap;hero.Controls.Add(originalIcon);
         var eyebrow=Txt("MATCHLAB  /  MATÇ MƏRKƏZİ",9,true,Accent);
-        eyebrow.SetBounds(18,11,370,21);hero.Controls.Add(eyebrow);
+        eyebrow.SetBounds(106,14,390,21);hero.Controls.Add(eyebrow);
         var h=Txt("Bu gün futbol",20,true,Ink);
         h.AutoEllipsis=false;h.Font=new Font("Segoe UI Semibold",22f,FontStyle.Bold);
-        h.SetBounds(18,35,580,53);hero.Controls.Add(h);
+        h.SetBounds(105,39,580,53);hero.Controls.Add(h);
         var detail=Txt(caption??"Real nəticələr, təsdiqlənmiş heyətlər və klub statistikası — bir məkanda.",10,false,Muted);
-        detail.AutoEllipsis=false;detail.SetBounds(19,96,570,37);hero.Controls.Add(detail);
+        detail.AutoEllipsis=false;detail.SetBounds(106,98,550,38);hero.Controls.Add(detail);
         var quick=new (string label,string target)[]{("⌕  Axtarış","search"),("▦  Taktika","tactics"),("▤  Cədvəl","standings")};
         var shortcutButtons=new List<Button>();
         for(int i=0;i<quick.Length;i++){
@@ -342,8 +348,8 @@ public sealed class MatchlabForm : Form
             int y=narrow?150:69;
             for(int index=0;index<shortcutButtons.Count;index++)
                 shortcutButtons[index].SetBounds(x+index*115,y,105,36);
-            detail.Width=Math.Max(260,narrow?hero.Width-36:hero.Width-435);
-            h.Width=Math.Max(270,narrow?hero.Width-36:hero.Width-420);
+            detail.Width=Math.Max(235,narrow?hero.Width-128:hero.Width-520);
+            h.Width=Math.Max(240,narrow?hero.Width-124:hero.Width-490);
         }
         hero.SizeChanged+=(_,_)=>LayoutHero();
         LayoutHero();
@@ -522,7 +528,7 @@ public sealed class MatchlabForm : Form
         return state=="live"?"● CANLI  "+Val(m,"minute"):state=="final"?"Bitib":state=="scheduled"?"Başlamayıb":state;
     }
     private void MatchRow(JsonElement m,bool saved=false) {
-        var p=CardPanel(78);
+        var p=CardPanel(Option("compact_cards","false")=="true"?70:78);
         var home=Txt(Team(m,"home"),11,true);home.SetBounds(48,9,206,30);home.Anchor=AnchorStyles.Top|AnchorStyles.Left;p.Controls.Add(home);
         var away=Txt(Team(m,"away"),11,true);away.SetBounds(48,40,206,28);p.Controls.Add(away);
         var homeBadge=new PictureBox{Left=15,Top=12,Width=25,Height=25,SizeMode=PictureBoxSizeMode.Zoom};
@@ -945,6 +951,8 @@ public sealed class MatchlabForm : Form
         Tool("➜ Oxları çək",()=>{pitch.ArrowMode=!pitch.ArrowMode;},128);
         Tool("▦ Tor",()=>{pitch.ShowGrid=!pitch.ShowGrid;},95);
         Tool("Oxları sil",pitch.ClearArrows,115);
+        Tool("↶ Geri al",pitch.UndoLast,112);
+        Tool("⇆ Güzgü",pitch.MirrorPlan,112);
         var extras=CardPanel(76);int ex=12;
         void Extra(string label,Action action,int width){
             var btn=NewButton(label,Raised,Ink,width);btn.SetBounds(ex,12,width,45);ex+=width+10;
@@ -985,7 +993,7 @@ public sealed class MatchlabForm : Form
             };
             row.Controls.Add(edit);
         }
-        Message("Meydanda 11 oyunçunu sürüşdür, iki dəfə kliklə ad/nömrəni dəyiş. Hərəkət oxlarını animasiyada oynat və PNG saxla. Şəxsi plan avtomatik yadda qalır.");
+        Message("11 oyunçu yeri dəyişə bilər · Geri al ilə son hərəkəti düzəlt · Güzgü ilə meydanı üfüqi əks etdir · Oxları çək və animasiya/PNG ixrac et. Plan avtomatik yadda saxlanılır.");
     }
     private async Task ShowSettings(){
         Heading("MATCHLAB  /  İDARƏETMƏ PANELİ");
@@ -1042,7 +1050,35 @@ public sealed class MatchlabForm : Form
             card.SizeChanged+=(_,_)=>preview.Left=card.Width-178;
             card.Controls.Add(preview);
         }
-        Heading("Bağlantı və məlumatın doğruluğu");
+        Heading("Görünüş və yaddaş");
+        var appOptions=CardPanel(144);
+        var maximize=new CheckBox{
+            Text="Açılışda maksimum pəncərə",
+            ForeColor=Ink,Checked=Option("start_maximized","true")=="true"};
+        maximize.SetBounds(15,8,400,37);
+        maximize.CheckedChanged+=(_,_)=>SaveOption("start_maximized",maximize.Checked?"true":"false");
+        appOptions.Controls.Add(maximize);
+        var compact=new CheckBox{
+            Text="Yığcam matç kartları",
+            ForeColor=Ink,Checked=Option("compact_cards","false")=="true"};
+        compact.SetBounds(15,47,320,37);
+        compact.CheckedChanged+=(_,_)=>{SaveOption("compact_cards",compact.Checked?"true":"false");};
+        appOptions.Controls.Add(compact);
+        var clear=NewButton("Yerli keşi təmizlə",Raised,Accent,230);
+        clear.SetBounds(15,90,230,41);
+        clear.Click+=(_,_)=>{
+            if(MessageBox.Show("Saxlanmış matç və tarixi mövsüm keçi silinsin? Sevimlilər, taktika planları və sazlamalar qalacaq.",
+                "MATCHLAB AZ",MessageBoxButtons.YesNo,MessageBoxIcon.Question)!=DialogResult.Yes)return;
+            try{
+                var dir=Path.GetDirectoryName(optionsPath)!;
+                foreach(var pattern in new[]{"history_*.json","matches_*.json"})
+                    foreach(var filename in Directory.EnumerateFiles(dir,pattern))File.Delete(filename);
+                historyBundles.Clear();
+                MessageBox.Show("Matç və arxiv keşi silindi.","MATCHLAB AZ");
+            }catch(Exception ex){MessageBox.Show("Keş təmizlənmədi: "+ex.Message,"MATCHLAB AZ");}
+        };
+        appOptions.Controls.Add(clear);
+                Heading("Bağlantı və məlumatın doğruluğu");
         Message("Mənbə: Render HTTPS API (Enzonic hələ yoxlanmayıb). Keş məlumatı CANLI DEYİL. Səslər yalnız real hesab dəyişikliyi aşkar olunanda, proqram açıq ikən işləyir.");
         Message("Serveri pulsuz planda oyatmaq gecikmə yarada bilər. İnternet olmadan canlı hesab və dəqiq statistikalar uydurulmur.");
         try{
