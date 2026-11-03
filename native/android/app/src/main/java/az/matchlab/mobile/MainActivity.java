@@ -869,6 +869,15 @@ public final class MainActivity extends Activity {
             profileFact("Vəfat tarixi",p.optString("death"));
             profileFact("Mövqe",p.optString("position"));
             profileFact("Haqqında",p.optString("description"));
+            profileFact("Baş məşqçi",p.optString("manager"));
+            profileFact("Liqa",p.optString("league"));
+            JSONObject updateStatus=p.optJSONObject("updateStatus");
+            if(updateStatus!=null&&updateStatus.optBoolean("autoRefresh")){
+                String checked=updateStatus.optString("checkedUtc","");
+                info("Avtomatik mənbə yoxlaması aktivdir · Son yoxlama: "+
+                    (checked.isEmpty()||"null".equals(checked)?"Hələ yoxlanılmayıb":checked)+
+                    " · Yalnız baxılan profillər. Wikipedia / Wikidata.",false);
+            }
             for(String k:new String[]{"clubs","coached","awards"}){
                 JSONArray arr=p.optJSONArray(k);if(arr==null||arr.length()==0)continue;
                 section(k.equals("clubs")?"Klub karyerası":k.equals("coached")?"Məşqçilik karyerası":"Nailiyyətlər");
