@@ -62,6 +62,24 @@ public final class MainActivity extends Activity {
     private Runnable searchPending;
     private String matchLeague="all",tableLeague="eng.1";
     private JSONObject currentMatch=null;
+    private PitchView pendingExportPitch;
+    private static final int EXPORT_TACTIC_PNG=957;
+    @Override protected void onActivityResult(int requestCode,int resultCode,Intent data){
+        super.onActivityResult(requestCode,resultCode,data);
+        if(requestCode!=EXPORT_TACTIC_PNG)return;
+        if(resultCode!=RESULT_OK||data==null||data.getData()==null||pendingExportPitch==null){
+            pendingExportPitch=null;return;
+        }
+        try(java.io.OutputStream stream=getContentResolver().openOutputStream(data.getData())){
+            if(stream==null)throw new IOException("Export stream could not be opened");
+            android.graphics.Bitmap bitmap=pendingExportPitch.exportBitmap();
+            boolean saved=bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG,100,stream);
+            bitmap.recycle();
+            if(!saved)throw new IOException("PNG encoding failed");
+            Toast.makeText(this,"Taktika PNG saxlandı",Toast.LENGTH_LONG).show();
+        }catch(Exception ex){Toast.makeText(this,"PNG saxlanmadı: "+ex.getMessage(),Toast.LENGTH_LONG).show();}
+        finally{pendingExportPitch=null;}
+    }
     private SharedPreferences prefs;
     private final Runnable refresh=new Runnable(){
         @Override public void run(){
@@ -1112,6 +1130,21 @@ public final class MainActivity extends Activity {
         Button mirror=button("⇆ Güzgü");
         mirror.setOnClickListener(v->pitch.mirror());advanced.addView(mirror,new LinearLayout.LayoutParams(0,dp(44),1));
         card(advanced);
+        LinearLayout exports=row();
+        Button animate=button("▶ Hərəkət animasiyası");
+        animate.setOnClickListener(v->pitch.togglePlayback());
+        exports.addView(animate,new LinearLayout.LayoutParams(0,dp(46),1));
+        Button png=button("▣ PNG saxla");
+        png.setOnClickListener(v->{
+            pendingExportPitch=pitch;
+            Intent create=new Intent(Intent.ACTION_CREATE_DOCUMENT);
+            create.addCategory(Intent.CATEGORY_OPENABLE);
+            create.setType("image/png");
+            create.putExtra(Intent.EXTRA_TITLE,"MATCHLAB_AZ_Taktika_"+formations[formation].replace("-","_")+".png");
+            startActivityForResult(create,EXPORT_TACTIC_PNG);
+        });
+        exports.addView(png,new LinearLayout.LayoutParams(0,dp(46),1));
+        card(exports);
         gap(page,9);
         section("Ehtiyat oyunçular və əvəzetmələr");
         for(int i=1;i<=7;i++){
