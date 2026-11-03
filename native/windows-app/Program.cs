@@ -871,11 +871,22 @@ public sealed class MatchlabForm : Form
             }
             RenderHistoryRows(result,false);
         }catch(Exception ex){
-            if(page=="history"&&token==viewVersion&&data.ValueKind!=JsonValueKind.Object)
-                EmptyState("Arxiv mənbəsi əlçatan deyil",ex.Message);
+            // Older Render instances may not yet expose /api/history-bundle.
+            // Keep the previous server-paged historical UI usable until rollout.
+            if(page!="history"||token!=viewVersion||data.ValueKind==JsonValueKind.Object)return;
+            try{
+                var legacy=await Get("/api/history?league="+Uri.EscapeDataString(historyLeague)+
+                    "&season="+Uri.EscapeDataString(historySeason)+"&limit=60&offset="+historyOffset+
+                    "&team="+Uri.EscapeDataString(historyTeam));
+                if(page!="history"||token!=viewVersion)return;
+                if(Yes(legacy,"available")){
+                    Message("Uyğunluq rejimi · serverin tam mövsüm keşi yenilənməyib; nəticələr səhifə-səhifə gəlir.");
+                    RenderHistoryRows(legacy,false,true);
+                }else EmptyState("Arxiv serverdə əlçatan deyil",Val(legacy,"message",ex.Message),false);
+            }catch(Exception){if(page=="history"&&token==viewVersion)EmptyState("Arxiv mənbəsi əlçatan deyil",ex.Message,false);}
         }
     }
-    private void RenderHistoryRows(JsonElement result,bool local){
+    private void RenderHistoryRows(JsonElement result,bool local,bool legacy=false){
         if(page!="history")return;
         Heading(Val(result,"leagueName","Tarixi matçlar")+" · "+historySeason+
             (local?"  ·  YERLİ KEŞ":"  ·  CC0 MƏNBƏ"));
@@ -885,7 +896,7 @@ public sealed class MatchlabForm : Form
             Val(m,"away").Contains(term,StringComparison.OrdinalIgnoreCase)).ToList();
         Message(all.Count+" uyğun tarixi matç · axtarış yerli yaddaşdan işləyir · CANLI DEYİL");
         if(all.Count==0){EmptyState("Komanda tapılmadı","Adı dəyişdir və yenidən axtar.",false);return;}
-        foreach(var m in all.Skip(historyOffset).Take(60)){
+        foreach(var m in all.Skip(legacy?0:historyOffset).Take(60)){
             var row=CardPanel(83);
             var round=Txt(Val(m,"round")+"  ·  "+Val(m,"date")+"  "+Val(m,"time"),9,false,Muted);
             round.SetBounds(18,3,650,25);row.Controls.Add(round);
@@ -896,11 +907,15 @@ public sealed class MatchlabForm : Form
             score.SetBounds(row.Width-142,27,125,43);score.Anchor=AnchorStyles.Top|AnchorStyles.Right;
             row.Controls.Add(score);
         }
-        if(historyOffset+60<all.Count){
+        if(legacy?(!string.IsNullOrEmpty(Val(result,"nextOffset"))):(historyOffset+60<all.Count)){
             var bar=CardPanel(64);
             var more=NewButton("Daha 60 matç",Accent,Bg,164);
             more.SetBounds(15,11,164,40);bar.Controls.Add(more);
-            more.Click+=(_,_)=>{historyOffset+=60;Render();};
+            more.Click+=(_,_)=>{
+                if(legacy&&int.TryParse(Val(result,"nextOffset"),out int moreOffset))historyOffset=moreOffset;
+                else historyOffset+=60;
+                Render();
+            };
         }
         Message("Mənbə: OpenFootball football.json (CC0). Mövsüm məlumatı 24 saatdan bir yenilənir.");
     }
