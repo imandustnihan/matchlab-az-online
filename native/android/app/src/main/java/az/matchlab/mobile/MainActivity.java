@@ -867,14 +867,27 @@ public final class MainActivity extends Activity {
                 for(int i=0;i<Math.min(stats.length(),32);i++){
                     JSONObject stat=stats.optJSONObject(i);
                     if(stat==null)continue;
+                    LinearLayout block=column();
+                    block.setPadding(dp(10),dp(9),dp(10),dp(9));
                     LinearLayout line=row();
-                    line.setPadding(dp(9),dp(8),dp(9),dp(8));
                     line.addView(fixed(val(stat,"home"),12,INK,true,48));
                     TextView title=single(stat.optString("name",stat.optString("label","Statistika")),11,MUTED,false);
                     title.setGravity(Gravity.CENTER);line.addView(title,new LinearLayout.LayoutParams(0,-2,1));
                     line.addView(fixed(val(stat,"away"),12,INK,true,48));
-                    line.setBackgroundColor(i%2==0?CARD:RAISED);
-                    page.addView(line);
+                    block.addView(line);
+                    double left=statNumber(val(stat,"home")),right=statNumber(val(stat,"away"));
+                    if(left>=0&&right>=0&&left+right>0){
+                        LinearLayout bar=row();bar.setBackground(shape(RAISED,4));
+                        int leftWeight=Math.max(1,(int)Math.round(1000*left/(left+right)));
+                        View h=new View(this);h.setBackground(shape(ACCENT,4));
+                        bar.addView(h,new LinearLayout.LayoutParams(0,dp(5),leftWeight));
+                        View a=new View(this);a.setBackground(shape(Color.rgb(97,122,145),4));
+                        bar.addView(a,new LinearLayout.LayoutParams(0,dp(5),1001-leftWeight));
+                        LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(-1,dp(5));bp.topMargin=dp(7);
+                        block.addView(bar,bp);
+                    }
+                    block.setBackgroundColor(i%2==0?CARD:RAISED);
+                    page.addView(block);
                 }
             }else info("Mənbədə təsdiqlənmiş statistika yoxdur.",false);
             JSONObject lineup=data.optJSONObject("lineup");
@@ -909,6 +922,12 @@ public final class MainActivity extends Activity {
             String note=data.optString("message","");
             if(!note.isEmpty()&&data.optBoolean("available"))info(note,false);
         });
+    }
+    private double statNumber(String raw){
+        if(raw==null)return -1;
+        String value=raw.trim().replace("%","").replace(",",".");
+        if(!value.matches("[0-9]+(\\.[0-9]+)?"))return -1;
+        try{return Double.parseDouble(value);}catch(NumberFormatException e){return -1;}
     }
     private void addSquad(String label,JSONArray entries){
         if(entries==null||entries.length()==0)return;
