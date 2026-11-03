@@ -11,5 +11,6 @@
   <ItemGroup>
     <Compile Include="WindowsVisualSmoke.cs" />
     <Compile Include="../windows-app/*.cs" />
+    <EmbeddedResource Include="../shared/registry_offline.tsv.gz" LogicalName="MATCHLABAZ.OfflineRegistry" />
   </ItemGroup>
 </Project>
