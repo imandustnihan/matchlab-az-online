@@ -1188,6 +1188,7 @@ public final class MainActivity extends Activity {
     }
 
     private void showHistory(){
+        page.removeAllViews();
         section("FOOTBALL HERITAGE  ·  CC0 ARXİV");
         info("Arxiv matçları canlı DEYİL. Hesab və tarix yalnız mənbədə mövcuddursa göstərilir.",false);
         final String[] ids={"eng.1","esp.1","ger.1","ita.1","fra.1","tur.1","por.1","ned.1","sco.1","eng.2","bel.1"};
