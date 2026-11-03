@@ -84,3 +84,27 @@ def view(league,season,fetch,limit=60,offset=0,team=""):
             "season":season,"league":league,"leagueName":name,"live":False,
             "source":"OpenFootball CC0 / football.json",
             "message":"Tarixi arxivdir, canlı matç nəticələri deyil. Yalnız mənbədə olan hesablar göstərilir."}
+
+def bundle(league,season,fetch):
+    """Bounded full-season snapshot for fast client-side team filtering.
+
+    The client retains this historical (never live) source snapshot and can filter
+    hundreds of matches without another network request.  HTTP failures return
+    unavailable instead of made-up scores.  A bundle is capped at 1,800 rows.
+    """
+    first=view(league,season,fetch,limit=80,offset=0)
+    if not first.get("available"):return first
+    rows=list(first["items"])
+    next_offset=first.get("nextOffset")
+    while next_offset is not None and len(rows)<1800:
+        data=view(league,season,fetch,limit=80,offset=next_offset)
+        if not data.get("available"):break
+        batch=data.get("items") or []
+        if not batch:break
+        rows.extend(batch)
+        next_offset=data.get("nextOffset")
+    return {**first,"items":rows,"offset":0,
+            "count":len(rows),"nextOffset":None,
+            "complete":next_offset is None,
+            "bundle":True,"live":False,
+            "message":"Mənbədən götürülmüş tarixi mövsüm nüsxəsi. Canlı nəticələr deyil."}
