@@ -1,0 +1,125 @@
+name: MATCHLAB AZ - Windows UI and Android emulator QA
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'qa/**'
+    paths:
+      - 'native/qa/**'
+      - '.github/workflows/matchlab_visual_smoke.yml'
+      - 'native/windows-app/**'
+      - 'native/android/**'
+
+permissions:
+  contents: read
+
+jobs:
+  windows-visual:
+    name: Windows 11 native visual and functional smoke
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Compile and run Windows GUI checks
+        shell: pwsh
+        run: |
+          dotnet run --project native/qa/WindowsVisualSmoke.csproj --configuration Release
+          if ($LASTEXITCODE -ne 0) { throw 'Windows visual smoke checks failed' }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: MATCHLAB_QA_Windows_Screenshots
+          path: qa-artifacts/windows/
+          if-no-files-found: warn
+
+  windows-installer:
+    name: Windows Setup install, launch and uninstall
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Generate original branded Windows installer icon
+        shell: pwsh
+        run: |
+          python -m pip install pillow
+          python native/branding/generate_icons.py
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Publish the real standalone Windows EXE
+        shell: pwsh
+        run: |
+          dotnet publish native/windows-app/MATCHLABAZ.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o native/windows-app/out
+      - name: Build the real Windows installer
+        shell: pwsh
+        run: |
+          choco install innosetup --yes --no-progress
+          $compiler = Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) 'Inno Setup 6/ISCC.exe'
+          & $compiler native/installer/MATCHLAB_AZ.iss
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup build failed" }
+      - name: Install, launch, verify shortcuts and uninstall
+        shell: pwsh
+        run: ./native/qa/windows_installer_smoke.ps1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: MATCHLAB_QA_Windows_Installer
+          path: qa-artifacts/windows-installer/
+          if-no-files-found: warn
+
+  android-emulator:
+    name: Android emulator API 30 interactive smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Generate Android branding and build real app
+        run: |
+          set -euo pipefail
+          python3 -m pip install pillow
+          python3 native/branding/generate_icons.py
+          cd native/android
+          gradle --no-daemon :app:assembleDebug
+      - name: Enable Android x86 KVM acceleration when available
+        run: |
+          if [ -e /dev/kvm ]; then
+            ls -l /dev/kvm
+            sudo chmod 666 /dev/kvm
+            echo "Android hardware acceleration enabled"
+          else
+            echo "::warning::GitHub runner has no /dev/kvm, emulator may boot slowly"
+          fi
+      - name: Verify app against Android emulator screen and touch events
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          target: default
+          arch: x86_64
+          profile: pixel_2
+          ram-size: 2048M
+          heap-size: 256M
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          disable-animations: false
+          script: |
+            adb install -r native/android/app/build/outputs/apk/debug/app-debug.apk
+            python3 native/qa/android_emulator_smoke.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: MATCHLAB_QA_Android_Emulator_Screenshots
+          path: qa-artifacts/android/
+          if-no-files-found: warn

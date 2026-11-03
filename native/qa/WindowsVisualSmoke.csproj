@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <StartupObject>MatchlabQA.QaProgram</StartupObject>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="WindowsVisualSmoke.cs" />
+    <Compile Include="../windows-app/*.cs" />
+  </ItemGroup>
+</Project>
