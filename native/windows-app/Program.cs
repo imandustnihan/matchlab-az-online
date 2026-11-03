@@ -342,8 +342,11 @@ public sealed class MatchlabForm : Form
             content.ResumeLayout();
         }catch(Exception e){
             if(page!="matches"||token!=viewVersion)return;
-            SetConnection(false);content.Controls.Clear();DateFilter();
-            Message("Serverlə əlaqə alınmadı: "+e.Message,true);
+            SetConnection(false);
+            if(!File.Exists(MatchesCacheFile)||latestMatches.Count==0){
+                content.Controls.Clear();DateFilter();
+            }
+            Message("Serverlə əlaqə alınmadı: "+e.Message+" · saxlanmış nəticələr CANLI DEYİL.",true);
         }
     }
     private static string Team(JsonElement m,string key)=>Val(Prop(m,key),"name","—");
