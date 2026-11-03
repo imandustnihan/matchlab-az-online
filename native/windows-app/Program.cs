@@ -474,8 +474,8 @@ public sealed class MatchlabForm : Form
                 foreach(var ev in stats){
                     string left=Val(ev,"home",Val(ev,"homeValue","—")),right=Val(ev,"away",Val(ev,"awayValue","—"));
                     var block=CardPanel(77);
-                    var name=Txt(Val(ev,"name",Val(ev,"label","Statistika")),11,true);
-                    name.SetBounds(15,6,310,32);block.Controls.Add(name);
+                    var statLabel=Txt(Val(ev,"name",Val(ev,"label","Statistika")),11,true);
+                    statLabel.SetBounds(15,6,310,32);block.Controls.Add(statLabel);
                     var value=Txt(left+"  :  "+right,11,true,Accent);
                     value.SetBounds(345,6,170,32);block.Controls.Add(value);
                     static bool ParseStat(string s,out double n) =>
