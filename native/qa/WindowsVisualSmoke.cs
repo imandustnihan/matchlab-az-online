@@ -88,6 +88,9 @@ public static class QaProgram
                 "Football hero title is not vertically clipped");
             Check(Walk(form).OfType<PictureBox>().Any(p=>p.Image!=null),
                 "Original rendered MATCHLAB M-ball logo present");
+            var filterMethod=typeof(MatchlabForm).GetMethod("MatchFilterBar",PrivateInstance);
+            filterMethod!.Invoke(form,new object[]{false});
+            Check(HasText(form,"Liqa üzrə"),"Windows score list includes league/time sorting");
             Shot(form,"01_matches.png");
 
             string cacheFolder=Path.Combine(
@@ -160,6 +163,42 @@ public static class QaProgram
             ambiguousForm.Add("Manchester City","Chelsea",2,0,true,"2025-08-11");
             ambiguousForm.Add("Manchester United","Fulham",1,1,true,"2025-08-12");
             Check(ambiguousForm.Ambiguous,"Shared prefix cannot mix different teams");
+
+
+            // Offline catalogue is an actual embedded 506207-row source-verified
+            // Reep CC0 index, not a padded artifact or fictional profiles.
+            var offline=OfflineIdentityIndex.SearchBundled("Madrid","teams",30);
+            Check(offline.Count>0&&offline.Any(x=>x.Name.Contains("Madrid",StringComparison.OrdinalIgnoreCase)),
+                "Bundled offline registry finds real Madrid clubs without network");
+            Check(OfflineIdentityIndex.SearchBundled("","all").Count==0,
+                "Offline search refuses blank queries");
+            Check(OfflineIdentityIndex.Normalize("Qarabağ")=="qarabag",
+                "Offline player/club search handles Azerbaijani diacritics");
+
+            // Provide a deterministic local provider-shaped payload to verify
+            // that all native match-center tabs show only received facts.
+            using(var match=JsonDocument.Parse("{\"id\":\"espn:eng.1:qa\",\"leagueName\":\"QA Premier League\",\"source\":\"QA fixture\",\"state\":\"final\",\"home\":{\"name\":\"Home QA\"},\"away\":{\"name\":\"Away QA\"},\"homeScore\":2,\"awayScore\":1}"))
+            using(var details=JsonDocument.Parse("{\"available\":true,\"partial\":false,\"events\":[{\"minute\":\"77\",\"text\":\"Verified QA goal\"}],\"statistics\":[{\"name\":\"Ball possession\",\"home\":\"54%\",\"away\":\"46%\"}],\"lineup\":{\"home\":{\"starters\":[{\"name\":\"QA player\",\"number\":\"8\"}],\"substitutes\":[]},\"away\":{\"starters\":[],\"substitutes\":[]}}}")){
+                SetField(form,"openedMatch",match.RootElement.Clone());
+                SetField(form,"hasOpenedMatch",true);
+                SetField(form,"openedDetailsId","espn:eng.1:qa");
+                SetField(form,"openedDetails",details.RootElement.Clone());
+                SetField(form,"detailTab","overview");RenderPage(form,"details");
+                Check(HasText(form,"Xülasə")&&HasText(form,"Statistika")&&
+                    HasText(form,"Heyətlər")&&HasText(form,"Hadisələr"),
+                    "Four native match center tabs present");
+                Check(HasText(form,"MATÇ XÜLASƏSİ"),"Match overview summarizes verified provider fields");
+                Shot(form,"06_match_overview.png");
+                SetField(form,"detailTab","stats");RenderPage(form,"details");
+                Check(HasText(form,"Ball possession")&&HasText(form,"54%"),
+                    "Native stats tab displays real-source sample values without guessing");
+                Shot(form,"07_match_stats.png");
+                SetField(form,"detailTab","events");RenderPage(form,"details");
+                Check(HasText(form,"Verified QA goal"),"Native event timeline displays provider event");
+                SetField(form,"detailTab","lineups");RenderPage(form,"details");
+                Check(HasText(form,"QA player"),"Native lineup tab displays provider starter");
+                Shot(form,"08_match_lineups.png");
+            }
 
             RenderPage(form,"tactics");
             var pitch=Walk(form).OfType<PitchPanel>().FirstOrDefault();

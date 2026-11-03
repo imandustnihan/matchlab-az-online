@@ -8,10 +8,15 @@
     <AssemblyName>MATCHLAB_AZ</AssemblyName>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <ApplicationIcon>../branding/matchlab_icon.ico</ApplicationIcon>
-    <Version>0.9.58</Version>
+    <Version>0.9.59</Version>
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
   </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="../shared/registry_offline.tsv.gz"
+      LogicalName="MATCHLABAZ.OfflineRegistry"
+      Condition="Exists('../shared/registry_offline.tsv.gz')" />
+  </ItemGroup>
 </Project>

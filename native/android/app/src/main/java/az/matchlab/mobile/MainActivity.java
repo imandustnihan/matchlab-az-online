@@ -54,6 +54,11 @@ public final class MainActivity extends Activity {
     private final Map<String,JSONObject> historyBundles=new HashMap<>();
     private int historyOffset=0;
     private int searchOffset=0;
+    private boolean sortChronological=false;
+    private JSONObject lastMatchResponse=null;
+    private int searchSerial=0,onlineSearchSerial=-1;
+    private String detailTab="overview",detailMatchId="";
+    private JSONObject detailData=null;
     private JSONArray searchRows=new JSONArray();
     private boolean standingsExpanded=false;
     private final String[] formations={"4-3-3","4-2-3-1","4-4-2","3-5-2","3-4-3","4-1-4-1","5-3-2","4-2-2-2"};
@@ -96,6 +101,7 @@ public final class MainActivity extends Activity {
         tableLeague=prefs.getString("tableleague","eng.1");
         league=matchLeague;
         matchMode=prefs.getString("matchmode","all");
+        sortChronological=prefs.getBoolean("sort_chronological",false);
         formation=prefs.getInt("tactic_formation",0);
         if(formation<0||formation>=formations.length)formation=0;
         showShell();
@@ -322,6 +328,22 @@ public final class MainActivity extends Activity {
             choose.setOnClickListener(v->showLeaguePicker(choose,false));
             controls.addView(choose);
             card(controls);
+            LinearLayout order=row();
+            for(String[] item:new String[][]{{"group","▤ Liqa üzrə"},{"time","◷ Saata görə"}}){
+                boolean chrono="time".equals(item[0]),active=sortChronological==chrono;
+                Button b=button(item[1]);b.setTextSize(12);
+                b.setTextColor(active?BG:INK);
+                b.setBackground(shape(active?ACCENT:RAISED,10));
+                b.setMinimumHeight(dp(48));
+                LinearLayout.LayoutParams slot=new LinearLayout.LayoutParams(0,dp(48),1);
+                slot.rightMargin=dp(5);order.addView(b,slot);
+                b.setOnClickListener(v->{
+                    sortChronological=chrono;prefs.edit().putBoolean("sort_chronological",chrono).apply();
+                    if(lastMatchResponse!=null)renderLiveMatches(lastMatchResponse);
+                    else navigate("matches");
+                });
+            }
+            card(order);
             if(!league.equals("all")){
                 TextView note=text("Bu liqa seçimi yalnız bu ekranın filtridir. “Bütün liqalar” seçərək ümumi matçlara qayıt.",10,MUTED,false);
                 card(note);
@@ -407,7 +429,7 @@ public final class MainActivity extends Activity {
                 HttpURLConnection conn=(HttpURLConnection)url.openConnection();
                 conn.setConnectTimeout(6500);conn.setReadTimeout(14500);
                 conn.setRequestProperty("Accept","application/json");
-                conn.setRequestProperty("User-Agent","MATCHLABAZ-Native/0.9.58");
+                conn.setRequestProperty("User-Agent","MATCHLABAZ-Native/0.9.59");
                 int code=conn.getResponseCode();
                 if(code<200||code>=300)throw new IOException("HTTP "+code);
                 try(InputStream input=conn.getInputStream();ByteArrayOutputStream out=new ByteArrayOutputStream()){
@@ -469,6 +491,7 @@ public final class MainActivity extends Activity {
         return true;
     }
     private void renderLiveMatches(JSONObject data){
+        lastMatchResponse=data;
         matches=data.optJSONArray("items");if(matches==null)matches=new JSONArray();
         page.removeAllViews();filters(false);
         if(data.optBoolean("partial")||data.optBoolean("stale"))
@@ -491,6 +514,19 @@ public final class MainActivity extends Activity {
             if("favorites".equals(matchMode))info("Bu tarixdə seçilmiş oyun yoxdur. Matç kartlarındakı ☆ işarəsinə toxun.",false);
             else if("live".equals(matchMode))info("Hazırda təsdiqlənmiş canlı oyun yoxdur. “Hamısı” bölməsində bütün oyunlara bax.",false);
             else info(data.optBoolean("available")?"Seçilmiş tarixdə mənbələr oyun qaytarmadı.":"Matçlar mənbədən alınmadı.",!data.optBoolean("available"));
+            return;
+        }
+        if(sortChronological){
+            ArrayList<JSONObject> allMatches=new ArrayList<>();
+            for(ArrayList<JSONObject> values:groups.values())allMatches.addAll(values);
+            allMatches.sort((left,right)->{
+                String a=left.optString("time",""),b=right.optString("time","");
+                if(!a.matches("\\d{2}:\\d{2}"))a="99:99";
+                if(!b.matches("\\d{2}:\\d{2}"))b="99:99";
+                return a.compareTo(b);
+            });
+            section("SAAT ARDICILLIĞI · "+allMatches.size()+" OYUN");
+            for(JSONObject item:allMatches)matchRow(item,false);
             return;
         }
         // Priority follows the actual fixture list, not a permanent hardcoded league panel.
@@ -606,7 +642,7 @@ public final class MainActivity extends Activity {
         });
         body.addView(star);
         wrapper.addView(body);
-        wrapper.setOnClickListener(v->{currentMatch=m;navigate("details");});
+        wrapper.setOnClickListener(v->{currentMatch=m;detailTab="overview";detailMatchId="";detailData=null;navigate("details");});
         wrapper.setContentDescription(val(home,"name")+" "+score+" "+val(away,"name")+", "+stateLabel(m,saved));
         LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.bottomMargin=dp(5);
         page.addView(wrapper,lp);
@@ -810,15 +846,20 @@ public final class MainActivity extends Activity {
             .hideSoftInputFromWindow(page.getWindowToken(),0);
         final int token=generation;
         final String query=q.trim();
-        if(offset==0){searchResults.removeAllViews();searchRows=new JSONArray();}
+        if(offset==0){searchResults.removeAllViews();searchRows=new JSONArray();searchSerial++;}
+        final int serial=searchSerial;
         TextView waiting=text(offset==0?"Reyestr axtarılır…":"Daha çox nəticə alınır…",12,MUTED,false);
         searchResults.addView(waiting);
+        if(offset==0)searchOfflineIdentities(query,requestedKind,token,serial);
         fetch("/api/search?q="+encode(query)+"&kind="+requestedKind+"&offset="+offset,(json,error)->{
             if(token!=generation||!screen.equals("search")||!query.equals(searchText)||!requestedKind.equals(kind))return;
             searchResults.removeView(waiting);
             if(error!=null||json==null){
-                searchResults.addView(text(networkMessage(error),12,RED,false));return;
+                searchResults.addView(text(networkMessage(error)+
+                    " · Yerli reyestr varsa yuxarıda göstərilir.",12,RED,false));return;
             }
+            onlineSearchSerial=serial;
+            if(offset==0)searchResults.removeAllViews();
             JSONArray arr=json.optJSONArray("items");
             if(arr==null||arr.length()==0){
                 if(offset==0)searchResults.addView(text("Bu sorğu üçün təsdiqlənmiş nəticə tapılmadı.",12,MUTED,false));
@@ -855,6 +896,51 @@ public final class MainActivity extends Activity {
             }
         });
     }
+
+    private void searchOfflineIdentities(String q,String requestedKind,int token,int serial){
+        if(q.length()<2)return;
+        network.execute(()->{
+            java.util.List<OfflineIdentityIndex.Entry> results;
+            try(java.io.InputStream input=getAssets().open("registry_offline.tsv.gz")){
+                results=OfflineIdentityIndex.search(input,q,requestedKind,50);
+            }catch(Exception ex){return;}
+            ui.post(()->{
+                if(token!=generation||serial!=searchSerial||serial==onlineSearchSerial||
+                    !"search".equals(screen)||!q.equals(searchText)||searchResults==null)return;
+                searchResults.removeAllViews();
+                TextView source=text("OFFLAYN REEP CC0 · 506 207 REAL KİMLİK QEYDİ",11,ACCENT,true);
+                searchResults.addView(source);gap(searchResults,8);
+                if(results.isEmpty()){
+                    searchResults.addView(text("Yerli reyestrdə uyğun ad tapılmadı. İnternet nəticəsi ayrıca yoxlanır.",12,MUTED,false));
+                    return;
+                }
+                for(OfflineIdentityIndex.Entry entry:results){
+                    LinearLayout cardRow=row();
+                    cardRow.setPadding(dp(12),dp(10),dp(12),dp(10));
+                    cardRow.setBackground(shape(CARD,12));
+                    TextView initial=fixed(entry.name.isEmpty()?"•":entry.name.substring(0,1).toUpperCase(Locale.ROOT),16,ACCENT,true,42);
+                    cardRow.addView(initial);
+                    LinearLayout infoBox=column();
+                    infoBox.addView(single(entry.name,14,INK,true));
+                    infoBox.addView(single(entry.kind+" · "+entry.country+" · OFFLAYN",11,MUTED,false));
+                    cardRow.addView(infoBox,new LinearLayout.LayoutParams(0,-2,1));
+                    TextView arrow=text("›",22,ACCENT,true);cardRow.addView(arrow);
+                    cardRow.setOnClickListener(v->new AlertDialog.Builder(this)
+                        .setTitle(entry.name)
+                        .setMessage("Mənbə: Reep CC0\nKateqoriya: "+entry.kind+
+                            "\nÖlkə: "+entry.country+
+                            "\nBu, təsdiqlənmiş şəxs/klub identifikatorudur. Canlı karyera, foto və statistika internet tələb edir.")
+                        .setNegativeButton("Bağla",null)
+                        .setPositiveButton("Onlayn profili yoxla",(d,which)->openProfile(entry.id))
+                        .show());
+                    LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(-1,-2);
+                    params.bottomMargin=dp(6);searchResults.addView(cardRow,params);
+                }
+                searchResults.addView(text("Siyahı yerli arxivdir. Serverdən gələn təsdiqli nəticə onu yeniləyə bilər.",11,MUTED,false));
+            });
+        });
+    }
+
     private void profileFact(String label,String value){
         if(value==null||value.trim().isEmpty()||value.equalsIgnoreCase("null")||value.equalsIgnoreCase("unknown")||value.equalsIgnoreCase("unverified"))return;
         LinearLayout line=row();TextView a=text(label,12,MUTED,true);line.addView(a,new LinearLayout.LayoutParams(0,-2,1));
@@ -928,6 +1014,7 @@ public final class MainActivity extends Activity {
         });
     }
     private void showDetails(){
+        page.removeAllViews();
         if(currentMatch==null){info("Matç seçilməyib.",true);return;}
         JSONObject match=currentMatch;
         JSONObject home=match.optJSONObject("home"),away=match.optJSONObject("away");
@@ -954,20 +1041,65 @@ public final class MainActivity extends Activity {
         TextView status=text(stateLabel(match,false)+" · "+match.optString("source",""),11,MUTED,true);
         status.setGravity(Gravity.CENTER);hero.addView(status);
         page.addView(hero);gap(page,11);
-        String[] parts=match.optString("id").split(":",3);
+
+        LinearLayout tabs=row();
+        for(String[] entry:new String[][]{{"overview","Xülasə"},{"stats","Statistika"},{"lineups","Heyətlər"},{"events","Hadisələr"}}){
+            final String target=entry[0];
+            boolean active=detailTab.equals(target);
+            Button b=button(entry[1]);b.setTextSize(11);b.setMinimumHeight(dp(48));
+            b.setTextColor(active?BG:INK);b.setBackground(shape(active?ACCENT:RAISED,10));
+            LinearLayout.LayoutParams slot=new LinearLayout.LayoutParams(0,dp(48),1);
+            slot.rightMargin=dp(3);tabs.addView(b,slot);
+            b.setOnClickListener(v->{detailTab=target;showDetails();});
+        }
+        card(tabs);
+
+        String matchId=match.optString("id","");
+        String[] parts=matchId.split(":",3);
         if(parts.length!=3||!Arrays.asList("espn","sportsdb","open").contains(parts[0])){
-            banner("Bu matç üçün doğrulanmış hadisə mənbəyi yoxdur.",MUTED);return;
+            banner("Bu matç üçün təsdiqlənmiş hadisə mənbəyi yoxdur.",MUTED);return;
+        }
+        if(detailData!=null&&matchId.equals(detailMatchId)){
+            renderMatchDetailTab(detailData,homeName,awayName);return;
         }
         final int token=generation;
-        info("Mənbədən real matç məlumatları alınır…",false);
+        info("Matç məlumatları mənbədən yoxlanılır…",false);
         fetch("/api/match-detail?provider="+parts[0]+"&league="+encode(parts[1])+"&id="+encode(parts[2]),(data,error)->{
-            if(token!=generation||!screen.equals("details"))return;
-            // Remove only the last progress card; keep the score header.
-            if(page.getChildCount()>3)page.removeViewAt(page.getChildCount()-1);
-            if(error!=null){banner(networkMessage(error),RED);return;}
-            if(!data.optBoolean("available"))
-                banner(data.optString("message","Detallar mövcud deyil."),RED);
-            if(data.optBoolean("partial"))banner("Mənbənin bəzi hissələri əlçatan deyil.",RED);
+            if(token!=generation||!"details".equals(screen)||currentMatch==null||
+                !matchId.equals(currentMatch.optString("id")))return;
+            if(error!=null||data==null){
+                page.removeAllViews();section("MATÇ MƏRKƏZİ");
+                info(networkMessage(error),true);
+                Button retry=button("↻ Yenidən yoxla");retry.setOnClickListener(v->showDetails());card(retry);
+                return;
+            }
+            detailData=data;detailMatchId=matchId;showDetails();
+        });
+    }
+
+    private void renderMatchDetailTab(JSONObject data,String homeName,String awayName){
+        if(!data.optBoolean("available"))
+            info(data.optString("message","Matçın doğrulanmış detalları hazırda yoxdur."),true);
+        if(data.optBoolean("partial"))
+            banner("Mənbə natamamdır. Heyət və statistika uydurulmur.",RED);
+        if("overview".equals(detailTab)){
+            JSONArray stats=data.optJSONArray("statistics"),events=data.optJSONArray("events");
+            JSONObject lineup=data.optJSONObject("lineup");
+            int statCount=stats==null?0:stats.length(),eventCount=events==null?0:events.length();
+            int starterCount=0;
+            if(lineup!=null)for(String side:new String[]{"home","away"}){
+                JSONObject team=lineup.optJSONObject(side);
+                if(team!=null){JSONArray starters=team.optJSONArray("starters");
+                    if(starters!=null)starterCount+=starters.length();}
+            }
+            section("MATÇ XÜLASƏSİ");
+            info(statCount+" statistik göstərici · "+eventCount+" hadisə · "+starterCount+" qeyd edilmiş start heyəti üzvü",false);
+            info("Ətraflı baxmaq üçün Statistika / Heyətlər / Hadisələr bölmələrinə keç.",false);
+            String note=data.optString("message","");
+            if(!note.isEmpty())info(note,false);
+            return;
+        }
+        if("stats".equals(detailTab)){
             JSONArray stats=data.optJSONArray("statistics");
             if(stats!=null&&stats.length()>0){
                 section("MATÇ STATİSTİKASI");
@@ -997,6 +1129,9 @@ public final class MainActivity extends Activity {
                     page.addView(block);
                 }
             }else info("Mənbədə təsdiqlənmiş statistika yoxdur.",false);
+            return;
+        }
+        if("lineups".equals(detailTab)){
             JSONObject lineup=data.optJSONObject("lineup");
             if(lineup!=null){
                 section("TƏSDİQLƏNMİŞ HEYƏTLƏR");
@@ -1013,6 +1148,10 @@ public final class MainActivity extends Activity {
                     addSquad("Ehtiyatlar",subs);
                 }
             }
+            if(lineup==null)info("Mənbədə heyət yoxdur.",false);
+            return;
+        }
+        if("events".equals(detailTab)){
             JSONArray events=data.optJSONArray("events");
             if(events!=null&&events.length()>0){
                 section("MATÇ HADİSƏLƏRİ");
@@ -1026,9 +1165,8 @@ public final class MainActivity extends Activity {
                     card(line);
                 }
             }else info("Mənbədə təsdiqlənmiş hadisə siyahısı yoxdur.",false);
-            String note=data.optString("message","");
-            if(!note.isEmpty()&&data.optBoolean("available"))info(note,false);
-        });
+            return;
+        }
     }
     private double statNumber(String raw){
         if(raw==null)return -1;
@@ -1177,7 +1315,7 @@ public final class MainActivity extends Activity {
         info("Bu plan sənin öz taktiki layihəndir. Real matç heyəti və təsdiqlənmiş formasiya kimi təqdim edilmir.",false);
     }
     private void showSettings(){
-        section("MATCHLAB AZ Native 0.9.58");
+        section("MATCHLAB AZ Native 0.9.59");
         section("Görünüş, şəbəkə və yaddaş");
         Switch refreshToggle=new Switch(this);
         refreshToggle.setText("Matçları avtomatik yenilə");

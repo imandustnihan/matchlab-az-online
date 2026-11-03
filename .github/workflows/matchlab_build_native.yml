@@ -34,6 +34,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Include verified Reep CC0 offline registry inside native Windows EXE
+        run: python native/qa/export_offline_registry.py --output native/shared/registry_offline.tsv.gz
       - name: Generate branded Windows icon
         run: |
           python -m pip install pillow
@@ -53,16 +55,16 @@ jobs:
           if (-not (Test-Path $compiler)) { throw "Inno Setup compiler is missing" }
           & $compiler 'native/installer/MATCHLAB_AZ.iss'
           if ($LASTEXITCODE -ne 0) { throw "Inno Setup compiler failed with $LASTEXITCODE" }
-          if (-not (Test-Path 'native/windows-app/installer-out/MATCHLAB_AZ_Setup_0.9.58_x64.exe')) { throw "Installer missing" }
+          if (-not (Test-Path 'native/windows-app/installer-out/MATCHLAB_AZ_Setup_0.9.59_x64.exe')) { throw "Installer missing" }
       - uses: actions/upload-artifact@v4
         with:
-          name: MATCHLAB_AZ_Setup_v0958
-          path: native/windows-app/installer-out/MATCHLAB_AZ_Setup_0.9.58_x64.exe
+          name: MATCHLAB_AZ_Setup_v0959
+          path: native/windows-app/installer-out/MATCHLAB_AZ_Setup_0.9.59_x64.exe
           if-no-files-found: error
           retention-days: 30
       - uses: actions/upload-artifact@v4
         with:
-          name: MATCHLAB_AZ_Windows_x64_v0958
+          name: MATCHLAB_AZ_Windows_x64_v0959
           path: native/windows-app/out/MATCHLAB_AZ.exe
           if-no-files-found: error
           retention-days: 30
@@ -81,6 +83,8 @@ jobs:
           python -m unittest discover -s tests -p test_live_center_cache.py -v
           python -m unittest discover -s tests -p test_history_archive.py -v
           python -m unittest discover -s tests -p test_profile_auto_updates.py -v
+      - name: Include verified Reep CC0 offline registry inside Android APK
+        run: python native/qa/export_offline_registry.py --output native/android/app/src/main/assets/registry_offline.tsv.gz
       - name: Generate Android launcher icons
         run: |
           python -m pip install pillow
@@ -103,12 +107,16 @@ jobs:
           mkdir -p /tmp/matchlab-history-qa
           javac -d /tmp/matchlab-history-qa native/android/app/src/main/java/az/matchlab/mobile/HistoryTeamForm.java native/qa/HistoryTeamFormSmoke.java
           java -cp /tmp/matchlab-history-qa HistoryTeamFormSmoke
+      - name: Verify offline registry search with plain JDK
+        run: |
+          javac -d /tmp/matchlab-history-qa native/android/app/src/main/java/az/matchlab/mobile/OfflineIdentityIndex.java native/qa/OfflineIdentitySmoke.java
+          java -cp /tmp/matchlab-history-qa OfflineIdentitySmoke
       - name: Compile native Android UI
         working-directory: native/android
         run: gradle --no-daemon --stacktrace :app:assembleDebug
       - uses: actions/upload-artifact@v4
         with:
-          name: MATCHLAB_AZ_Android_v0958
+          name: MATCHLAB_AZ_Android_v0959
           path: native/android/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 30
@@ -125,26 +133,26 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          name: MATCHLAB_AZ_Setup_v0958
+          name: MATCHLAB_AZ_Setup_v0959
           path: dist/setup
       - uses: actions/download-artifact@v4
         with:
-          name: MATCHLAB_AZ_Windows_x64_v0958
+          name: MATCHLAB_AZ_Windows_x64_v0959
           path: dist/portable
       - uses: actions/download-artifact@v4
         with:
-          name: MATCHLAB_AZ_Android_v0958
+          name: MATCHLAB_AZ_Android_v0959
           path: dist/android
       - name: Prepare clearly named public downloads and checksums
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p public
-          cp dist/setup/MATCHLAB_AZ_Setup_0.9.58_x64.exe public/MATCHLAB_AZ_Setup_0.9.58_x64.exe
-          cp dist/portable/MATCHLAB_AZ.exe public/MATCHLAB_AZ_Portable_0.9.58_x64.exe
+          cp dist/setup/MATCHLAB_AZ_Setup_0.9.59_x64.exe public/MATCHLAB_AZ_Setup_0.9.59_x64.exe
+          cp dist/portable/MATCHLAB_AZ.exe public/MATCHLAB_AZ_Portable_0.9.59_x64.exe
           APK="$(find dist/android -type f -name '*.apk' | head -n 1)"
           test -n "$APK"
-          cp "$APK" public/MATCHLAB_AZ_Android_0.9.58.apk
+          cp "$APK" public/MATCHLAB_AZ_Android_0.9.59.apk
           (cd public && sha256sum *.exe *.apk > SHA256SUMS.txt)
           ls -lh public
       - name: Create or update GitHub Release with direct public assets
@@ -153,13 +161,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          TAG="v0.9.58"
+          TAG="v0.9.59"
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" public/* --clobber
           else
             gh release create "$TAG" public/* \
-              --title "MATCHLAB AZ v0.9.58 — Windows & Android" \
-              --notes-file native/RELEASE_NOTES_v0958.md \
+              --title "MATCHLAB AZ v0.9.59 — Windows & Android" \
+              --notes-file native/RELEASE_NOTES_v0959.md \
               --latest
           fi
           gh release view "$TAG" --json url,assets --jq '{url: .url, files: [.assets[].name]}'
