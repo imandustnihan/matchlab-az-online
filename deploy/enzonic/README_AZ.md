@@ -11,7 +11,14 @@ Bu paket mövcud MATCHLAB AZ serverinin **Python + SQLite** arxitekturasını d�
 3. Planın **512 MB RAM, 50% CPU, 10 GB SSD, Always On** yazıldığını yoxla. Pulsuz yer region və mövcudluqla məhdudlaşa bilər. Bu, xidmətin öz iddiasıdır, zəmanətli SLA deyil.
 4. Yaxın region varsa Frankfurt, Spain və ya Europe-dan uyğununu seç.
 5. Repository: `https://github.com/imandustnihan/matchlab-az-online`, branch: `main`.
-6. Startup command: `sh deploy/enzonic/start.sh`. Bəzi panellər `python3` əvəzinə `python` tələb edir. Python 3.10+ istifadə et.
+6. Enzonic panelində **Adım 4/5 — Başlatmayı ince ayarlayın**:
+   - Çalışma zamanı: **Python 3.13** (əgər mövcuddursa; 3.14 məcburi deyil).
+   - Main File: `main.py` (SQLite yoxlanışından sonra HTTP API-ni başladır).
+   - User Uploaded Files: Git üzərindən quraşdırılacaqsa OFF seçilə bilər; panelin Git clone işləməsini doğrula.
+   - Git Repository Address: `https://github.com/imandustnihan/matchlab-az-online.git`
+   - Git Branch: `main`
+   - Additional Packages: boş saxla; hazırkı Python API standart kitabxanadan istifadə edir.
+   - Terminaldan alternativ startup command: `sh deploy/enzonic/start.sh`.
 7. `PORT` dəyişənini panelin verdiyi HTTP portuna təyin et. Proqram bu portda `0.0.0.0`-da dinləyir; Render-də port avtomatik təyin olunur. Əlavə `MATCHLAB_BIND_HOST` dəyişənini paneldə `127.0.0.1` etmə.
 8. Açıq **HTTPS** URL tələb olunur. Panel yalnız `IP:port` verirsə, Windows EXE-yə HTTP ünvanı yazma: reverse proxy, domen və TLS lazımdır. HTTPS olmadan son istifadəçi buraxılışına keçmə.
 

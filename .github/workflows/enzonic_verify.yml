@@ -5,12 +5,14 @@ on:
     paths:
       - 'deploy/enzonic/**'
       - 'hosting_server.py'
+      - 'main.py'
       - '.github/workflows/enzonic_verify.yml'
   push:
-    branches: [main, 'infra/**']
+    branches: [main, 'infra/**', 'fix/**']
     paths:
       - 'deploy/enzonic/**'
       - 'hosting_server.py'
+      - 'main.py'
       - '.github/workflows/enzonic_verify.yml'
   workflow_dispatch:
 
@@ -29,7 +31,7 @@ jobs:
       - name: Syntax and deployment checks
         run: |
           set -eu
-          python -m py_compile hosting_server.py server.py prepare_database.py world_db.py
+          python -m py_compile main.py hosting_server.py server.py prepare_database.py world_db.py
           sh -n deploy/enzonic/start.sh
           python -m unittest discover -s tests -p 'test_live_center_cache.py' -v
           grep -Fq 'exec python3 hosting_server.py' deploy/enzonic/start.sh
