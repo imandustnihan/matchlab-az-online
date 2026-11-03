@@ -924,8 +924,8 @@ public sealed class MatchlabForm : Form
             var lineup=Prop(data,"lineup");
             if(lineup.ValueKind==JsonValueKind.Object){
                 Heading("Təsdiqlənmiş heyətlər");
-                ShowLineup(lineup,"home",Team(m,"home"));
-                ShowLineup(lineup,"away",Team(m,"away"));
+                ShowLineup(lineup,"home",Team(openedMatch,"home"));
+                ShowLineup(lineup,"away",Team(openedMatch,"away"));
             }
 
             if(lineup.ValueKind!=JsonValueKind.Object)
