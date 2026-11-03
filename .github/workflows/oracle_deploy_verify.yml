@@ -1,0 +1,55 @@
+name: MATCHLAB AZ - Oracle deployment verification
+
+on:
+  pull_request:
+    paths:
+      - 'deploy/oracle/**'
+      - 'hosting_server.py'
+      - '.github/workflows/oracle_deploy_verify.yml'
+  push:
+    branches: [main, 'infra/**']
+    paths:
+      - 'deploy/oracle/**'
+      - 'hosting_server.py'
+      - '.github/workflows/oracle_deploy_verify.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Check syntax, safe reverse proxy and regression tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate Python modules and cache regression
+        run: |
+          python -m py_compile hosting_server.py server.py prepare_database.py world_db.py live_center.py
+          python -m unittest discover -s tests -p 'test_live_center_cache.py' -v
+      - name: Validate deployment shell scripts and systemd configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n deploy/oracle/setup.sh
+          bash -n deploy/oracle/update.sh
+          grep -Fq 'MATCHLAB_BIND_HOST=127.0.0.1' deploy/oracle/matchlab.service
+          grep -Fq 'ReadWritePaths=/opt/matchlab-az/score_cache' deploy/oracle/matchlab.service
+          grep -Fq 'reverse_proxy 127.0.0.1:10000' deploy/oracle/Caddyfile.example
+          grep -Fq 'respond @internal 404' deploy/oracle/Caddyfile.example
+      - name: Validate source database checksum manifests
+        run: |
+          python - <<'PY'
+          import json, pathlib, hashlib
+          m=json.loads(pathlib.Path('data_manifest.json').read_text())
+          assert m['total']==506207 and len(m['parts'])==16
+          for part in m['parts']:
+              data=pathlib.Path(part['name']).read_bytes()
+              assert len(data)==part['bytes']
+              assert hashlib.sha256(data).hexdigest()==part['sha256'],part['name']
+          print('Database fragments match verified manifest')
+          PY
