@@ -26,6 +26,7 @@ public sealed class PitchPanel : Panel
     private bool arrowMode;
     private bool gridVisible;
     private bool changed;
+    private SavedPlan? undoSnapshot;
     private readonly Stopwatch playback = new();
     private readonly System.Windows.Forms.Timer playbackTimer = new() { Interval = 25 };
     private bool playing;
@@ -140,12 +141,35 @@ public sealed class PitchPanel : Panel
         }
         catch (IOException e) { MessageBox.Show("Taktika saxlanmadı: " + e.Message, "MATCHLAB AZ"); }
     }
-    public void ResetPlan() { StopPlayback(); Defaults(); SavePlan(); Invalidate(); }
-    public void ClearArrows() { StopPlayback(); arrows.Clear(); arrowStart = null; SavePlan(); Invalidate(); }
+    private SavedPlan Snapshot()=>new()
+    {
+        Positions=positions.Select(x=>x.ToArray()).ToArray(),
+        Names=playerNames.ToArray(),Numbers=numbers.ToArray(),
+        Arrows=arrows.Select(x=>x.ToArray()).ToList()
+    };
+    private void Remember()=>undoSnapshot=Snapshot();
+    public void UndoLast(){
+        if(undoSnapshot==null)return;
+        StopPlayback();
+        var last=Snapshot();
+        var snapshot=undoSnapshot;
+        positions=snapshot.Positions.Select(x=>x.ToArray()).ToArray();
+        playerNames=snapshot.Names.ToArray();numbers=snapshot.Numbers.ToArray();
+        arrows=snapshot.Arrows.Select(x=>x.ToArray()).ToList();
+        undoSnapshot=last;SavePlan();Invalidate();
+    }
+    public void MirrorPlan(){
+        StopPlayback();Remember();
+        for(int i=0;i<SquadSize;i++)positions[i][0]=Clamp(1-positions[i][0]);
+        foreach(var arrow in arrows){arrow[0]=Clamp(1-arrow[0]);arrow[2]=Clamp(1-arrow[2]);}
+        SavePlan();Invalidate();
+    }
+    public void ResetPlan() { StopPlayback();Remember();Defaults();SavePlan();Invalidate(); }
+    public void ClearArrows() { StopPlayback(); Remember(); arrows.Clear(); arrowStart = null; SavePlan(); Invalidate(); }
     public void ReplacePlayer(int index, string newName)
     {
         if (index < 0 || index >= SquadSize || string.IsNullOrWhiteSpace(newName)) return;
-        playerNames[index] = newName.Trim().Length > 30 ? newName.Trim()[..30] : newName.Trim();
+        Remember();playerNames[index] = newName.Trim().Length > 30 ? newName.Trim()[..30] : newName.Trim();
         SavePlan(); Invalidate();
     }
     public string ExportText()
@@ -180,7 +204,7 @@ public sealed class PitchPanel : Panel
             if (arrowStart == null) arrowStart = p;
             else
             {
-                arrows.Add(new[] { arrowStart.Value.X, arrowStart.Value.Y, p.X, p.Y });
+                Remember();arrows.Add(new[] { arrowStart.Value.X, arrowStart.Value.Y, p.X, p.Y });
                 arrowStart = null; SavePlan();
             }
             Invalidate(); return;
@@ -193,6 +217,7 @@ public sealed class PitchPanel : Panel
             { dragging = i; break; }
         }
         changed = false;
+        if(dragging>=0)Remember();
     }
     protected override void OnMouseMove(MouseEventArgs e)
     {
@@ -224,7 +249,7 @@ public sealed class PitchPanel : Panel
             dialog.AcceptButton = ok;
             if (dialog.ShowDialog(FindForm()) == DialogResult.OK)
             {
-                playerNames[player] = name.Text.Trim().Length > 30 ? name.Text.Trim()[..30] : name.Text.Trim();
+                Remember();playerNames[player] = name.Text.Trim().Length > 30 ? name.Text.Trim()[..30] : name.Text.Trim();
                 numbers[player] = string.IsNullOrWhiteSpace(number.Text) ? (player + 1).ToString() : number.Text.Trim()[..Math.Min(3, number.Text.Trim().Length)];
                 SavePlan(); Invalidate();
             }

@@ -51,6 +51,7 @@ public final class MainActivity extends Activity {
     private final Map<String,String> scoreBaseline=new HashMap<>();
     private boolean hasScoreBaseline=false;
     private String historyLeague="eng.1",historySeason="2025-26",historyTeam="";
+    private final Map<String,JSONObject> historyBundles=new HashMap<>();
     private int historyOffset=0;
     private int searchOffset=0;
     private JSONArray searchRows=new JSONArray();
@@ -61,11 +62,29 @@ public final class MainActivity extends Activity {
     private Runnable searchPending;
     private String matchLeague="all",tableLeague="eng.1";
     private JSONObject currentMatch=null;
+    private PitchView pendingExportPitch;
+    private static final int EXPORT_TACTIC_PNG=957;
+    @Override protected void onActivityResult(int requestCode,int resultCode,Intent data){
+        super.onActivityResult(requestCode,resultCode,data);
+        if(requestCode!=EXPORT_TACTIC_PNG)return;
+        if(resultCode!=RESULT_OK||data==null||data.getData()==null||pendingExportPitch==null){
+            pendingExportPitch=null;return;
+        }
+        try(java.io.OutputStream stream=getContentResolver().openOutputStream(data.getData())){
+            if(stream==null)throw new IOException("Export stream could not be opened");
+            android.graphics.Bitmap bitmap=pendingExportPitch.exportBitmap();
+            boolean saved=bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG,100,stream);
+            bitmap.recycle();
+            if(!saved)throw new IOException("PNG encoding failed");
+            Toast.makeText(this,"Taktika PNG saxlandı",Toast.LENGTH_LONG).show();
+        }catch(Exception ex){Toast.makeText(this,"PNG saxlanmadı: "+ex.getMessage(),Toast.LENGTH_LONG).show();}
+        finally{pendingExportPitch=null;}
+    }
     private SharedPreferences prefs;
     private final Runnable refresh=new Runnable(){
         @Override public void run(){
-            if("matches".equals(screen)) loadMatches(false);
-            ui.postDelayed(this,30000);
+            if("matches".equals(screen)&&prefs.getBoolean("auto_refresh",true))loadMatches(false);
+            ui.postDelayed(this,prefs.getInt("refresh_interval",30)*1000L);
         }
     };
 
@@ -81,7 +100,7 @@ public final class MainActivity extends Activity {
         if(formation<0||formation>=formations.length)formation=0;
         showShell();
         navigate("matches");
-        ui.postDelayed(refresh,30000);
+        ui.postDelayed(refresh,prefs.getInt("refresh_interval",30)*1000L);
     }
     private int dp(float n){return Math.round(n*getResources().getDisplayMetrics().density);}
     private GradientDrawable shape(int bg,int radius){
@@ -388,7 +407,7 @@ public final class MainActivity extends Activity {
                 HttpURLConnection conn=(HttpURLConnection)url.openConnection();
                 conn.setConnectTimeout(6500);conn.setReadTimeout(14500);
                 conn.setRequestProperty("Accept","application/json");
-                conn.setRequestProperty("User-Agent","MATCHLABAZ-Native/0.9.55");
+                conn.setRequestProperty("User-Agent","MATCHLABAZ-Native/0.9.56");
                 int code=conn.getResponseCode();
                 if(code<200||code>=300)throw new IOException("HTTP "+code);
                 try(InputStream input=conn.getInputStream();ByteArrayOutputStream out=new ByteArrayOutputStream()){
@@ -541,7 +560,7 @@ public final class MainActivity extends Activity {
     }
     private void matchRow(JSONObject m,boolean saved){
         LinearLayout wrapper=column();
-        wrapper.setBackground(shape(CARD,12));
+        wrapper.setBackground(shape(CARD,prefs.getBoolean("compact_cards",false)?8:12));
         wrapper.setPadding(dp(9),dp(7),dp(9),dp(7));
         String state=m.optString("state");
         boolean live=!saved&&!m.optBoolean("stale")&&"live".equals(state);
@@ -1105,6 +1124,27 @@ public final class MainActivity extends Activity {
         Button arrows=button("➜ Oxlar");arrows.setOnClickListener(v->pitch.toggleArrows());tools.addView(arrows,new LinearLayout.LayoutParams(0,dp(44),1));
         Button clear=button("✕ Oxları sil");clear.setOnClickListener(v->pitch.clearArrows());tools.addView(clear,new LinearLayout.LayoutParams(0,dp(44),1));
         page.addView(tools);
+        LinearLayout advanced=row();
+        Button undo=button("↶ Geri al");
+        undo.setOnClickListener(v->pitch.undo());advanced.addView(undo,new LinearLayout.LayoutParams(0,dp(44),1));
+        Button mirror=button("⇆ Güzgü");
+        mirror.setOnClickListener(v->pitch.mirror());advanced.addView(mirror,new LinearLayout.LayoutParams(0,dp(44),1));
+        card(advanced);
+        LinearLayout exports=row();
+        Button animate=button("▶ Hərəkət animasiyası");
+        animate.setOnClickListener(v->pitch.togglePlayback());
+        exports.addView(animate,new LinearLayout.LayoutParams(0,dp(46),1));
+        Button png=button("▣ PNG saxla");
+        png.setOnClickListener(v->{
+            pendingExportPitch=pitch;
+            Intent create=new Intent(Intent.ACTION_CREATE_DOCUMENT);
+            create.addCategory(Intent.CATEGORY_OPENABLE);
+            create.setType("image/png");
+            create.putExtra(Intent.EXTRA_TITLE,"MATCHLAB_AZ_Taktika_"+formations[formation].replace("-","_")+".png");
+            startActivityForResult(create,EXPORT_TACTIC_PNG);
+        });
+        exports.addView(png,new LinearLayout.LayoutParams(0,dp(46),1));
+        card(exports);
         gap(page,9);
         section("Ehtiyat oyunçular və əvəzetmələr");
         for(int i=1;i<=7;i++){
@@ -1137,8 +1177,36 @@ public final class MainActivity extends Activity {
         info("Bu plan sənin öz taktiki layihəndir. Real matç heyəti və təsdiqlənmiş formasiya kimi təqdim edilmir.",false);
     }
     private void showSettings(){
-        section("MATCHLAB AZ Native 0.9.55");
-        section("Bildiriş və səs idarəetməsi");
+        section("MATCHLAB AZ Native 0.9.56");
+        section("Görünüş, şəbəkə və yaddaş");
+        Switch refreshToggle=new Switch(this);
+        refreshToggle.setText("Matçları avtomatik yenilə");
+        refreshToggle.setTextColor(INK);
+        refreshToggle.setChecked(prefs.getBoolean("auto_refresh",true));
+        refreshToggle.setOnCheckedChangeListener((v,on)->prefs.edit().putBoolean("auto_refresh",on).apply());
+        card(refreshToggle);
+        LinearLayout refreshRow=row();
+        refreshRow.addView(text("Yenilənmə intervalı",12,INK,true),new LinearLayout.LayoutParams(0,dp(43),1));
+        String[] intervals={"15 saniyə","30 saniyə","45 saniyə","60 saniyə"};
+        final int[] values={15,30,45,60};
+        int index=1;for(int i=0;i<values.length;i++)if(values[i]==prefs.getInt("refresh_interval",30))index=i;
+        refreshRow.addView(spinner(intervals,index,n->prefs.edit().putInt("refresh_interval",values[n]).apply()));
+        card(refreshRow);
+        Switch compact=new Switch(this);compact.setText("Yığcam matç kartları");
+        compact.setTextColor(INK);compact.setChecked(prefs.getBoolean("compact_cards",false));
+        compact.setOnCheckedChangeListener((v,on)->prefs.edit().putBoolean("compact_cards",on).apply());
+        card(compact);
+        Button clearHistory=button("Arxiv ve matç keşi təmizlə");
+        clearHistory.setOnClickListener(v->new AlertDialog.Builder(this).setTitle("Yerli keş silinsin?")
+            .setMessage("Tarix arxivi və matç keşi silinir. Sevimlilər, taktika və tənzimləmələr qalır.")
+            .setNegativeButton("Ləğv et",null).setPositiveButton("Sil",(d,w)->{
+                SharedPreferences.Editor editor=prefs.edit();
+                for(String key:prefs.getAll().keySet())
+                    if(key.startsWith("history_bundle_")||key.startsWith("match_cache_"))editor.remove(key);
+                editor.apply();historyBundles.clear();
+                Toast.makeText(this,"Yerli keş təmizləndi",Toast.LENGTH_SHORT).show();
+            }).show());card(clearHistory);
+                section("Bildiriş və səs idarəetməsi");
         section("Səs səviyyəsi");
         SeekBar volume=new SeekBar(this);
         volume.setMax(100);volume.setProgress(prefs.getInt("sound_volume",90));
@@ -1196,50 +1264,90 @@ public final class MainActivity extends Activity {
         });card(statusButton);
     }
 
+    private String historyKey(){return "history_bundle_"+historyLeague+"_"+historySeason;}
+    private JSONObject cachedHistory(){
+        String key=historyKey();
+        if(historyBundles.containsKey(key))return historyBundles.get(key);
+        try{
+            String saved=prefs.getString(key,"");
+            if(!saved.isEmpty()){
+                JSONObject result=new JSONObject(saved);
+                if(result.optBoolean("available")&&result.optBoolean("bundle")){
+                    historyBundles.put(key,result);return result;
+                }
+            }
+        }catch(Exception ignored){}
+        return null;
+    }
     private void showHistory(){
         page.removeAllViews();
         section("FOOTBALL HERITAGE  ·  CC0 ARXİV");
-        info("Arxiv matçları canlı DEYİL. Hesab və tarix yalnız mənbədə mövcuddursa göstərilir.",false);
+        info("Arxiv canlı DEYİL. İlk dəfə mövsüm yüklənir, sonra komanda axtarışı internet sorğusu etmədən işləyir.",false);
         final String[] ids={"eng.1","esp.1","ger.1","ita.1","fra.1","tur.1","por.1","ned.1","sco.1","eng.2","bel.1"};
         final String[] names={"Premier League","La Liga","Bundesliga","Serie A","Ligue 1","Süper Lig","Primeira Liga","Eredivisie","Scottish Premiership","Championship","Belgian Pro League"};
         LinearLayout tools=column();
-        Spinner leaguesPicker=spinner(names,Math.max(0,Arrays.asList(ids).indexOf(historyLeague)),n->historyLeague=ids[n]);
+        Spinner leaguesPicker=spinner(names,Math.max(0,Arrays.asList(ids).indexOf(historyLeague)),n->{historyLeague=ids[n];historyOffset=0;showHistory();});
         tools.addView(leaguesPicker);
         String[] seasons=new String[17];
         for(int i=0;i<seasons.length;i++){int y=2026-i;seasons[i]=y+"-"+String.format(Locale.US,"%02d",(y+1)%100);}
-        Spinner seasonPicker=spinner(seasons,Math.max(0,Arrays.asList(seasons).indexOf(historySeason)),n->historySeason=seasons[n]);
+        Spinner seasonPicker=spinner(seasons,Math.max(0,Arrays.asList(seasons).indexOf(historySeason)),n->{historySeason=seasons[n];historyOffset=0;showHistory();});
         tools.addView(seasonPicker);
-        EditText club=new EditText(this);club.setSingleLine(true);club.setHint("Komanda adına görə filtr");
+        EditText club=new EditText(this);club.setSingleLine(true);club.setHint("Komanda adına görə axtar");
         club.setText(historyTeam);club.setTextColor(INK);club.setHintTextColor(MUTED);
         tools.addView(club);
-        Button load=button("⌕  Tarixi matçları axtar");
+        Button load=button("⌕  Komandanı tap");
         load.setOnClickListener(v->{historyTeam=club.getText().toString().trim();historyOffset=0;showHistory();});
         tools.addView(load);card(tools);
         int token=generation;
-        fetch("/api/history?league="+encode(historyLeague)+"&season="+encode(historySeason)+"&offset="+historyOffset+"&limit=60&team="+encode(historyTeam),(json,error)->{
-            if(token!=generation||!"history".equals(screen))return;
-            if(error!=null||json==null){info(networkMessage(error),true);return;}
-            if(!json.optBoolean("available")){info(json.optString("message","Tarixi arxiv mövcud deyil."),true);return;}
-            section(json.optString("leagueName",historyLeague)+"  ·  "+historySeason+"  ·  "+json.optInt("count")+" matç");
-            JSONArray rows=json.optJSONArray("items");
-            if(rows==null||rows.length()==0){info("Bu filtrə uyğun matç yoxdur.",false);return;}
-            for(int i=0;i<rows.length();i++){
-                JSONObject game=rows.optJSONObject(i);if(game==null)continue;
-                LinearLayout item=column();item.setPadding(dp(12),dp(12),dp(12),dp(12));item.setBackground(shape(CARD,12));
-                item.addView(text(game.optString("round")+"   ·   "+game.optString("date")+"  "+game.optString("time"),10,MUTED,false));
-                String score=game.optBoolean("resultRecorded")?game.optString("homeScore")+" : "+game.optString("awayScore"):"— : —";
-                item.addView(text(game.optString("home")+"  "+score+"  "+game.optString("away"),13,INK,true));
-                LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.bottomMargin=dp(7);page.addView(item,lp);
+        String key=historyKey();
+        JSONObject old=cachedHistory();
+        if(old!=null)renderHistoricalRows(old,true);
+        boolean recent=old!=null&&System.currentTimeMillis()-prefs.getLong(key+"_checked",0)<86400000L;
+        if(recent)return;
+        if(old==null)info("Mövsüm arxivi mənbədən alınır…",false);
+        fetch("/api/history-bundle?league="+encode(historyLeague)+"&season="+encode(historySeason),(json,error)->{
+            if(token!=generation||!"history".equals(screen)||!key.equals(historyKey()))return;
+            if(error!=null||json==null||!json.optBoolean("available")){
+                if(old==null)info(error!=null?networkMessage(error):json==null?"Arxiv alınmadı":json.optString("message"),true);
+                return;
             }
-            if(!json.isNull("nextOffset")){
-                int next=json.optInt("nextOffset",-1);
-                if(next>historyOffset){
-                    Button more=button("Daha 60 matç");
-                    more.setOnClickListener(v->{historyOffset=next;showHistory();});card(more);
-                }
+            if(json.optBoolean("complete")&&json.toString().length()<1_500_000){
+                historyBundles.put(key,json);
+                prefs.edit().putString(key,json.toString()).putLong(key+"_checked",System.currentTimeMillis()).apply();
             }
-            info("OpenFootball football.json (CC0). Tarixi matçlar, canlı nəticə deyil.",false);
+            // Keep the current search field intact when stale results were already displayed.
+            if(old==null)renderHistoricalRows(json,false);
         });
+    }
+    private void renderHistoricalRows(JSONObject json,boolean cached){
+        section(json.optString("leagueName",historyLeague)+" · "+historySeason+(cached?" · YERLİ KEŞ":" · CC0"));
+        JSONArray rows=json.optJSONArray("items");
+        if(rows==null){info("Tarixi məlumat yoxdur.",false);return;}
+        ArrayList<JSONObject> filtered=new ArrayList<>();
+        String term=historyTeam.toLowerCase(Locale.ROOT).trim();
+        for(int i=0;i<rows.length();i++){
+            JSONObject game=rows.optJSONObject(i);
+            if(game==null)continue;
+            if(!term.isEmpty()&&!game.optString("home").toLowerCase(Locale.ROOT).contains(term)
+                &&!game.optString("away").toLowerCase(Locale.ROOT).contains(term))continue;
+            filtered.add(game);
+        }
+        info(filtered.size()+" uyğun oyun · tarixi, canlı deyil",false);
+        int end=Math.min(historyOffset+60,filtered.size());
+        for(int i=historyOffset;i<end;i++){
+            JSONObject game=filtered.get(i);
+            LinearLayout item=column();item.setPadding(dp(12),dp(12),dp(12),dp(12));
+            item.setBackground(shape(CARD,12));
+            item.addView(text(game.optString("round")+" · "+game.optString("date")+"  "+game.optString("time"),10,MUTED,false));
+            String score=game.optBoolean("resultRecorded")?game.optString("homeScore")+" : "+game.optString("awayScore"):"— : —";
+            item.addView(text(game.optString("home")+"   "+score+"   "+game.optString("away"),13,INK,true));
+            LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.bottomMargin=dp(7);page.addView(item,p);
+        }
+        if(end<filtered.size()){
+            Button more=button("Daha 60 oyun");
+            more.setOnClickListener(v->{historyOffset=end;showHistory();});card(more);
+        }
+        info("Mənbə: OpenFootball CC0. Arxiv yerli yaddaşa köçürülür; gündə bir dəfə yenilənir.",false);
     }
     private void showMenu(View anchor){
         PopupMenu popup=new PopupMenu(this,anchor);

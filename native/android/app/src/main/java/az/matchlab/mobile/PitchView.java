@@ -4,6 +4,7 @@ import android.app.AlertDialog;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.Canvas;
+import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Path;
@@ -28,9 +29,54 @@ public final class PitchView extends View {
     private boolean showGrid=false,showLines=true;
     private final java.util.ArrayList<float[]> arrows=new java.util.ArrayList<>();
     private boolean arrowMode=false;
+    private boolean playing=false;
+    private long playbackStart=0;
+    public void togglePlayback(){
+        if(playing){playing=false;invalidate();return;}
+        if(arrows.isEmpty()){Toast.makeText(getContext(),"Əvvəlcə hərəkət oxu çək",Toast.LENGTH_SHORT).show();return;}
+        playing=true;playbackStart=android.os.SystemClock.uptimeMillis();invalidate();
+    }
+    public Bitmap exportBitmap(){
+        int width=1080,height=1350;
+        Bitmap bitmap=Bitmap.createBitmap(width,height,Bitmap.Config.ARGB_8888);
+        Canvas exportCanvas=new Canvas(bitmap);
+        exportCanvas.scale((float)width/Math.max(1,getWidth()),(float)height/Math.max(1,getHeight()));
+        boolean wasPlaying=playing;playing=false;
+        draw(exportCanvas);
+        playing=wasPlaying;
+        return bitmap;
+    }
+    @Override protected void onDetachedFromWindow(){playing=false;super.onDetachedFromWindow();}
+
     private float arrowStartX=-1,arrowStartY=-1;
     private float downX,downY;
     private boolean changed=false;
+    private float[] undoX,undoY;
+    private String[] undoNames,undoNumbers;
+    private java.util.ArrayList<float[]> undoArrows;
+    private void remember(){
+        undoX=x.clone();undoY=y.clone();undoNames=names.clone();undoNumbers=numbers.clone();
+        undoArrows=new java.util.ArrayList<>();
+        for(float[] a:arrows)undoArrows.add(a.clone());
+    }
+    public void undo(){
+        if(undoX==null)return;
+        float[] nx=x.clone(),ny=y.clone();
+        String[] nn=names.clone(),nums=numbers.clone();
+        java.util.ArrayList<float[]> next=new java.util.ArrayList<>();
+        for(float[] a:arrows)next.add(a.clone());
+        System.arraycopy(undoX,0,x,0,11);System.arraycopy(undoY,0,y,0,11);
+        System.arraycopy(undoNames,0,names,0,11);System.arraycopy(undoNumbers,0,numbers,0,11);
+        arrows.clear();for(float[] a:undoArrows)arrows.add(a.clone());
+        undoX=nx;undoY=ny;undoNames=nn;undoNumbers=nums;undoArrows=next;
+        save();saveArrows();invalidate();
+    }
+    public void mirror(){
+        remember();
+        for(int i=0;i<11;i++)x[i]=clamp(1-x[i],.09f,.91f);
+        for(float[] a:arrows){a[0]=1-a[0];a[2]=1-a[2];}
+        save();saveArrows();invalidate();
+    }
     private long pressedAt;
     private int dp(float n){return Math.round(n*getResources().getDisplayMetrics().density);}
     public PitchView(Context context,String formation){
@@ -81,9 +127,10 @@ public final class PitchView extends View {
     public void toggleGrid(){showGrid=!showGrid;invalidate();}
     public void toggleLines(){showLines=!showLines;invalidate();}
     public void toggleArrows(){arrowMode=!arrowMode;Toast.makeText(getContext(),arrowMode?"Ox aləti aktivdir: iki nöqtəyə toxun":"Ox aləti söndürüldü",Toast.LENGTH_SHORT).show();}
-    public void clearArrows(){arrows.clear();prefs.edit().remove(formation+"_arrows").apply();invalidate();}
+    public void clearArrows(){playing=false;remember();arrows.clear();prefs.edit().remove(formation+"_arrows").apply();invalidate();}
     private void saveArrows(){StringBuilder s=new StringBuilder();for(float[] a:arrows){if(s.length()>0)s.append(";");s.append(a[0]).append(",").append(a[1]).append(",").append(a[2]).append(",").append(a[3]);}prefs.edit().putString(formation+"_arrows",s.toString()).apply();}
     public void reset(){
+        playing=false;remember();
         SharedPreferences.Editor edit=prefs.edit();
         for(int i=0;i<11;i++){
             String k=formation+"_"+i;
@@ -149,6 +196,19 @@ public final class PitchView extends View {
         if(showGrid){stroke(Color.argb(65,255,255,255),dp(1));for(int i=1;i<6;i++){float xx=inner.left+inner.width()*i/6f;c.drawLine(xx,inner.top,xx,inner.bottom,p);}for(int i=1;i<10;i++){float yy=inner.top+inner.height()*i/10f;c.drawLine(inner.left,yy,inner.right,yy,p);}}
         if(showLines){stroke(Color.argb(110,190,255,190),dp(1.5f));for(int i=1;i<11;i++){if(Math.abs(y[i]-y[i-1])<.12f)c.drawLine(inner.left+x[i-1]*inner.width(),inner.top+y[i-1]*inner.height(),inner.left+x[i]*inner.width(),inner.top+y[i]*inner.height(),p);}}
         for(float[] a:arrows){float sx=inner.left+a[0]*inner.width(),sy=inner.top+a[1]*inner.height(),ex=inner.left+a[2]*inner.width(),ey=inner.top+a[3]*inner.height();stroke(Color.rgb(255,210,95),dp(3));c.drawLine(sx,sy,ex,ey,p);double angle=Math.atan2(ey-sy,ex-sx);float len=dp(14);c.drawLine(ex,ey,(float)(ex-len*Math.cos(angle-.55)),(float)(ey-len*Math.sin(angle-.55)),p);c.drawLine(ex,ey,(float)(ex-len*Math.cos(angle+.55)),(float)(ey-len*Math.sin(angle+.55)),p);}
+        if(playing&&!arrows.isEmpty()){
+            long elapsed=android.os.SystemClock.uptimeMillis()-playbackStart;
+            float frame=(elapsed/1200f)%arrows.size();
+            int segment=Math.min(arrows.size()-1,(int)frame);
+            float fraction=frame-segment;
+            float[] a=arrows.get(segment);
+            float xx=inner.left+(a[0]+(a[2]-a[0])*fraction)*inner.width();
+            float yy=inner.top+(a[1]+(a[3]-a[1])*fraction)*inner.height();
+            p.setStyle(Paint.Style.FILL);p.setColor(Color.argb(105,255,213,89));
+            c.drawCircle(xx,yy,dp(18),p);
+            p.setColor(Color.rgb(255,222,104));c.drawCircle(xx,yy,dp(8),p);
+            postInvalidateDelayed(33);
+        }
         for(int i=0;i<11;i++)drawPlayer(c,inner,i);
     }
     private int findPlayer(float px,float py){
@@ -176,7 +236,7 @@ public final class PitchView extends View {
         new AlertDialog.Builder(ctx).setTitle("Mövqe "+(index+1))
             .setView(layout).setNegativeButton("Ləğv et",null)
             .setPositiveButton("Saxla",(d,which)->{
-                names[index]=player.getText().toString().trim();
+                remember();names[index]=player.getText().toString().trim();
                 numbers[index]=no.getText().toString().trim();
                 if(numbers[index].isEmpty())numbers[index]=String.valueOf(index+1);
                 if(numbers[index].length()>3)numbers[index]=numbers[index].substring(0,3);
@@ -189,13 +249,14 @@ public final class PitchView extends View {
         if(action==MotionEvent.ACTION_DOWN&&arrowMode){
             RectF f=field();RectF inner=new RectF(f.left+dp(11),f.top+dp(11),f.right-dp(11),f.bottom-dp(11));
             float xx=clamp((event.getX()-inner.left)/inner.width(),0,1),yy=clamp((event.getY()-inner.top)/inner.height(),0,1);
-            if(arrowStartX<0){arrowStartX=xx;arrowStartY=yy;}else{arrows.add(new float[]{arrowStartX,arrowStartY,xx,yy});arrowStartX=-1;saveArrows();invalidate();}
+            if(arrowStartX<0){arrowStartX=xx;arrowStartY=yy;}else{remember();arrows.add(new float[]{arrowStartX,arrowStartY,xx,yy});arrowStartX=-1;saveArrows();invalidate();}
             return true;
         }
         if(arrowMode&&action==MotionEvent.ACTION_UP)return true;
         if(action==MotionEvent.ACTION_DOWN){
             dragging=findPlayer(event.getX(),event.getY());
             if(dragging<0)return false;
+            remember();
             downX=event.getX();downY=event.getY();changed=false;
             pressedAt=System.currentTimeMillis();
             getParent().requestDisallowInterceptTouchEvent(true);

@@ -447,6 +447,11 @@ def send_data(path,params):
            'startYear':historical_archive.START_YEAR,
            'endYear':historical_archive.END_YEAR,
            'source':'OpenFootball CC0','live':False}
+  if path=='/api/history-bundle':
+   return historical_archive.bundle(
+       params.get('league',['eng.1'])[0],
+       params.get('season',['2025-26'])[0],
+       get_json)
   if path=='/api/history':
    try:
     return historical_archive.view(
