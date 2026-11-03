@@ -112,6 +112,8 @@ public static class QaProgram
             RenderPage(form,"history");watch.Stop();
             Check(HasText(form,"Liverpool FC"),"Cached history matches chosen team");
             Check(!HasText(form,"Real Madrid"),"Cached history filters out other teams");
+            Check(HasText(form,"Qələbə: 1"),"Real historical team win summary appears");
+            Check(HasText(form,"Qollar: 4:2"),"Historical team goal difference is correctly oriented");
             Check(watch.ElapsedMilliseconds<3500,
                 "Cached history search renders without a server round trip");
             Shot(form,"02_history_filter.png");
@@ -119,6 +121,18 @@ public static class QaProgram
             RenderPage(form,"history");
             Check(HasText(form,"Real Madrid"),"Second local team search works");
             Shot(form,"03_history_search.png");
+            var historyForm=new HistoryTeamForm("Liverpool");
+            historyForm.Add("Liverpool FC","Chelsea",2,0,true,"2025-08-20");
+            historyForm.Add("Arsenal","Liverpool FC",1,1,true,"2025-08-21");
+            historyForm.Add("Liverpool FC","Everton",0,2,true,"2025-08-22");
+            historyForm.Add("Liverpool FC","Wolves",-1,-1,false,"2025-08-23");
+            historyForm.Add("Liverpool Reserves","Liverpool FC",2,1,true,"2025-08-24");
+            Check(historyForm.Played==3&&historyForm.Wins==1&&historyForm.Draws==1&&historyForm.Losses==1,
+                "History form excludes unrecorded and ambiguous games");
+            Check(historyForm.GoalsFor==3&&historyForm.GoalsAgainst==3,
+                "History form uses the selected team's home/away goals");
+            Check(historyForm.RecentForm=="M · H · Q",
+                "History form displays most recent results in descending date order");
 
             RenderPage(form,"tactics");
             var pitch=Walk(form).OfType<PitchPanel>().FirstOrDefault();
