@@ -7,10 +7,18 @@ on:
       - main
       - 'fix/**'
       - 'feat/**'
+      - 'upgrade/**'
     paths:
       - 'native/**'
+      - 'tests/**'
+      - 'live_center.py'
+      - 'server.py'
       - '.github/workflows/android_native_release.yml'
       - '.github/workflows/matchlab_build_native.yml'
+
+concurrency:
+  group: matchlab-native-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -39,7 +47,7 @@ jobs:
           dotnet publish native/windows-app/MATCHLABAZ.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o native/windows-app/out
       - uses: actions/upload-artifact@v4
         with:
-          name: MATCHLAB_AZ_Windows_x64_v0951
+          name: MATCHLAB_AZ_Windows_x64_v0952
           path: native/windows-app/out/MATCHLAB_AZ.exe
           if-no-files-found: error
           retention-days: 30
@@ -53,6 +61,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Test live scores cache and stale labeling
+        run: python -m unittest discover -s tests -p test_live_center_cache.py -v
       - name: Generate Android launcher icons
         run: |
           python -m pip install pillow
@@ -75,7 +85,7 @@ jobs:
         run: gradle --no-daemon --stacktrace :app:assembleDebug
       - uses: actions/upload-artifact@v4
         with:
-          name: MATCHLAB_AZ_Android_v0951
+          name: MATCHLAB_AZ_Android_v0952
           path: native/android/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 30
