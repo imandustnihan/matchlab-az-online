@@ -407,7 +407,7 @@ public final class MainActivity extends Activity {
                 HttpURLConnection conn=(HttpURLConnection)url.openConnection();
                 conn.setConnectTimeout(6500);conn.setReadTimeout(14500);
                 conn.setRequestProperty("Accept","application/json");
-                conn.setRequestProperty("User-Agent","MATCHLABAZ-Native/0.9.56");
+                conn.setRequestProperty("User-Agent","MATCHLABAZ-Native/0.9.57");
                 int code=conn.getResponseCode();
                 if(code<200||code>=300)throw new IOException("HTTP "+code);
                 try(InputStream input=conn.getInputStream();ByteArrayOutputStream out=new ByteArrayOutputStream()){
@@ -1177,7 +1177,7 @@ public final class MainActivity extends Activity {
         info("Bu plan sənin öz taktiki layihəndir. Real matç heyəti və təsdiqlənmiş formasiya kimi təqdim edilmir.",false);
     }
     private void showSettings(){
-        section("MATCHLAB AZ Native 0.9.56");
+        section("MATCHLAB AZ Native 0.9.57");
         section("Görünüş, şəbəkə və yaddaş");
         Switch refreshToggle=new Switch(this);
         refreshToggle.setText("Matçları avtomatik yenilə");
@@ -1257,9 +1257,14 @@ public final class MainActivity extends Activity {
         info("Canlı matçlar və profillər HTTPS JSON API-dən gəlir. Mənbələrdə boşluqlar ola bilər.",false);
         Button statusButton=button("Server vəziyyətini yoxla");
         statusButton.setOnClickListener(v->{
+            long started=android.os.SystemClock.elapsedRealtime();
             fetch("/api/status",(json,error)->{
-                if(error!=null){info(networkMessage(error),true);return;}
-                info("Versiya: "+json.optString("version")+" · Arxiv: "+(json.optJSONObject("world")!=null?json.optJSONObject("world").optString("total","—"):"—"),false);
+                long latency=android.os.SystemClock.elapsedRealtime()-started;
+                if(!"settings".equals(screen))return;
+                if(error!=null){info(networkMessage(error)+" · "+latency+" ms",true);return;}
+                if(json==null){info("Server boş cavab verdi · "+latency+" ms",true);return;}
+                info("Versiya: "+json.optString("version")+" · Arxiv: "+(json.optJSONObject("world")!=null?json.optJSONObject("world").optString("total","—"):"—")+
+                    " · Cavab müddəti: "+latency+" ms",false);
             });
         });card(statusButton);
     }
@@ -1345,7 +1350,22 @@ public final class MainActivity extends Activity {
                 &&!game.optString("away").toLowerCase(Locale.ROOT).contains(term))continue;
             filtered.add(game);
         }
-        info(filtered.size()+" uyğun oyun · tarixi, canlı deyil",false);
+        info(legacy
+            ? filtered.size()+" bu səhifədə uyğun oyun · server axtarışı · TAM MÖVSÜM DEYİL"
+            : filtered.size()+" uyğun oyun · tarixi, canlı deyil",false);
+        if(!historyTeam.trim().isEmpty()){
+            HistoryTeamForm form=new HistoryTeamForm(historyTeam);
+            for(JSONObject game:filtered){
+                form.add(game.optString("home"),game.optString("away"),
+                    game.optInt("homeScore",-1),game.optInt("awayScore",-1),
+                    game.optBoolean("resultRecorded"),game.optString("date"));
+            }
+            if(form.played()>0){
+                boolean complete=!legacy&&json.optBoolean("complete")&&json.optBoolean("bundle");
+                section(complete?"KOMANDA FORMASI · TAM MÖVSÜM":"KOMANDA FORMASI · BU SƏHİFƏ (TAM DEYİL)");
+                info(form.totals()+"\n"+form.goalsAndForm(),false);
+            }
+        }
         int begin=legacy?0:historyOffset;
         int end=Math.min(begin+60,filtered.size());
         for(int i=begin;i<end;i++){
