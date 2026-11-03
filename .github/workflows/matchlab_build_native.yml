@@ -6,8 +6,10 @@ on:
     branches:
       - main
       - 'fix/**'
+      - 'feat/**'
     paths:
       - 'native/**'
+      - '.github/workflows/android_native_release.yml'
       - '.github/workflows/matchlab_build_native.yml'
 
 permissions:
@@ -36,7 +38,7 @@ jobs:
           dotnet publish native/windows-app/MATCHLABAZ.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o native/windows-app/out
       - uses: actions/upload-artifact@v4
         with:
-          name: MATCHLAB_AZ_Native_Windows_v0931_Logo
+          name: MATCHLAB_AZ_Windows_x64_v0950
           path: native/windows-app/out/MATCHLAB_AZ.exe
           if-no-files-found: error
           retention-days: 30
@@ -72,7 +74,7 @@ jobs:
         run: gradle --no-daemon --stacktrace :app:assembleDebug
       - uses: actions/upload-artifact@v4
         with:
-          name: MATCHLAB_AZ_Native_Android_v0931_Logo
+          name: MATCHLAB_AZ_Android_v0950
           path: native/android/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 30
