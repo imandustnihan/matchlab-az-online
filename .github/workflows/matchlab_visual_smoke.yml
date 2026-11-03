@@ -94,17 +94,26 @@ jobs:
           python3 native/branding/generate_icons.py
           cd native/android
           gradle --no-daemon :app:assembleDebug
+      - name: Enable Android x86 KVM acceleration when available
+        run: |
+          if [ -e /dev/kvm ]; then
+            ls -l /dev/kvm
+            sudo chmod 666 /dev/kvm
+            echo "Android hardware acceleration enabled"
+          else
+            echo "::warning::GitHub runner has no /dev/kvm, emulator may boot slowly"
+          fi
       - name: Verify app against Android emulator screen and touch events
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 30
-          target: google_apis
+          target: default
           arch: x86_64
           profile: pixel_2
-          ram-size: 3072M
-          heap-size: 512M
+          ram-size: 2048M
+          heap-size: 256M
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
-          disable-animations: true
+          disable-animations: false
           script: |
             adb install -r native/android/app/build/outputs/apk/debug/app-debug.apk
             python3 native/qa/android_emulator_smoke.py
