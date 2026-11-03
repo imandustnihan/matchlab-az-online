@@ -84,7 +84,7 @@ jobs:
           python -m unittest discover -s tests -p test_history_archive.py -v
           python -m unittest discover -s tests -p test_profile_auto_updates.py -v
       - name: Include verified Reep CC0 offline registry inside Android APK
-        run: python native/qa/export_offline_registry.py --output native/android/app/src/main/assets/registry_offline.tsv.gz
+        run: python native/qa/export_offline_registry.py --output native/android/app/src/main/assets/registry_offline.bin
       - name: Generate Android launcher icons
         run: |
           python -m pip install pillow
@@ -114,6 +114,18 @@ jobs:
       - name: Compile native Android UI
         working-directory: native/android
         run: gradle --no-daemon --stacktrace :app:assembleDebug
+      - name: Verify compressed offline identity asset is present inside the real APK
+        run: |
+          python - <<'PY'
+          import zipfile
+          apk='native/android/app/build/outputs/apk/debug/app-debug.apk'
+          with zipfile.ZipFile(apk) as z:
+              assert 'assets/registry_offline.bin' in z.namelist()
+              with z.open('assets/registry_offline.bin') as stream:
+                  assert stream.read(2)==bytes((0x1f,0x8b))
+              assert z.getinfo('assets/registry_offline.bin').file_size>1_000_000
+          print('Verified real compressed CC0 registry in Android APK')
+          PY
       - uses: actions/upload-artifact@v4
         with:
           name: MATCHLAB_AZ_Android_v0959

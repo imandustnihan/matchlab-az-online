@@ -901,7 +901,7 @@ public final class MainActivity extends Activity {
         if(q.length()<2)return;
         network.execute(()->{
             java.util.List<OfflineIdentityIndex.Entry> results;
-            try(java.io.InputStream input=getAssets().open("registry_offline.tsv.gz")){
+            try(java.io.InputStream input=getAssets().open("registry_offline.bin")){
                 results=OfflineIdentityIndex.search(input,q,requestedKind,50);
             }catch(Exception ex){return;}
             ui.post(()->{

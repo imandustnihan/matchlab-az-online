@@ -102,7 +102,7 @@ jobs:
           java -cp /tmp/matchlab-history-qa HistoryTeamFormSmoke
       - name: Verify and export offline registry for Android emulator
         run: |
-          python3 native/qa/export_offline_registry.py --output native/android/app/src/main/assets/registry_offline.tsv.gz
+          python3 native/qa/export_offline_registry.py --output native/android/app/src/main/assets/registry_offline.bin
           mkdir -p /tmp/matchlab-offline-qa
           javac -d /tmp/matchlab-offline-qa native/android/app/src/main/java/az/matchlab/mobile/OfflineIdentityIndex.java native/qa/OfflineIdentitySmoke.java
           java -cp /tmp/matchlab-offline-qa OfflineIdentitySmoke
