@@ -31,6 +31,32 @@ public final class PitchView extends View {
     private float arrowStartX=-1,arrowStartY=-1;
     private float downX,downY;
     private boolean changed=false;
+    private float[] undoX,undoY;
+    private String[] undoNames,undoNumbers;
+    private java.util.ArrayList<float[]> undoArrows;
+    private void remember(){
+        undoX=x.clone();undoY=y.clone();undoNames=names.clone();undoNumbers=numbers.clone();
+        undoArrows=new java.util.ArrayList<>();
+        for(float[] a:arrows)undoArrows.add(a.clone());
+    }
+    public void undo(){
+        if(undoX==null)return;
+        float[] nx=x.clone(),ny=y.clone();
+        String[] nn=names.clone(),nums=numbers.clone();
+        java.util.ArrayList<float[]> next=new java.util.ArrayList<>();
+        for(float[] a:arrows)next.add(a.clone());
+        System.arraycopy(undoX,0,x,0,11);System.arraycopy(undoY,0,y,0,11);
+        System.arraycopy(undoNames,0,names,0,11);System.arraycopy(undoNumbers,0,numbers,0,11);
+        arrows.clear();for(float[] a:undoArrows)arrows.add(a.clone());
+        undoX=nx;undoY=ny;undoNames=nn;undoNumbers=nums;undoArrows=next;
+        save();saveArrows();invalidate();
+    }
+    public void mirror(){
+        remember();
+        for(int i=0;i<11;i++)x[i]=clamp(1-x[i],.09f,.91f);
+        for(float[] a:arrows){a[0]=1-a[0];a[2]=1-a[2];}
+        save();saveArrows();invalidate();
+    }
     private long pressedAt;
     private int dp(float n){return Math.round(n*getResources().getDisplayMetrics().density);}
     public PitchView(Context context,String formation){
@@ -81,9 +107,10 @@ public final class PitchView extends View {
     public void toggleGrid(){showGrid=!showGrid;invalidate();}
     public void toggleLines(){showLines=!showLines;invalidate();}
     public void toggleArrows(){arrowMode=!arrowMode;Toast.makeText(getContext(),arrowMode?"Ox aləti aktivdir: iki nöqtəyə toxun":"Ox aləti söndürüldü",Toast.LENGTH_SHORT).show();}
-    public void clearArrows(){arrows.clear();prefs.edit().remove(formation+"_arrows").apply();invalidate();}
+    public void clearArrows(){remember();arrows.clear();prefs.edit().remove(formation+"_arrows").apply();invalidate();}
     private void saveArrows(){StringBuilder s=new StringBuilder();for(float[] a:arrows){if(s.length()>0)s.append(";");s.append(a[0]).append(",").append(a[1]).append(",").append(a[2]).append(",").append(a[3]);}prefs.edit().putString(formation+"_arrows",s.toString()).apply();}
     public void reset(){
+        remember();
         SharedPreferences.Editor edit=prefs.edit();
         for(int i=0;i<11;i++){
             String k=formation+"_"+i;
@@ -176,7 +203,7 @@ public final class PitchView extends View {
         new AlertDialog.Builder(ctx).setTitle("Mövqe "+(index+1))
             .setView(layout).setNegativeButton("Ləğv et",null)
             .setPositiveButton("Saxla",(d,which)->{
-                names[index]=player.getText().toString().trim();
+                remember();names[index]=player.getText().toString().trim();
                 numbers[index]=no.getText().toString().trim();
                 if(numbers[index].isEmpty())numbers[index]=String.valueOf(index+1);
                 if(numbers[index].length()>3)numbers[index]=numbers[index].substring(0,3);
@@ -189,13 +216,14 @@ public final class PitchView extends View {
         if(action==MotionEvent.ACTION_DOWN&&arrowMode){
             RectF f=field();RectF inner=new RectF(f.left+dp(11),f.top+dp(11),f.right-dp(11),f.bottom-dp(11));
             float xx=clamp((event.getX()-inner.left)/inner.width(),0,1),yy=clamp((event.getY()-inner.top)/inner.height(),0,1);
-            if(arrowStartX<0){arrowStartX=xx;arrowStartY=yy;}else{arrows.add(new float[]{arrowStartX,arrowStartY,xx,yy});arrowStartX=-1;saveArrows();invalidate();}
+            if(arrowStartX<0){arrowStartX=xx;arrowStartY=yy;}else{remember();arrows.add(new float[]{arrowStartX,arrowStartY,xx,yy});arrowStartX=-1;saveArrows();invalidate();}
             return true;
         }
         if(arrowMode&&action==MotionEvent.ACTION_UP)return true;
         if(action==MotionEvent.ACTION_DOWN){
             dragging=findPlayer(event.getX(),event.getY());
             if(dragging<0)return false;
+            remember();
             downX=event.getX();downY=event.getY();changed=false;
             pressedAt=System.currentTimeMillis();
             getParent().requestDisallowInterceptTouchEvent(true);
