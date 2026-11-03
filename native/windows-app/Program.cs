@@ -88,6 +88,33 @@ public sealed class MatchlabForm : Form
     private string historySeason="2025-26";
     private int historyOffset=0;
     private string historyTeam="";
+    private readonly Dictionary<string,JsonElement> historyBundles = new();
+    private string HistoryKey=>historyLeague+"_"+historySeason;
+    private string HistoryCachePath=>Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "MATCHLAB_AZ","history_"+HistoryKey.Replace('.','_')+".json");
+    private JsonElement CachedHistory(){
+        if(historyBundles.TryGetValue(HistoryKey,out var cached))return cached;
+        try{
+            if(File.Exists(HistoryCachePath)){
+                using var document=JsonDocument.Parse(File.ReadAllText(HistoryCachePath));
+                var payload=document.RootElement.Clone();
+                if(Yes(payload,"available")&&Yes(payload,"bundle")){
+                    historyBundles[HistoryKey]=payload;return payload;
+                }
+            }
+        }catch(Exception){}
+        return default;
+    }
+    private void SaveHistory(JsonElement payload){
+        if(!Yes(payload,"available")||!Yes(payload,"complete"))return;
+        string raw=payload.GetRawText();if(raw.Length>2_000_000)return;
+        try{
+            Directory.CreateDirectory(Path.GetDirectoryName(HistoryCachePath)!);
+            File.WriteAllText(HistoryCachePath,raw);
+            historyBundles[HistoryKey]=payload.Clone();
+        }catch(IOException){}
+    }
     private bool hasLiveBaseline;
     private readonly Dictionary<string,(int home,int away,string state)> scoreBaseline=new();
     private string matchFilter="all";
@@ -211,7 +238,7 @@ public sealed class MatchlabForm : Form
         brand.SetBounds(80,24,140,30);nav.Controls.Add(brand);
         var sub=Txt("FUTBOL MƏRKƏZİ",8,false,Muted);
         sub.SetBounds(80,53,138,19);nav.Controls.Add(sub);
-        var build=Txt("NATIVE · 0.9.55",8,false,Muted);
+        var build=Txt("NATIVE · 0.9.56",8,false,Muted);
         build.SetBounds(20,91,190,22);nav.Controls.Add(build);
         var items=new(string key,string label)[]{
             ("matches","⚽  Matçlar"),("standings","▤   Cədvəl"),("search","⌕   Axtarış"),
@@ -292,14 +319,15 @@ public sealed class MatchlabForm : Form
         var l=Txt(text,12,true,Accent);l.Dock=DockStyle.Fill;row.Controls.Add(l);
     }
     private void DashboardHero(string? caption=null){
-        var hero=CardPanel(165);
+        var hero=CardPanel(194);
         hero.BackColor=Color.FromArgb(17,43,48);
         var eyebrow=Txt("MATCHLAB  /  MATÇ MƏRKƏZİ",9,true,Accent);
         eyebrow.SetBounds(18,11,370,21);hero.Controls.Add(eyebrow);
         var h=Txt("Bu gün futbol",20,true,Ink);
-        h.SetBounds(18,34,440,35);hero.Controls.Add(h);
+        h.AutoEllipsis=false;h.Font=new Font("Segoe UI Semibold",22f,FontStyle.Bold);
+        h.SetBounds(18,35,580,53);hero.Controls.Add(h);
         var detail=Txt(caption??"Real nəticələr, təsdiqlənmiş heyətlər və klub statistikası — bir məkanda.",10,false,Muted);
-        detail.SetBounds(19,75,570,27);hero.Controls.Add(detail);
+        detail.AutoEllipsis=false;detail.SetBounds(19,96,570,37);hero.Controls.Add(detail);
         var quick=new (string label,string target)[]{("⌕  Axtarış","search"),("▦  Taktika","tactics"),("▤  Cədvəl","standings")};
         var shortcutButtons=new List<Button>();
         for(int i=0;i<quick.Length;i++){
@@ -311,10 +339,11 @@ public sealed class MatchlabForm : Form
         void LayoutHero(){
             bool narrow=hero.Width<920;
             int x=narrow?18:hero.Width-365;
-            int y=narrow?114:53;
+            int y=narrow?150:69;
             for(int index=0;index<shortcutButtons.Count;index++)
                 shortcutButtons[index].SetBounds(x+index*115,y,105,36);
-            detail.Width=narrow?hero.Width-36:hero.Width-435;
+            detail.Width=Math.Max(260,narrow?hero.Width-36:hero.Width-435);
+            h.Width=Math.Max(270,narrow?hero.Width-36:hero.Width-420);
         }
         hero.SizeChanged+=(_,_)=>LayoutHero();
         LayoutHero();
@@ -815,39 +844,59 @@ public sealed class MatchlabForm : Form
         _=LoadHistory(viewVersion);
     }
     private async Task LoadHistory(int token){
-        Message("Tarixi matçlar mənbədən yoxlanılır…");
+        JsonElement data=CachedHistory();
+        if(data.ValueKind==JsonValueKind.Object)RenderHistoryRows(data,true);
+        bool recent=File.Exists(HistoryCachePath)&&DateTime.UtcNow-File.GetLastWriteTimeUtc(HistoryCachePath)<TimeSpan.FromHours(24);
+        if(recent&&data.ValueKind==JsonValueKind.Object)return;
+        if(data.ValueKind!=JsonValueKind.Object)Message("Mövsümün tarixi məlumatları ilk dəfə alınır. Növbəti komanda axtarışları yerli yaddaşdan açılacaq.");
         try{
-            string query="/api/history?league="+Uri.EscapeDataString(historyLeague)+
-                "&season="+Uri.EscapeDataString(historySeason)+
-                "&offset="+historyOffset+"&limit=60&team="+Uri.EscapeDataString(historyTeam);
-            var result=await Get(query);
-            if(page!="history"||token!=viewVersion)return;
+            string key=HistoryKey;
+            var result=await Get("/api/history-bundle?league="+Uri.EscapeDataString(historyLeague)+
+                "&season="+Uri.EscapeDataString(historySeason));
+            if(page!="history"||token!=viewVersion||key!=HistoryKey)return;
             if(!Yes(result,"available")){
-                EmptyState("Bu mövsüm arxivdə mövcud deyil",Val(result,"message","Başqa mövsüm və ya liqa seç."));return;
+                if(data.ValueKind!=JsonValueKind.Object)EmptyState("Mövsüm arxivdə yoxdur",Val(result,"message","Mənbə əlçatan deyil."),false);
+                return;
             }
-            Heading(Val(result,"leagueName","Tarixi matçlar")+" · "+historySeason+" · "+Val(result,"count")+" qeyd");
-            var items=Array(result,"items").ToList();
-            if(items.Count==0){EmptyState("Nəticə tapılmadı","Mövsüm, liqa və ya komanda filtrini dəyiş.",false);return;}
-            foreach(var m in items){
-                var row=CardPanel(82);
-                var round=Txt(Val(m,"round")+"  ·  "+Val(m,"date")+"  "+Val(m,"time"),9,false,Muted);
-                round.SetBounds(18,3,650,25);row.Controls.Add(round);
-                var names=Txt(Val(m,"home")+"   —   "+Val(m,"away"),12,true,Ink);
-                names.SetBounds(18,29,Math.Max(300,row.Width-200),41);names.Anchor=AnchorStyles.Left|AnchorStyles.Top;
-                row.Controls.Add(names);
-                var score=Txt(Yes(m,"resultRecorded")?Val(m,"homeScore")+" : "+Val(m,"awayScore"):"— : —",15,true,Accent);
-                score.SetBounds(row.Width-145,27,130,42);score.Anchor=AnchorStyles.Right|AnchorStyles.Top;
-                row.Controls.Add(score);
+            SaveHistory(result);
+            if(data.ValueKind==JsonValueKind.Object){
+                // Avoid replacing the user's live input when an existing local copy was shown.
+                return;
             }
-            string next=Val(result,"nextOffset");
-            if(!string.IsNullOrEmpty(next)){
-                var more=CardPanel(65);
-                var button=NewButton("Daha 60 matç",Accent,Bg,160);button.SetBounds(15,10,160,42);
-                button.Click+=(_,_)=>{if(int.TryParse(next,out int v)){historyOffset=v;Render();}};
-                more.Controls.Add(button);
-            }
-            Message("Mənbə: OpenFootball football.json · CC0. Yalnız tarixi nəticələr və təqvim.");
-        }catch(Exception ex){if(page=="history"&&token==viewVersion)EmptyState("Arxiv mənbəsinə çıxış yoxdur",ex.Message);}
+            RenderHistoryRows(result,false);
+        }catch(Exception ex){
+            if(page=="history"&&token==viewVersion&&data.ValueKind!=JsonValueKind.Object)
+                EmptyState("Arxiv mənbəsi əlçatan deyil",ex.Message);
+        }
+    }
+    private void RenderHistoryRows(JsonElement result,bool local){
+        if(page!="history")return;
+        Heading(Val(result,"leagueName","Tarixi matçlar")+" · "+historySeason+
+            (local?"  ·  YERLİ KEŞ":"  ·  CC0 MƏNBƏ"));
+        string term=historyTeam.Trim();
+        var all=Array(result,"items").Where(m=>
+            term.Length==0||Val(m,"home").Contains(term,StringComparison.OrdinalIgnoreCase)||
+            Val(m,"away").Contains(term,StringComparison.OrdinalIgnoreCase)).ToList();
+        Message(all.Count+" uyğun tarixi matç · axtarış yerli yaddaşdan işləyir · CANLI DEYİL");
+        if(all.Count==0){EmptyState("Komanda tapılmadı","Adı dəyişdir və yenidən axtar.",false);return;}
+        foreach(var m in all.Skip(historyOffset).Take(60)){
+            var row=CardPanel(83);
+            var round=Txt(Val(m,"round")+"  ·  "+Val(m,"date")+"  "+Val(m,"time"),9,false,Muted);
+            round.SetBounds(18,3,650,25);row.Controls.Add(round);
+            var names=Txt(Val(m,"home")+"  —  "+Val(m,"away"),12,true,Ink);
+            names.SetBounds(18,29,Math.Max(290,row.Width-200),43);
+            names.Anchor=AnchorStyles.Top|AnchorStyles.Left;row.Controls.Add(names);
+            var score=Txt(Yes(m,"resultRecorded")?Val(m,"homeScore")+" : "+Val(m,"awayScore"):"— : —",15,true,Accent);
+            score.SetBounds(row.Width-142,27,125,43);score.Anchor=AnchorStyles.Top|AnchorStyles.Right;
+            row.Controls.Add(score);
+        }
+        if(historyOffset+60<all.Count){
+            var bar=CardPanel(64);
+            var more=NewButton("Daha 60 matç",Accent,Bg,164);
+            more.SetBounds(15,11,164,40);bar.Controls.Add(more);
+            more.Click+=(_,_)=>{historyOffset+=60;Render();};
+        }
+        Message("Mənbə: OpenFootball football.json (CC0). Mövsüm məlumatı 24 saatdan bir yenilənir.");
     }
     private void ShowFavorites(){
         Heading("Yadda saxlanmış matçlar");
