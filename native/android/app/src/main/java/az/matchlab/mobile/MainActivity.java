@@ -470,9 +470,15 @@ public final class MainActivity extends Activity {
         fetch("/api/live?league="+encode(league)+"&date="+date(),(json,error)->{
             if(token!=generation||!screen.equals("matches"))return;
             if(error!=null||json==null){
-                page.removeAllViews();filters(false);
                 status.setTextColor(RED);
-                info(networkMessage(error),true);retry("matches");return;
+                if(!prefs.getString(cacheKey,"").isEmpty()){
+                    // Keep clearly stale local fixtures visible during Render cold starts.
+                    banner("Server cavab vermir. Saxlanmış nəticələr CANLI DEYİL; yenidən yoxlanacaq.",RED);
+                }else{
+                    page.removeAllViews();filters(false);
+                    info(networkMessage(error),true);retry("matches");
+                }
+                return;
             }
             status.setTextColor(json.optBoolean("available")?ACCENT:RED);
             if(json.optBoolean("available")&&!json.optBoolean("stale")&&json.toString().length()<130000)
