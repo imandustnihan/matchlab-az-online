@@ -65,8 +65,8 @@ public final class MainActivity extends Activity {
     private SharedPreferences prefs;
     private final Runnable refresh=new Runnable(){
         @Override public void run(){
-            if("matches".equals(screen)) loadMatches(false);
-            ui.postDelayed(this,30000);
+            if("matches".equals(screen)&&prefs.getBoolean("auto_refresh",true))loadMatches(false);
+            ui.postDelayed(this,prefs.getInt("refresh_interval",30)*1000L);
         }
     };
 
@@ -82,7 +82,7 @@ public final class MainActivity extends Activity {
         if(formation<0||formation>=formations.length)formation=0;
         showShell();
         navigate("matches");
-        ui.postDelayed(refresh,30000);
+        ui.postDelayed(refresh,prefs.getInt("refresh_interval",30)*1000L);
     }
     private int dp(float n){return Math.round(n*getResources().getDisplayMetrics().density);}
     private GradientDrawable shape(int bg,int radius){
@@ -542,7 +542,7 @@ public final class MainActivity extends Activity {
     }
     private void matchRow(JSONObject m,boolean saved){
         LinearLayout wrapper=column();
-        wrapper.setBackground(shape(CARD,12));
+        wrapper.setBackground(shape(CARD,prefs.getBoolean("compact_cards",false)?8:12));
         wrapper.setPadding(dp(9),dp(7),dp(9),dp(7));
         String state=m.optString("state");
         boolean live=!saved&&!m.optBoolean("stale")&&"live".equals(state);
@@ -1106,6 +1106,12 @@ public final class MainActivity extends Activity {
         Button arrows=button("➜ Oxlar");arrows.setOnClickListener(v->pitch.toggleArrows());tools.addView(arrows,new LinearLayout.LayoutParams(0,dp(44),1));
         Button clear=button("✕ Oxları sil");clear.setOnClickListener(v->pitch.clearArrows());tools.addView(clear,new LinearLayout.LayoutParams(0,dp(44),1));
         page.addView(tools);
+        LinearLayout advanced=row();
+        Button undo=button("↶ Geri al");
+        undo.setOnClickListener(v->pitch.undo());advanced.addView(undo,new LinearLayout.LayoutParams(0,dp(44),1));
+        Button mirror=button("⇆ Güzgü");
+        mirror.setOnClickListener(v->pitch.mirror());advanced.addView(mirror,new LinearLayout.LayoutParams(0,dp(44),1));
+        card(advanced);
         gap(page,9);
         section("Ehtiyat oyunçular və əvəzetmələr");
         for(int i=1;i<=7;i++){
@@ -1139,7 +1145,35 @@ public final class MainActivity extends Activity {
     }
     private void showSettings(){
         section("MATCHLAB AZ Native 0.9.56");
-        section("Bildiriş və səs idarəetməsi");
+        section("Görünüş, şəbəkə və yaddaş");
+        Switch refreshToggle=new Switch(this);
+        refreshToggle.setText("Matçları avtomatik yenilə");
+        refreshToggle.setTextColor(INK);
+        refreshToggle.setChecked(prefs.getBoolean("auto_refresh",true));
+        refreshToggle.setOnCheckedChangeListener((v,on)->prefs.edit().putBoolean("auto_refresh",on).apply());
+        card(refreshToggle);
+        LinearLayout refreshRow=row();
+        refreshRow.addView(text("Yenilənmə intervalı",12,INK,true),new LinearLayout.LayoutParams(0,dp(43),1));
+        String[] intervals={"15 saniyə","30 saniyə","45 saniyə","60 saniyə"};
+        final int[] values={15,30,45,60};
+        int index=1;for(int i=0;i<values.length;i++)if(values[i]==prefs.getInt("refresh_interval",30))index=i;
+        refreshRow.addView(spinner(intervals,index,n->prefs.edit().putInt("refresh_interval",values[n]).apply()));
+        card(refreshRow);
+        Switch compact=new Switch(this);compact.setText("Yığcam matç kartları");
+        compact.setTextColor(INK);compact.setChecked(prefs.getBoolean("compact_cards",false));
+        compact.setOnCheckedChangeListener((v,on)->prefs.edit().putBoolean("compact_cards",on).apply());
+        card(compact);
+        Button clearHistory=button("Arxiv ve matç keşi təmizlə");
+        clearHistory.setOnClickListener(v->new AlertDialog.Builder(this).setTitle("Yerli keş silinsin?")
+            .setMessage("Tarix arxivi və matç keşi silinir. Sevimlilər, taktika və tənzimləmələr qalır.")
+            .setNegativeButton("Ləğv et",null).setPositiveButton("Sil",(d,w)->{
+                SharedPreferences.Editor editor=prefs.edit();
+                for(String key:prefs.getAll().keySet())
+                    if(key.startsWith("history_bundle_")||key.startsWith("match_cache_"))editor.remove(key);
+                editor.apply();historyBundles.clear();
+                Toast.makeText(this,"Yerli keş təmizləndi",Toast.LENGTH_SHORT).show();
+            }).show());card(clearHistory);
+                section("Bildiriş və səs idarəetməsi");
         section("Səs səviyyəsi");
         SeekBar volume=new SeekBar(this);
         volume.setMax(100);volume.setProgress(prefs.getInt("sound_volume",90));
