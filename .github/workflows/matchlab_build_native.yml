@@ -80,6 +80,7 @@ jobs:
         run: |
           python -m unittest discover -s tests -p test_live_center_cache.py -v
           python -m unittest discover -s tests -p test_history_archive.py -v
+          python -m unittest discover -s tests -p test_profile_auto_updates.py -v
       - name: Generate Android launcher icons
         run: |
           python -m pip install pillow
