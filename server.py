@@ -340,7 +340,7 @@ def openliga_table():
 def live_from_sources(league,date):
  # ESPN is often the broadest source; alternative APIs are used on failure or empty result.
  errors=[]; empty_success=None
- candidates=[('ESPN',lambda:feeds.espn_games(source_call('ESPN',
+ candidates=[] if league=='aze.1' else [('ESPN',lambda:feeds.espn_games(source_call('ESPN',
   f'https://site.api.espn.com/apis/site/v2/sports/soccer/{league}/scoreboard?dates={date.replace("-","")}&limit=200',23),league),False)]
  if league in feeds.OPENLIGA:
   candidates.append(('OpenLigaDB',lambda:feeds.openliga_games(source_call('OpenLigaDB',feeds.openliga_matches_url(date,league),120),league,date),True))
@@ -377,7 +377,7 @@ def live_from_sources(league,date):
 
 def table_from_sources(league):
  errors=[]; empty_success=None
- candidates=[('ESPN',lambda:espn_standings(league))]
+ candidates=[] if league=='aze.1' else [('ESPN',lambda:espn_standings(league))]
  if league in feeds.OPENLIGA:
   date=_dt.date.today().isoformat()
   candidates.append(('OpenLigaDB',lambda:feeds.openliga_table(source_call('OpenLigaDB',feeds.openliga_table_url(league,date),900))))
@@ -398,10 +398,10 @@ def table_from_sources(league):
     return result
    if empty_success is None:empty_success=result
   except Exception as ex:errors.append(name+': '+type(ex).__name__)
- if empty_success is not None:return empty_success
+ if empty_success is not None and league!='aze.1':return empty_success
  prior=snapshot_load('table',league,'')
  if prior:return prior
- return {'items':[],'available':False,'message':'Cədvəl mənbələri əlçatan deyil: '+', '.join(errors)}
+ return {'items':[],'available':False,'message':('Azərbaycan Premyer Liqasının cari cədvəli mənbədən alınmadı. Rəsmi PFL cədvəlinə baxın.' if league=='aze.1' else 'Cədvəl mənbələri əlçatan deyil: '+', '.join(errors))}
 
 
 def media_by_qid(qid,kind='players',retry=False):
